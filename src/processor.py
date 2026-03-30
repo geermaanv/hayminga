@@ -53,7 +53,7 @@ def extract_event_data(image_path: Path) -> dict | None:
         b64, media_type = encode_image(image_path)
 
         response = client.messages.create(
-            model="claude-opus-4-5-20251101",
+            model="claude-sonnet-4-5-20251022",
             max_tokens=500,
             system=SYSTEM_PROMPT,
             messages=[
