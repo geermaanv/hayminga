@@ -107,4 +107,7 @@ def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
             downloaded.append(filename)
             print(f"[scraper] Descargada: {filename.name}")
             time.sleep(0.3)
-        exc
+        except Exception as e:
+            print(f"[scraper] Error descargando {url}: {e}")
+
+    return downloaded
