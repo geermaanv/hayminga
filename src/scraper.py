@@ -82,3 +82,29 @@ def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
     Retorna lista de paths de archivos descargados.
     """
     IMAGES_DIR.mkdir(exist_ok=True)
+    seen = load_seen_hashes()
+    query = build_query(hashtag)
+    urls = fetch_image_urls(query, max_results=30)
+
+    downloaded = []
+    for url in urls:
+        if len(downloaded) >= max_new:
+            break
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=10)
+            if resp.status_code != 200:
+                continue
+            data = resp.content
+            h = image_hash(data)
+            if h in seen:
+                continue
+            ext = url.split(".")[-1].split("?")[0][:4]
+            if ext not in ("jpg", "jpeg", "png", "webp"):
+                ext = "jpg"
+            filename = IMAGES_DIR / f"{hashtag}_{h[:12]}.{ext}"
+            filename.write_bytes(data)
+            save_hash(h)
+            downloaded.append(filename)
+            print(f"[scraper] Descargada: {filename.name}")
+            time.sleep(0.3)
+        exc
