@@ -1,7 +1,8 @@
 """
 scraper.py
-Busca imágenes en Google Images filtrando site:instagram.com
-usando SerpAPI y descarga los flyers nuevos evitando duplicados.
+Busca imágenes en Google Images sobre eventos de bioconstrucción
+usando SerpAPI y descarga los thumbnails de Google (encrypted-tbn)
+que sí son accesibles, evitando duplicados.
 """
 
 import os
@@ -22,6 +23,13 @@ HEADERS = {
     )
 }
 
+VALID_MAGIC = {
+    b'\xff\xd8\xff': 'jpg',   # JPEG
+    b'\x89PNG':      'png',   # PNG
+    b'RIFF':         'webp',  # WEBP (primeros 4 bytes son RIFF)
+    b'GIF8':         'gif',   # GIF
+}
+
 
 def load_seen_hashes() -> set:
     if not SEEN_FILE.exists():
@@ -38,13 +46,20 @@ def image_hash(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
+def is_valid_image(data: bytes) -> tuple[bool, str]:
+    """Verifica que los bytes son una imagen real por magic bytes."""
+    for magic, ext in VALID_MAGIC.items():
+        if data[:len(magic)] == magic:
+            return True, ext
+    return False, ''
+
+
 def build_query(hashtag: str) -> str:
-    """Construye la query para Google Images."""
-    return f"site:instagram.com #{hashtag} (minga OR bioconstruccion OR adobe OR taller) evento"
+    return f"#{hashtag} (minga OR bioconstruccion OR adobe OR taller) evento"
 
 
-def fetch_image_urls(query: str, max_results: int = 20) -> list[str]:
-    """Usa SerpAPI para buscar imágenes en Google Images."""
+def fetch_thumbnails(query: str, max_results: int = 30) -> list[str]:
+    """Usa SerpAPI para buscar imágenes y retorna URLs de thumbnails de Google."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         print("[scraper] SERPAPI_KEY no configurada")
@@ -53,17 +68,12 @@ def fetch_image_urls(query: str, max_results: int = 20) -> list[str]:
     params = {
         "engine": "google_images",
         "q": query,
-        "num": min(max_results, 100),
         "api_key": api_key,
         "ijn": 0,
-        "tbs": "qdr:m",  # solo imágenes del último mes
+        "tbs": "qdr:m",  # último mes
     }
 
-    resp = requests.get(
-        "https://serpapi.com/search",
-        params=params,
-        timeout=20
-    )
+    resp = requests.get("https://serpapi.com/search", params=params, timeout=20)
 
     if resp.status_code != 200:
         print(f"[SerpAPI] Error {resp.status_code}: {resp.text[:200]}")
@@ -71,20 +81,22 @@ def fetch_image_urls(query: str, max_results: int = 20) -> list[str]:
 
     data = resp.json()
     images = data.get("images_results", [])
-    urls = [img["original"] for img in images[:max_results] if img.get("original")]
-    print(f"[scraper] SerpAPI devolvió {len(urls)} URL(s)")
+
+    # Thumbnail de Google — siempre en encrypted-tbn0.gstatic.com, siempre accesible
+    urls = [img["thumbnail"] for img in images[:max_results] if img.get("thumbnail")]
+    print(f"[scraper] SerpAPI devolvió {len(urls)} thumbnail(s)")
     return urls
 
 
 def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
     """
-    Descarga imágenes nuevas para un hashtag.
-    Retorna lista de paths de archivos descargados.
+    Descarga thumbnails nuevos para un hashtag.
+    Valida que cada descarga sea una imagen real antes de guardarla.
     """
     IMAGES_DIR.mkdir(exist_ok=True)
     seen = load_seen_hashes()
     query = build_query(hashtag)
-    urls = fetch_image_urls(query, max_results=30)
+    urls = fetch_thumbnails(query, max_results=40)
 
     downloaded = []
     for url in urls:
@@ -94,20 +106,32 @@ def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
             resp = requests.get(url, headers=HEADERS, timeout=10)
             if resp.status_code != 200:
                 continue
+
             data = resp.content
+            valid, ext = is_valid_image(data)
+            if not valid:
+                print(f"[scraper] No es imagen válida, saltando: {url[:60]}")
+                continue
+
             h = image_hash(data)
             if h in seen:
                 continue
-            ext = url.split(".")[-1].split("?")[0][:4]
-            if ext not in ("jpg", "jpeg", "png", "webp"):
-                ext = "jpg"
+
             filename = IMAGES_DIR / f"{hashtag}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             save_hash(h)
             downloaded.append(filename)
             print(f"[scraper] Descargada: {filename.name}")
             time.sleep(0.3)
+
         except Exception as e:
-            print(f"[scraper] Error descargando {url}: {e}")
+            print(f"[scraper] Error descargando {url[:60]}: {e}")
 
     return downloaded
+
+
+if __name__ == "__main__":
+    for tag in HASHTAGS:
+        print(f"\n=== #{tag} ===")
+        files = download_images(tag)
+        print(f"  {len(files)} imagen(es) nueva(s)")
