@@ -1,0 +1,50 @@
+name: Importar eventos de bioconstrucción
+
+on:
+  schedule:
+    # Corre todos los días a las 8:00 AM (hora Argentina = UTC-3)
+    - cron: "0 11 * * *"
+  workflow_dispatch: # Permite correrlo manualmente desde GitHub
+
+jobs:
+  import-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Restaurar hashes vistos (caché entre runs)
+        uses: actions/cache@v4
+        with:
+          path: seen_hashes.txt
+          key: seen-hashes-${{ github.run_id }}
+          restore-keys: |
+            seen-hashes-
+
+      - name: Correr pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          # Opcional: para usar Google Custom Search API en lugar de scraping
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_CX: ${{ secrets.GOOGLE_CX }}
+        run: python main.py
+
+      - name: Guardar hashes vistos
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: seen_hashes.txt
+          key: seen-hashes-${{ github.run_id }}
