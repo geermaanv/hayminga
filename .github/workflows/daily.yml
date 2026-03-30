@@ -31,7 +31,14 @@ jobs:
           key: seen-hashes-${{ github.run_id }}
           restore-keys: |
             seen-hashes-
-
+      - name: Debug secrets
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_CX: ${{ secrets.GOOGLE_CX }}
+        run: |
+          echo "CX length: ${#GOOGLE_CX}"
+          echo "KEY prefix: ${GOOGLE_API_KEY:0:10}"
+          
       - name: Correr pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
