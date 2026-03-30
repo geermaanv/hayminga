@@ -49,6 +49,7 @@ def extract_event_data(image_path: Path) -> dict | None:
     Procesa una imagen con Claude Vision.
     Retorna dict con los datos del evento, o None si no es un evento válido.
     """
+    raw = ""
     try:
         b64, media_type = encode_image(image_path)
 
@@ -77,7 +78,7 @@ def extract_event_data(image_path: Path) -> dict | None:
             ],
         )
 
-        
+        raw = response.content[0].text.strip()
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         data = json.loads(raw)
 
@@ -93,7 +94,6 @@ def extract_event_data(image_path: Path) -> dict | None:
         print(f"[processor] Error parseando JSON para {image_path.name}: {e}")
         print(f"[processor] Respuesta cruda: '{raw[:200]}'")
         return None
-      
     except Exception as e:
         print(f"[processor] Error procesando {image_path.name}: {e}")
         return None
