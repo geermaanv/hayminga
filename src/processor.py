@@ -90,7 +90,9 @@ def extract_event_data(image_path: Path) -> dict | None:
 
     except json.JSONDecodeError as e:
         print(f"[processor] Error parseando JSON para {image_path.name}: {e}")
+        print(f"[processor] Respuesta cruda: '{raw[:200]}'")
         return None
+      
     except Exception as e:
         print(f"[processor] Error procesando {image_path.name}: {e}")
         return None
