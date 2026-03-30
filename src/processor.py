@@ -77,7 +77,8 @@ def extract_event_data(image_path: Path) -> dict | None:
             ],
         )
 
-        raw = response.content[0].text.strip()
+        
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         data = json.loads(raw)
 
         if not data.get("es_evento", True):
