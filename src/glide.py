@@ -16,7 +16,7 @@ from googleapiclient.discovery import build
 
 APP_ID = "vecHaq4izl5UJg73ROm7"
 TABLE_NAME = "native-table-VkXzhDu5bqR3gxbKBrbt"
-DEVICE_ID = "CUCtih2pK7WbOyhMBs1Z"
+DEVICE_ID = "OdykpGGHmwH7CQlPpDwC"
 ENDPOINT = "https://hayminga.glide.page/api/container/playerFunctionSmall/enqueueDataAction"
 
 SPREADSHEET_ID = os.environ["GOOGLE_SPREADSHEET_ID"]
@@ -29,27 +29,12 @@ HEADERS = {
     "Referer": "https://hayminga.glide.page/",
 }
 
-# Columnas del Sheet — procesado es la última
 COLUMNS = [
-    "Activo",
-    "Nombre",
-    "Dirección",
-    "Fecha_Inicio",
-    "Modalidad",
-    "Descripción",
-    "Organizador",
-    "Link_Promocion",
-    "Tipo_Evento",
-    "img",
-    "Nivel_Requerido",
-    "Fecha_Fin",
-    "Lugares_Disponibles",
-    "Es_Practico",
-    "procesado",  # clave de deduplicación
+    "Activo", "Nombre", "Dirección", "Fecha_Inicio", "Fecha_Fin",
+    "Es_Virtual", "Provincia", "Descripción", "Organizador",
+    "Link_Promocion", "Tipo_Evento", "img", "procesado",
 ]
 
-
-# ── Google Sheets ──────────────────────────────────────────────────────────
 
 def get_sheets_service():
     creds_json = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
@@ -76,12 +61,11 @@ def ensure_header(service):
 
 
 def load_processed_names(service) -> set:
-    """Lee la columna 'procesado' para saber qué eventos ya fueron cargados."""
     try:
         result = (
             service.spreadsheets()
             .values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!O:O")
+            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!M:M")
             .execute()
         )
         values = result.get("values", [])
@@ -91,24 +75,20 @@ def load_processed_names(service) -> set:
 
 
 def register_event(service, event: dict):
-    """Registra el evento en el Sheet como respaldo y control de duplicados."""
-    fecha_inicio = event.get("fecha_inicio") or event.get("fecha") or ""
     row = [
         "true",
         event.get("nombre") or "",
         event.get("lugar") or "",
-        fecha_inicio,
-        event.get("modalidad") or "",
+        event.get("fecha_inicio") or "",
+        event.get("fecha_fin") or "",
+        "true" if event.get("es_virtual") else "false",
+        event.get("provincia") or "",
         event.get("descripcion") or "",
         event.get("organizador") or "",
         event.get("link_promocional") or "",
         event.get("tipo_evento") or "",
         event.get("imagen_url") or "",
-        event.get("nivel_requerido") or "",
-        event.get("fecha_fin") or "",
-        event.get("lugares_disponibles") or "",
-        "true" if event.get("incluye_practica") else "false",
-        (event.get("nombre") or "").strip().lower(),  # columna procesado
+        (event.get("nombre") or "").strip().lower(),
     ]
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
@@ -119,16 +99,13 @@ def register_event(service, event: dict):
     ).execute()
 
 
-# ── Glide ──────────────────────────────────────────────────────────────────
-
 def date_to_glide_timestamp(date_str: str) -> dict | None:
     if not date_str:
         return None
     for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
         try:
             dt = datetime.strptime(date_str.strip(), fmt)
-            timestamp_ms = int(dt.timestamp() * 1000)
-            return {"kind": "glide-date-time", "value": timestamp_ms, "tzOffset": None}
+            return {"kind": "glide-date-time", "value": int(dt.timestamp() * 1000), "tzOffset": None}
         except ValueError:
             continue
     return None
@@ -136,8 +113,7 @@ def date_to_glide_timestamp(date_str: str) -> dict | None:
 
 def generate_row_id() -> str:
     import base64
-    raw = uuid.uuid4().bytes[:16]
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    return base64.urlsafe_b64encode(uuid.uuid4().bytes[:16]).decode().rstrip("=")
 
 
 def add_row_to_glide(event: dict) -> bool:
@@ -145,29 +121,30 @@ def add_row_to_glide(event: dict) -> bool:
     row_id = generate_row_id()
     req_id = str(uuid.uuid4()).replace("-", "")[:20]
 
-    fecha_inicio = date_to_glide_timestamp(event.get("fecha_inicio") or event.get("fecha"))
+    fecha_inicio = date_to_glide_timestamp(event.get("fecha_inicio"))
     fecha_fin = date_to_glide_timestamp(event.get("fecha_fin"))
 
-    column_values = {
-        "$rowID": row_id,
-        "Nombre": event.get("nombre") or "",
-        "Dirección": event.get("lugar") or "",
-        "Modalidad": event.get("modalidad") or "",
-        "Descripción": event.get("descripcion") or "",
-        "Organizador": event.get("organizador") or "",
-        "Link": event.get("link_promocional") or "",
-        "3pjMi": event.get("tipo_evento") or "",
-        "6YHWp": event.get("nivel_requerido") or "",
-        "Hr0F2": event.get("imagen_url") or "",
-        "zg7Yb": bool(event.get("incluye_practica")),
-    }
+    column_values = {"$rowID": row_id, "Estado": True}
 
+    def add_if(key, val):
+        if val:
+            column_values[key] = val
+
+    add_if("Nombre", event.get("nombre"))
+    add_if("Dirección", event.get("lugar"))
+    add_if("Descripción", event.get("descripcion"))
+    add_if("Organizador", event.get("organizador"))
+    add_if("Link", event.get("link_promocional"))
+    add_if("3pjMi", event.get("tipo_evento"))
+    add_if("Hr0F2", event.get("imagen_url"))
+    add_if("pS1BP", event.get("provincia"))
+
+    if event.get("es_virtual") is not None:
+        column_values["Modalidad"] = bool(event.get("es_virtual"))
     if fecha_inicio:
         column_values["Fecha"] = fecha_inicio
     if fecha_fin:
         column_values["RigtA"] = fecha_fin
-    if event.get("lugares_disponibles"):
-        column_values["luKjF"] = int(event["lugares_disponibles"])
 
     payload = {
         "appID": APP_ID,
@@ -187,7 +164,6 @@ def add_row_to_glide(event: dict) -> bool:
     }
 
     try:
-        print(f"[glide] Payload: {json.dumps(payload)[:500]}")
         resp = requests.post(
             f"{ENDPOINT}?reqid={req_id}",
             headers=HEADERS,
@@ -205,8 +181,6 @@ def add_row_to_glide(event: dict) -> bool:
         return False
 
 
-# ── Orquestador ────────────────────────────────────────────────────────────
-
 def add_events(events: list[dict]) -> int:
     if not events:
         return 0
@@ -221,7 +195,6 @@ def add_events(events: list[dict]) -> int:
         nombre = (event.get("nombre") or "").strip()
         if not nombre:
             continue
-
         if nombre.lower() in processed:
             print(f"[glide] Duplicado, saltando: '{nombre}'")
             continue
