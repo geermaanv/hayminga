@@ -87,10 +87,10 @@ def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
         if img.get("thumbnail"):
             results.append({
                 "thumbnail": img.get("thumbnail", ""),
-                "original": img.get("original", ""),
+                "original": img.get("thumbnail", ""),  # usar thumbnail como imagen
                 "link": img.get("link", ""),
             })
-
+    })
     print(f"[scraper] SerpAPI devolvió {len(results)} imagen(es)")
     return results
 
