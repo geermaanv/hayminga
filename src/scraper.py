@@ -1,8 +1,7 @@
 """
 scraper.py
 Busca imágenes en Google Images sobre eventos de bioconstrucción
-usando SerpAPI y descarga los thumbnails de Google (encrypted-tbn)
-que sí son accesibles, evitando duplicados.
+usando SerpAPI y descarga los thumbnails evitando duplicados.
 """
 
 import os
@@ -24,10 +23,10 @@ HEADERS = {
 }
 
 VALID_MAGIC = {
-    b'\xff\xd8\xff': 'jpg',   # JPEG
-    b'\x89PNG':      'png',   # PNG
-    b'RIFF':         'webp',  # WEBP (primeros 4 bytes son RIFF)
-    b'GIF8':         'gif',   # GIF
+    b'\xff\xd8\xff': 'jpg',
+    b'\x89PNG':      'png',
+    b'RIFF':         'webp',
+    b'GIF8':         'gif',
 }
 
 
@@ -47,7 +46,6 @@ def image_hash(data: bytes) -> str:
 
 
 def is_valid_image(data: bytes) -> tuple[bool, str]:
-    """Verifica que los bytes son una imagen real por magic bytes."""
     for magic, ext in VALID_MAGIC.items():
         if data[:len(magic)] == magic:
             return True, ext
@@ -58,8 +56,10 @@ def build_query(hashtag: str) -> str:
     return f"#{hashtag} (minga OR bioconstruccion OR adobe OR taller) evento"
 
 
-def fetch_thumbnails(query: str, max_results: int = 30) -> list[str]:
-    """Usa SerpAPI para buscar imágenes y retorna URLs de thumbnails de Google."""
+def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
+    """
+    Usa SerpAPI y retorna lista de dicts con thumbnail, original y link.
+    """
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         print("[scraper] SERPAPI_KEY no configurada")
@@ -70,7 +70,7 @@ def fetch_thumbnails(query: str, max_results: int = 30) -> list[str]:
         "q": query,
         "api_key": api_key,
         "ijn": 0,
-        "tbs": "qdr:m",  # último mes
+        "tbs": "qdr:m",
     }
 
     resp = requests.get("https://serpapi.com/search", params=params, timeout=20)
@@ -82,35 +82,41 @@ def fetch_thumbnails(query: str, max_results: int = 30) -> list[str]:
     data = resp.json()
     images = data.get("images_results", [])
 
-    # Thumbnail de Google — siempre en encrypted-tbn0.gstatic.com, siempre accesible
-    urls = [img["thumbnail"] for img in images[:max_results] if img.get("thumbnail")]
-    print(f"[scraper] SerpAPI devolvió {len(urls)} thumbnail(s)")
-    return urls
+    results = []
+    for img in images[:max_results]:
+        if img.get("thumbnail"):
+            results.append({
+                "thumbnail": img.get("thumbnail", ""),
+                "original": img.get("original", ""),
+                "link": img.get("link", ""),
+            })
+
+    print(f"[scraper] SerpAPI devolvió {len(results)} imagen(es)")
+    return results
 
 
-def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
+def download_images(hashtag: str, max_new: int = 10) -> list[tuple[Path, dict]]:
     """
     Descarga thumbnails nuevos para un hashtag.
-    Valida que cada descarga sea una imagen real antes de guardarla.
+    Retorna lista de (path, metadata) donde metadata tiene original y link.
     """
     IMAGES_DIR.mkdir(exist_ok=True)
     seen = load_seen_hashes()
     query = build_query(hashtag)
-    urls = fetch_thumbnails(query, max_results=40)
+    image_data = fetch_image_data(query, max_results=40)
 
     downloaded = []
-    for url in urls:
+    for item in image_data:
         if len(downloaded) >= max_new:
             break
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
+            resp = requests.get(item["thumbnail"], headers=HEADERS, timeout=10)
             if resp.status_code != 200:
                 continue
 
             data = resp.content
             valid, ext = is_valid_image(data)
             if not valid:
-                print(f"[scraper] No es imagen válida, saltando: {url[:60]}")
                 continue
 
             h = image_hash(data)
@@ -120,12 +126,12 @@ def download_images(hashtag: str, max_new: int = 10) -> list[Path]:
             filename = IMAGES_DIR / f"{hashtag}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             save_hash(h)
-            downloaded.append(filename)
+            downloaded.append((filename, item))
             print(f"[scraper] Descargada: {filename.name}")
             time.sleep(0.3)
 
         except Exception as e:
-            print(f"[scraper] Error descargando {url[:60]}: {e}")
+            print(f"[scraper] Error: {e}")
 
     return downloaded
 
