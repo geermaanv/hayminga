@@ -15,21 +15,20 @@ SPREADSHEET_ID = os.environ["GOOGLE_SPREADSHEET_ID"]
 SHEET_NAME = "Eventos"
 
 COLUMNS = [
-    "Nombre del Evento",
-    "Imagen Promocional",
-    "Tipo de Evento",
+    "Activo",
+    "Nombre",
     "Dirección",
-    "Fecha de Inicio",
-    "Fecha de Fin",
+    "Fecha_Inicio",
     "Modalidad",
-    "Incluye Práctica",
     "Descripción",
-    "Lugares Disponibles",
-    "Nivel Requerido",
     "Organizador",
-    "Link Promocional",
-    "Confianza",
-    "Fecha Importación",
+    "Link_Promocion",
+    "Tipo_Evento",
+    "img",
+    "Nivel_Requerido",
+    "Fecha_Fin",
+    "Lugares_Disponibles",
+    "Es_Practico",
 ]
 
 
@@ -44,7 +43,7 @@ def get_existing_names(service) -> set:
     result = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A:A")
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!B:B")
         .execute()
     )
     values = result.get("values", [])
@@ -77,8 +76,6 @@ def append_events(events: list[dict]) -> int:
     existing = get_existing_names(service)
 
     rows = []
-    today = datetime.now().strftime("%d/%m/%Y")
-
     for event in events:
         nombre = (event.get("nombre") or "").strip()
         if nombre.lower() in existing:
@@ -86,21 +83,20 @@ def append_events(events: list[dict]) -> int:
             continue
 
         row = [
+            "true",
             nombre,
-            event.get("imagen_url") or "",
-            event.get("tipo_evento") or "",
             event.get("lugar") or "",
             event.get("fecha_inicio") or "",
-            event.get("fecha_fin") or "",
             event.get("modalidad") or "",
-            "Sí" if event.get("incluye_practica") else "No",
             event.get("descripcion") or "",
-            event.get("lugares_disponibles") or "",
-            event.get("nivel_requerido") or "",
             event.get("organizador") or "",
             event.get("link_promocional") or "",
-            event.get("confianza") or "",
-            today,
+            event.get("tipo_evento") or "",
+            event.get("imagen_url") or "",
+            event.get("nivel_requerido") or "",
+            event.get("fecha_fin") or "",
+            event.get("lugares_disponibles") or "",
+            "true" if event.get("incluye_practica") else "false",
         ]
         rows.append(row)
         existing.add(nombre.lower())
