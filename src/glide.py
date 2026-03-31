@@ -196,7 +196,7 @@ def add_row_to_glide(event: dict) -> bool:
             print(f"[glide] ✓ '{event.get('nombre')}'")
             return True
         else:
-            print(f"[glide] Error {resp.status_code}: {resp.text[:200]}")
+            print(f"[glide] Error {resp.status_code}: {resp.text[:500]}")
             return False
     except Exception as e:
         print(f"[glide] Error: {e}")
