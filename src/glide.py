@@ -175,6 +175,7 @@ def add_row_to_glide(event: dict) -> bool:
         "actionMetadata": {
             "jobID": job_id,
             "deviceID": DEVICE_ID,
+            "appID": APP_ID,
         },
         "payload": {
             "tableName": {"name": TABLE_NAME, "isSpecial": False},
