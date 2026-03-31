@@ -186,6 +186,7 @@ def add_row_to_glide(event: dict) -> bool:
     }
 
     try:
+        print(f"[glide] Payload: {json.dumps(payload)[:500]}")
         resp = requests.post(
             f"{ENDPOINT}?reqid={req_id}",
             headers=HEADERS,
