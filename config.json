@@ -17,5 +17,5 @@
     ]
   ],
   "dias_atras": 30,
-  "max_imagenes_por_query": 10
+  "max_imagenes_por_query": 100
 }
