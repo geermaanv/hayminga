@@ -1,12 +1,15 @@
 """
 main.py
-Orquesta el pipeline completo.
+Orquesta el pipeline completo:
+  1. Scraping de Google Images via SerpAPI
+  2. Extracción con Claude Vision
+  3. Escritura directa en Glide Tables
 """
 
 import sys
 from src.scraper import download_images, HASHTAGS
 from src.processor import process_batch
-from src.sheets import append_events
+from src.glide import add_events
 
 
 def run():
@@ -33,10 +36,10 @@ def run():
         print("Sin eventos válidos detectados. Pipeline finalizado.")
         return
 
-    # 3. Escritura en Google Sheets
-    print("[3/3] Escribiendo en Google Sheets...")
-    inserted = append_events(events)
-    print(f"      {inserted} evento(s) nuevo(s) cargado(s)\n")
+    # 3. Escritura directa en Glide
+    print("[3/3] Escribiendo en Glide...")
+    inserted = add_events(events)
+    print(f"      {inserted} evento(s) cargado(s) en Glide\n")
 
     print("=== Pipeline completado ===")
     return inserted
