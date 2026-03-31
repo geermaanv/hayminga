@@ -1,0 +1,21 @@
+{
+  "grupos": [
+    [
+      "site:instagram.com argentina bioconstruccion evento",
+      "site:instagram.com argentina minga bioconstruccion",
+      "site:instagram.com argentina taller adobe barro"
+    ],
+    [
+      "site:instagram.com argentina taller quincha",
+      "site:instagram.com argentina curso bioconstruccion",
+      "site:instagram.com argentina minga adobe"
+    ],
+    [
+      "site:instagram.com argentina taller tierra natural",
+      "site:instagram.com chile bioconstruccion evento",
+      "site:instagram.com uruguay bioconstruccion evento"
+    ]
+  ],
+  "dias_atras": 30,
+  "max_imagenes_por_query": 10
+}
