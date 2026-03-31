@@ -57,9 +57,7 @@ def build_query(hashtag: str) -> str:
 
 
 def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
-    """
-    Usa SerpAPI y retorna lista de dicts con thumbnail, original y link.
-    """
+    """Usa SerpAPI y retorna lista de dicts con thumbnail, original y link."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         print("[scraper] SERPAPI_KEY no configurada")
@@ -87,10 +85,10 @@ def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
         if img.get("thumbnail"):
             results.append({
                 "thumbnail": img.get("thumbnail", ""),
-                "original": img.get("thumbnail", ""),  # usar thumbnail como imagen
+                "original": img.get("thumbnail", ""),  # thumbnail público, no original de Instagram
                 "link": img.get("link", ""),
             })
-    })
+
     print(f"[scraper] SerpAPI devolvió {len(results)} imagen(es)")
     return results
 
@@ -98,7 +96,7 @@ def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
 def download_images(hashtag: str, max_new: int = 10) -> list[tuple[Path, dict]]:
     """
     Descarga thumbnails nuevos para un hashtag.
-    Retorna lista de (path, metadata) donde metadata tiene original y link.
+    Retorna lista de (path, metadata).
     """
     IMAGES_DIR.mkdir(exist_ok=True)
     seen = load_seen_hashes()
