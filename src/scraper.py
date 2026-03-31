@@ -1,18 +1,20 @@
 """
 scraper.py
-Busca imágenes en Google Images sobre eventos de bioconstrucción
-usando SerpAPI y descarga los thumbnails evitando duplicados.
+Busca imágenes en Google Images usando queries configurables
+y descarga los thumbnails evitando duplicados.
 """
 
 import os
 import time
 import hashlib
 import requests
+import json
 from pathlib import Path
+from datetime import datetime, timedelta
 
-HASHTAGS = ["minga", "bioconstruccion"]
 IMAGES_DIR = Path("images")
 SEEN_FILE = Path("seen_hashes.txt")
+CONFIG_FILE = Path("config.json")
 
 HEADERS = {
     "User-Agent": (
@@ -28,6 +30,27 @@ VALID_MAGIC = {
     b'RIFF':         'webp',
     b'GIF8':         'gif',
 }
+
+
+def load_config() -> dict:
+    return json.loads(CONFIG_FILE.read_text())
+
+
+def get_queries_for_today(config: dict) -> list[str]:
+    """Selecciona el grupo de queries según el día del año."""
+    grupos = config.get("grupos", [])
+    if not grupos:
+        return []
+    idx = datetime.now().timetuple().tm_yday % len(grupos)
+    queries = grupos[idx]
+    print(f"[scraper] Grupo {idx + 1}/{len(grupos)} — {len(queries)} queries")
+    return queries
+
+
+def build_query_with_date(query: str, dias_atras: int) -> str:
+    """Agrega filtro after: a la query."""
+    fecha = (datetime.now() - timedelta(days=dias_atras)).strftime("%Y-%m-%d")
+    return f"{query} after:{fecha}"
 
 
 def load_seen_hashes() -> set:
@@ -52,12 +75,8 @@ def is_valid_image(data: bytes) -> tuple[bool, str]:
     return False, ''
 
 
-def build_query(hashtag: str) -> str:
-    return f"#{hashtag} (minga OR bioconstruccion OR adobe OR taller) evento"
-
-
-def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
-    """Usa SerpAPI y retorna lista de dicts con thumbnail, original y link."""
+def fetch_image_data(query: str, max_results: int = 10) -> list[dict]:
+    """Usa SerpAPI con query estilo Google Images."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
         print("[scraper] SERPAPI_KEY no configurada")
@@ -68,7 +87,6 @@ def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
         "q": query,
         "api_key": api_key,
         "ijn": 0,
-        "tbs": "qdr:m",
     }
 
     resp = requests.get("https://serpapi.com/search", params=params, timeout=20)
@@ -85,23 +103,18 @@ def fetch_image_data(query: str, max_results: int = 30) -> list[dict]:
         if img.get("thumbnail"):
             results.append({
                 "thumbnail": img.get("thumbnail", ""),
-                "original": img.get("thumbnail", ""),  # thumbnail público, no original de Instagram
+                "original": img.get("thumbnail", ""),
                 "link": img.get("link", ""),
             })
 
-    print(f"[scraper] SerpAPI devolvió {len(results)} imagen(es)")
+    print(f"[scraper] '{query[:60]}...' → {len(results)} imagen(es)")
     return results
 
 
-def download_images(hashtag: str, max_new: int = 10) -> list[tuple[Path, dict]]:
-    """
-    Descarga thumbnails nuevos para un hashtag.
-    Retorna lista de (path, metadata).
-    """
+def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple[Path, dict]]:
+    """Descarga thumbnails nuevos para una query."""
     IMAGES_DIR.mkdir(exist_ok=True)
-    seen = load_seen_hashes()
-    query = build_query(hashtag)
-    image_data = fetch_image_data(query, max_results=40)
+    image_data = fetch_image_data(query, max_results=max_new * 3)
 
     downloaded = []
     for item in image_data:
@@ -121,9 +134,11 @@ def download_images(hashtag: str, max_new: int = 10) -> list[tuple[Path, dict]]:
             if h in seen:
                 continue
 
-            filename = IMAGES_DIR / f"{hashtag}_{h[:12]}.{ext}"
+            slug = hashlib.md5(query.encode()).hexdigest()[:6]
+            filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             save_hash(h)
+            seen.add(h)
             downloaded.append((filename, item))
             print(f"[scraper] Descargada: {filename.name}")
             time.sleep(0.3)
@@ -134,8 +149,25 @@ def download_images(hashtag: str, max_new: int = 10) -> list[tuple[Path, dict]]:
     return downloaded
 
 
+def download_all() -> list[tuple[Path, dict]]:
+    """Corre todas las queries del grupo de hoy."""
+    config = load_config()
+    queries = get_queries_for_today(config)
+    dias_atras = config.get("dias_atras", 30)
+    max_por_query = config.get("max_imagenes_por_query", 10)
+
+    seen = load_seen_hashes()
+    all_items = []
+
+    for query in queries:
+        query_con_fecha = build_query_with_date(query, dias_atras)
+        items = download_images_for_query(query_con_fecha, max_por_query, seen)
+        all_items.extend(items)
+        print(f"      {len(items)} imagen(es) nueva(s)")
+
+    return all_items
+
+
 if __name__ == "__main__":
-    for tag in HASHTAGS:
-        print(f"\n=== #{tag} ===")
-        files = download_images(tag)
-        print(f"  {len(files)} imagen(es) nueva(s)")
+    items = download_all()
+    print(f"\nTotal: {len(items)} imagen(es) descargada(s)")
