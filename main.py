@@ -1,9 +1,6 @@
 """
 main.py
-Orquesta el pipeline completo:
-  1. Scraping de Google Images
-  2. Extracción con Claude Vision
-  3. Escritura en Google Sheets
+Orquesta el pipeline completo.
 """
 
 import sys
@@ -16,20 +13,20 @@ def run():
     print("=== hayminga.org — pipeline de importación ===\n")
 
     # 1. Scraping
-    all_images = []
+    all_items = []
     for tag in HASHTAGS:
         print(f"[1/3] Buscando imágenes para #{tag}...")
-        images = download_images(tag, max_new=10)
-        all_images.extend(images)
-        print(f"      {len(images)} imagen(es) nueva(s)\n")
+        items = download_images(tag, max_new=10)
+        all_items.extend(items)
+        print(f"      {len(items)} imagen(es) nueva(s)\n")
 
-    if not all_images:
+    if not all_items:
         print("Sin imágenes nuevas. Pipeline finalizado.")
         return
 
     # 2. Procesamiento con Claude Vision
-    print(f"[2/3] Procesando {len(all_images)} imagen(es) con Claude Vision...")
-    events = process_batch(all_images)
+    print(f"[2/3] Procesando {len(all_items)} imagen(es) con Claude Vision...")
+    events = process_batch(all_items)
     print(f"      {len(events)} evento(s) extraído(s)\n")
 
     if not events:
@@ -39,7 +36,7 @@ def run():
     # 3. Escritura en Google Sheets
     print("[3/3] Escribiendo en Google Sheets...")
     inserted = append_events(events)
-    print(f"      {inserted} evento(s) nuevo(s) cargado(s) en Glide\n")
+    print(f"      {inserted} evento(s) nuevo(s) cargado(s)\n")
 
     print("=== Pipeline completado ===")
     return inserted
