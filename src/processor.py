@@ -1,6 +1,6 @@
 """
 processor.py
-Envía cada flyer a Claude Vision y extrae los 4 campos del evento.
+Envía cada flyer a Claude Vision y extrae los datos del evento.
 """
 
 import os
@@ -12,16 +12,22 @@ import anthropic
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 SYSTEM_PROMPT = """Sos un extractor de datos de eventos de bioconstrucción.
-Analizás imágenes de flyers de Instagram y extraés la información del evento.
+Analizás imágenes de flyers y extraés la información del evento.
 Respondés ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown.
 
 Formato exacto:
 {
-  "nombre": "nombre del evento o minga",
-  "fecha": "fecha en formato DD/MM/YYYY, o rango si aplica. null si no encontrás",
-  "lugar": "ciudad, provincia o dirección. null si no encontrás",
-  "contacto": "link, email, teléfono o usuario de Instagram. null si no encontrás",
-  "descripcion": "una línea describiendo el evento. null si no podés inferir",
+  "nombre": "nombre del evento",
+  "tipo_evento": "Curso | Taller | Minga | Charla | Evento | Residencia | Festival",
+  "fecha_inicio": "DD/MM/YYYY o null",
+  "fecha_fin": "DD/MM/YYYY o null",
+  "lugar": "ciudad, provincia, país o null",
+  "modalidad": "Presencial | Virtual | Híbrido o null",
+  "incluye_practica": true o false,
+  "descripcion": "una línea o null",
+  "lugares_disponibles": número o null,
+  "nivel_requerido": "Inicial | Medio | Experto o null",
+  "organizador": "nombre del organizador o null",
   "confianza": "alta | media | baja"
 }
 
@@ -31,7 +37,6 @@ Si la imagen no es un flyer de evento de bioconstrucción, respondé:
 
 
 def encode_image(path: Path) -> tuple[str, str]:
-    """Retorna (base64_data, media_type)."""
     suffix = path.suffix.lower().lstrip(".")
     media_map = {
         "jpg": "image/jpeg",
@@ -44,10 +49,10 @@ def encode_image(path: Path) -> tuple[str, str]:
     return data, media_type
 
 
-def extract_event_data(image_path: Path) -> dict | None:
+def extract_event_data(image_path: Path, metadata: dict) -> dict | None:
     """
     Procesa una imagen con Claude Vision.
-    Retorna dict con los datos del evento, o None si no es un evento válido.
+    metadata contiene: thumbnail, original, link
     """
     raw = ""
     try:
@@ -55,7 +60,7 @@ def extract_event_data(image_path: Path) -> dict | None:
 
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=500,
+            max_tokens=600,
             system=SYSTEM_PROMPT,
             messages=[
                 {
@@ -86,7 +91,10 @@ def extract_event_data(image_path: Path) -> dict | None:
             print(f"[processor] {image_path.name}: no es un evento, saltando")
             return None
 
-        data["imagen_fuente"] = image_path.name
+        # Agregar metadata de URLs
+        data["imagen_url"] = metadata.get("original") or metadata.get("thumbnail", "")
+        data["link_promocional"] = metadata.get("link", "")
+
         print(f"[processor] {image_path.name}: '{data.get('nombre', '?')}' — confianza {data.get('confianza', '?')}")
         return data
 
@@ -99,11 +107,11 @@ def extract_event_data(image_path: Path) -> dict | None:
         return None
 
 
-def process_batch(image_paths: list[Path]) -> list[dict]:
-    """Procesa una lista de imágenes y retorna los eventos extraídos."""
+def process_batch(items: list[tuple[Path, dict]]) -> list[dict]:
+    """Procesa una lista de (path, metadata) y retorna los eventos extraídos."""
     results = []
-    for path in image_paths:
-        data = extract_event_data(path)
+    for path, metadata in items:
+        data = extract_event_data(path, metadata)
         if data:
             results.append(data)
     return results
@@ -111,7 +119,7 @@ def process_batch(image_paths: list[Path]) -> list[dict]:
 
 if __name__ == "__main__":
     import sys
-    paths = [Path(p) for p in sys.argv[1:]] if len(sys.argv) > 1 else list(Path("images").glob("*.jpg"))
+    paths = [(Path(p), {}) for p in sys.argv[1:]] if len(sys.argv) > 1 else [(p, {}) for p in Path("images").glob("*.jpg")]
     events = process_batch(paths)
     print(f"\n{len(events)} evento(s) extraído(s):")
     for e in events:
