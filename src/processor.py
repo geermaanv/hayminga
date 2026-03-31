@@ -21,12 +21,10 @@ Formato exacto:
   "tipo_evento": "Curso | Taller | Minga | Charla | Evento | Residencia | Festival",
   "fecha_inicio": "DD/MM/YYYY o null",
   "fecha_fin": "DD/MM/YYYY o null",
-  "lugar": "ciudad, provincia, país o null",
-  "modalidad": "Presencial | Virtual | Híbrido o null",
-  "incluye_practica": true o false,
+  "lugar": "dirección o null",
+  "provincia": "provincia argentina o null",
+  "es_virtual": true o false,
   "descripcion": "una línea o null",
-  "lugares_disponibles": número o null,
-  "nivel_requerido": "Inicial | Medio | Experto o null",
   "organizador": "nombre del organizador o null",
   "confianza": "alta | media | baja"
 }
