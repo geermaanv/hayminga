@@ -1,11 +1,10 @@
 """
 scraper.py
-Busca imágenes en Google Images filtrando por última semana (qdr:w)
-y tamaño grande (isz:l). Sin SerpAPI — usa requests directo.
+Busca imágenes en Google Images via SerpAPI con filtro de última semana
+y tamaño grande (isz:l, qdr:w). Descarga thumbnails evitando duplicados.
 """
 
 import os
-import re
 import time
 import hashlib
 import requests
@@ -13,8 +12,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-IMAGES_DIR = Path("images")
-SEEN_FILE  = Path("seen_hashes.txt")
+IMAGES_DIR  = Path("images")
+SEEN_FILE   = Path("seen_hashes.txt")
 CONFIG_FILE = Path("config.json")
 
 HEADERS = {
@@ -22,8 +21,7 @@ HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "es-AR,es;q=0.9",
+    )
 }
 
 VALID_MAGIC = {
@@ -69,63 +67,52 @@ def is_valid_image(data: bytes) -> tuple[bool, str]:
     return False, ''
 
 
-def build_search_url(query: str) -> str:
-    """
-    Construye URL de Google Images con:
-    - isz:l  → imágenes grandes (mejor resolución)
-    - qdr:w  → última semana
-    """
-    import urllib.parse
-    q = urllib.parse.quote(query)
-    return (
-        f"https://www.google.com/search"
-        f"?q={q}&tbm=isch&tbs=isz:l,qdr:w&hl=es&gl=ar"
-    )
+def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
+    """Busca en Google Images via SerpAPI con filtros de tamaño y fecha."""
+    api_key = os.getenv("SERPAPI_KEY")
+    if not api_key:
+        print("[scraper] SERPAPI_KEY no configurada")
+        return []
 
-
-def fetch_image_urls(query: str, max_results: int = 20) -> list[dict]:
-    """Extrae URLs de imágenes y links fuente desde Google Images."""
-    url = build_search_url(query)
-    print(f"[scraper] GET {url[:80]}...")
+    params = {
+        "engine":  "google_images",
+        "q":       query,
+        "api_key": api_key,
+        "ijn":     0,
+        "tbs":     "isz:l,qdr:w",  # large + última semana
+        "hl":      "es",
+        "gl":      "ar",
+    }
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get("https://serpapi.com/search", params=params, timeout=20)
     except Exception as e:
         print(f"[scraper] Error de red: {e}")
         return []
 
     if resp.status_code != 200:
-        print(f"[scraper] HTTP {resp.status_code}")
+        print(f"[SerpAPI] Error {resp.status_code}: {resp.text[:200]}")
         return []
 
-    html = resp.text
+    data     = resp.json()
+    images   = data.get("images_results", [])
+    results  = []
 
-    # Google embebe los datos de imágenes en JSON dentro del HTML
-    # Patrón para extraer thumbnail URLs y links fuente
-    results = []
+    for img in images[:max_results]:
+        thumb = img.get("thumbnail") or img.get("original")
+        if thumb:
+            results.append({
+                "thumbnail": thumb,
+                "link":      img.get("link", ""),
+            })
 
-    # Extraer thumbnails (encrypted-tbn)
-    thumbs = re.findall(r'https://encrypted-tbn0\.gstatic\.com/images\?[^"\'\\]+', html)
-    # Extraer links de instagram
-    links = re.findall(r'https://www\.instagram\.com/p/[A-Za-z0-9_\-]+/?', html)
-    links += re.findall(r'https://www\.instagram\.com/reel/[A-Za-z0-9_\-]+/?', html)
-
-    # Deduplicar manteniendo orden
-    thumbs = list(dict.fromkeys(thumbs))
-    links  = list(dict.fromkeys(links))
-
-    print(f"[scraper] '{query[:50]}' → {len(thumbs)} thumbs, {len(links)} links IG")
-
-    for i, thumb in enumerate(thumbs[:max_results]):
-        link = links[i] if i < len(links) else ""
-        results.append({"thumbnail": thumb, "link": link})
-
+    print(f"[scraper] '{query[:55]}' → {len(results)} imagen(es)")
     return results
 
 
 def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple[Path, dict]]:
     IMAGES_DIR.mkdir(exist_ok=True)
-    items = fetch_image_urls(query, max_results=max_new * 3)
+    items = fetch_image_data(query, max_results=max_new * 3)
 
     downloaded = []
     for item in items:
@@ -136,7 +123,7 @@ def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple
             if resp.status_code != 200:
                 continue
 
-            data = resp.content
+            data  = resp.content
             valid, ext = is_valid_image(data)
             if not valid:
                 continue
@@ -145,14 +132,14 @@ def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple
             if h in seen:
                 continue
 
-            slug = hashlib.md5(query.encode()).hexdigest()[:6]
+            slug     = hashlib.md5(query.encode()).hexdigest()[:6]
             filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             save_hash(h)
             seen.add(h)
             downloaded.append((filename, item))
             print(f"[scraper] ✓ {filename.name} — {item.get('link','')[:50]}")
-            time.sleep(0.5)
+            time.sleep(0.3)
 
         except Exception as e:
             print(f"[scraper] Error descargando: {e}")
@@ -161,11 +148,11 @@ def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple
 
 
 def download_all() -> list[tuple[Path, dict]]:
-    config  = load_config()
-    queries = get_queries_for_today(config)
+    config        = load_config()
+    queries       = get_queries_for_today(config)
     max_por_query = config.get("max_imagenes_por_query", 10)
 
-    seen = load_seen_hashes()
+    seen      = load_seen_hashes()
     all_items = []
 
     for query in queries:
