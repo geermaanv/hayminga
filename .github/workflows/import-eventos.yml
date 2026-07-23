@@ -12,6 +12,10 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+    defaults:
+      run:
+        working-directory: import
+
     steps:
       - name: Checkout repositorio
         uses: actions/checkout@v4
@@ -21,6 +25,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: import/requirements.txt
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
@@ -28,7 +33,7 @@ jobs:
       - name: Restaurar hashes vistos
         uses: actions/cache@v4
         with:
-          path: seen_hashes.txt
+          path: import/seen_hashes.txt
           key: seen-hashes-${{ github.run_id }}
           restore-keys: |
             seen-hashes-
@@ -45,5 +50,5 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: seen_hashes.txt
+          path: import/seen_hashes.txt
           key: seen-hashes-${{ github.run_id }}
