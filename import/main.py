@@ -4,6 +4,10 @@ Google Images (última semana, imágenes grandes) → Claude Vision → Google S
 """
 
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from src.scraper import download_all
 from src.processor import process_batch
 from src.sheets import append_events

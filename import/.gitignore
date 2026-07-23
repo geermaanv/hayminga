@@ -1,0 +1,5 @@
+.env
+images/
+seen_hashes.txt
+__pycache__/
+*.pyc
