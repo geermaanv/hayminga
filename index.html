@@ -179,6 +179,15 @@ footer a{color:var(--tierra);text-decoration:none;}
 .btn-publicar:disabled{opacity:0.6;cursor:default;}
 .evento-form-alt{text-align:center;font-size:0.8rem;color:var(--texto-suave);margin-top:0.75rem;}
 .evento-form-alt a{color:var(--tierra-claro);}
+.vista-toggle{display:flex;gap:0.4rem;max-width:1100px;margin:1rem auto 0;padding:0 1.5rem;}
+.vista-btn{padding:0.45rem 1rem;border:1.5px solid var(--paja-oscuro);border-radius:20px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:500;cursor:pointer;}
+.vista-btn.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
+.persona-card{background:var(--blanco);border-radius:var(--radio);box-shadow:0 2px 8px var(--sombra);border:1px solid rgba(139,69,19,0.08);padding:1.1rem;display:flex;flex-direction:column;gap:0.5rem;}
+.persona-nombre{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:500;color:var(--texto);}
+.persona-provincia{font-size:0.78rem;color:var(--texto-suave);}
+.persona-desc{font-size:0.85rem;color:var(--texto);line-height:1.4;flex:1;}
+.btn-contactar{align-self:flex-start;margin-top:0.4rem;padding:0.4rem 0.9rem;background:transparent;border:1.5px solid var(--tierra-claro);color:var(--tierra-claro);border-radius:20px;font-family:'DM Sans',sans-serif;font-size:0.82rem;font-weight:500;cursor:pointer;}
+.btn-contactar:hover{background:var(--tierra-claro);color:white;}
 </style>
 </head>
 <body>
@@ -189,8 +198,16 @@ footer a{color:var(--tierra);text-decoration:none;}
     <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
     <button class="nav-link" onclick="abrirPopup()">hayminga en tu email</button>
     <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()">+ Nuevo Evento</button>
+    <button class="nav-btn" style="border:none;cursor:pointer;background:var(--verde);" onclick="abrirFormDirectorio()">+ Sumarme</button>
   </nav>
 </header>
+
+<div class="vista-toggle">
+  <button class="vista-btn on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">Eventos</button>
+  <button class="vista-btn" id="vista-btn-directorio" onclick="mostrarVista('directorio')">Directorio</button>
+</div>
+
+<div id="vista-eventos">
 
 <div class="filtros-container">
   <div class="filtros-inner">
@@ -276,6 +293,16 @@ footer a{color:var(--tierra);text-decoration:none;}
 <div class="conteo" id="conteo"></div>
 <div class="grilla" id="grilla">
   <div class="loading"><div class="spinner"></div><p>Cargando eventos...</p></div>
+</div>
+
+</div>
+<!-- /vista-eventos -->
+
+<div id="vista-directorio" style="display:none;">
+  <div class="conteo" id="conteo-directorio"></div>
+  <div class="grilla" id="grilla-directorio">
+    <div class="loading"><div class="spinner"></div><p>Cargando directorio...</p></div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
@@ -386,6 +413,51 @@ footer a{color:var(--tierra);text-decoration:none;}
   </div>
 </div>
 
+<div class="popup-overlay" id="form-directorio-overlay" onclick="cerrarFormDirectorio(event)">
+  <div class="popup">
+    <button class="popup-cerrar" onclick="cerrarFormDirectorio()">✕</button>
+    <h3>Sumate al <em>directorio</em></h3>
+    <p>Profesional, aprendiz, curioso — si te interesa la bioconstrucción, contanos.</p>
+    <form id="form-directorio" onsubmit="enviarDirectorio(event)">
+      <input type="text" name="web" class="honeypot-field" tabindex="-1" autocomplete="off">
+      <input type="text" id="directorio-nombre" placeholder="Tu nombre" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+      <input type="email" id="directorio-email" placeholder="tu@email.com (no se muestra público)" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+      <input type="text" id="directorio-provincia" placeholder="Provincia"
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+      <textarea id="directorio-descripcion" placeholder="¿Qué te interesa o en qué podés ayudar?" rows="3"
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
+      <button type="submit" id="btn-publicar-directorio"
+        style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
+        Sumarme
+      </button>
+      <p id="directorio-form-msg" style="margin-top:0.75rem;font-size:0.82rem;text-align:center;display:none;"></p>
+    </form>
+  </div>
+</div>
+
+<div class="popup-overlay" id="contacto-overlay" onclick="cerrarSolicitarContacto(event)">
+  <div class="popup">
+    <button class="popup-cerrar" onclick="cerrarSolicitarContacto()">✕</button>
+    <h3>Contactar a <em id="contacto-nombre-destino"></em></h3>
+    <p>Le mandamos tu mensaje. Si acepta, les compartimos los emails a los dos.</p>
+    <form id="form-contacto" onsubmit="enviarSolicitudContacto(event)">
+      <input type="text" id="contacto-solicitante-nombre" placeholder="Tu nombre" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+      <input type="email" id="contacto-solicitante-email" placeholder="tu@email.com" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+      <textarea id="contacto-mensaje" placeholder="Mensaje (opcional)" rows="3"
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
+      <button type="submit" id="btn-enviar-contacto"
+        style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
+        Enviar solicitud
+      </button>
+      <p id="contacto-form-msg" style="margin-top:0.75rem;font-size:0.82rem;text-align:center;display:none;"></p>
+    </form>
+  </div>
+</div>
+
 <section class="vision" id="vision">
   <div class="vision-inner">
     <h2 class="vision-titulo">¿Qué es <em>hayminga</em>?</h2>
@@ -425,7 +497,7 @@ var SHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
 var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Eventos';
 // URL del Web App de Apps Script (import/apps-script/Code.gs) — se completa
 // después de desplegarlo: Implementar > Nueva implementación > Aplicación web
-var APPS_SCRIPT_URL = 'PEGAR_AQUI_LA_URL_DEL_WEB_APP_DESPLEGADO';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVjevBJdUwh0xrusFIrRSI647HkUna9zZBR_dHTbKotBfgk_8byPmdDzeP9dBnzDCy/exec';
 var todosLosEventos = [];
 var eventosFiltrados = [];
 
@@ -898,11 +970,155 @@ function enviarEvento(e) {
   reader.readAsDataURL(file);
 }
 
+// ---- Directorio ----
+var directorioApiUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Directorio';
+var directorioCargado = false;
+var personasDirectorio = [];
+
+function mostrarVista(vista) {
+  var esEventos = vista === 'eventos';
+  document.getElementById('vista-eventos').style.display = esEventos ? '' : 'none';
+  document.getElementById('vista-directorio').style.display = esEventos ? 'none' : '';
+  document.getElementById('vista-btn-eventos').classList.toggle('on', esEventos);
+  document.getElementById('vista-btn-directorio').classList.toggle('on', !esEventos);
+  if (!esEventos && !directorioCargado) cargarDirectorio();
+}
+
+function cargarDirectorio() {
+  directorioCargado = true;
+  fetch(directorioApiUrl)
+    .then(function(r) { return r.text(); })
+    .then(function(texto) {
+      var json = JSON.parse(texto.substring(47, texto.length - 2));
+      var filas = json.table.rows;
+      if (!filas || !filas.length) { personasDirectorio = []; renderDirectorio(); return; }
+      var cols = filas[0].c.map(function(c) { return c ? c.v : ''; });
+      personasDirectorio = filas.slice(1)
+        .filter(function(f) { return f && f.c; })
+        .map(function(f) {
+          var obj = {};
+          cols.forEach(function(col, i) {
+            var celda = f.c[i];
+            obj[col] = celda ? (celda.f || celda.v) : '';
+          });
+          return obj;
+        })
+        .filter(function(p) { return p['Nombre']; });
+      renderDirectorio();
+    })
+    .catch(function() {
+      document.getElementById('grilla-directorio').innerHTML =
+        '<div class="empty"><div class="empty-icon">🌱</div><h3>No se pudo cargar el directorio</h3></div>';
+    });
+}
+
+function renderDirectorio() {
+  var g = document.getElementById('grilla-directorio');
+  var n = personasDirectorio.length;
+  document.getElementById('conteo-directorio').textContent = n === 0 ? 'Sin resultados' : n + ' persona' + (n !== 1 ? 's' : '');
+  if (n === 0) {
+    g.innerHTML = '<div class="empty"><div class="empty-icon">🌿</div><h3>Todavía no hay nadie</h3><p>Sé el primero en sumarte</p></div>';
+    return;
+  }
+  var html = '';
+  personasDirectorio.forEach(function(p) {
+    html += '<div class="persona-card">'
+      + '<div class="persona-nombre">' + p['Nombre'] + '</div>'
+      + (p['Provincia'] ? '<div class="persona-provincia">' + p['Provincia'] + '</div>' : '')
+      + (p['Descripcion'] ? '<div class="persona-desc">' + p['Descripcion'] + '</div>' : '')
+      + '<button class="btn-contactar" onclick="abrirSolicitarContacto(\'' + p['Id'] + '\',' + JSON.stringify(p['Nombre']) + ')">Quiero contactar</button>'
+      + '</div>';
+  });
+  g.innerHTML = html;
+}
+
+function abrirFormDirectorio() {
+  document.getElementById('form-directorio-overlay').classList.add('activo');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarFormDirectorio(ev) {
+  if (ev && ev.target !== document.getElementById('form-directorio-overlay')) return;
+  document.getElementById('form-directorio-overlay').classList.remove('activo');
+  document.body.style.overflow = '';
+}
+
+function enviarDirectorio(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btn-publicar-directorio');
+  var msg = document.getElementById('directorio-form-msg');
+  var payload = {
+    accion: 'directorio_alta',
+    web: document.querySelector('#form-directorio .honeypot-field').value,
+    nombre: document.getElementById('directorio-nombre').value,
+    email: document.getElementById('directorio-email').value,
+    provincia: document.getElementById('directorio-provincia').value,
+    descripcion: document.getElementById('directorio-descripcion').value
+  };
+  btn.disabled = true;
+  fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) })
+    .then(function() {
+      msg.style.display = 'block'; msg.style.color = 'var(--verde)';
+      msg.textContent = '¡Listo! Ya estás en el directorio 🌿';
+      document.getElementById('form-directorio').reset();
+      btn.disabled = false;
+      directorioCargado = false; // fuerza recarga la próxima vez que se abra
+      setTimeout(function() { cerrarFormDirectorio(); }, 1800);
+    })
+    .catch(function() {
+      msg.style.display = 'block'; msg.style.color = '#c0392b';
+      msg.textContent = 'Algo salió mal, intentá de nuevo.';
+      btn.disabled = false;
+    });
+}
+
+var contactoDirectorioId = null;
+
+function abrirSolicitarContacto(id, nombre) {
+  contactoDirectorioId = id;
+  document.getElementById('contacto-nombre-destino').textContent = nombre;
+  document.getElementById('contacto-overlay').classList.add('activo');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarSolicitarContacto(ev) {
+  if (ev && ev.target !== document.getElementById('contacto-overlay')) return;
+  document.getElementById('contacto-overlay').classList.remove('activo');
+  document.body.style.overflow = '';
+}
+
+function enviarSolicitudContacto(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btn-enviar-contacto');
+  var msg = document.getElementById('contacto-form-msg');
+  var payload = {
+    accion: 'directorio_contacto',
+    directorioId: contactoDirectorioId,
+    solicitanteNombre: document.getElementById('contacto-solicitante-nombre').value,
+    solicitanteEmail: document.getElementById('contacto-solicitante-email').value,
+    mensaje: document.getElementById('contacto-mensaje').value
+  };
+  btn.disabled = true;
+  fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) })
+    .then(function() {
+      msg.style.display = 'block'; msg.style.color = 'var(--verde)';
+      msg.textContent = '¡Listo! Si acepta, les avisamos a los dos por mail.';
+      document.getElementById('form-contacto').reset();
+      btn.disabled = false;
+      setTimeout(function() { cerrarSolicitarContacto(); }, 2000);
+    })
+    .catch(function() {
+      msg.style.display = 'block'; msg.style.color = '#c0392b';
+      msg.textContent = 'Algo salió mal, intentá de nuevo.';
+      btn.disabled = false;
+    });
+}
+
 document.addEventListener('keydown', function(ev) {
   if (ev.key === 'Escape') {
     document.getElementById('modal-overlay').classList.remove('activo');
     document.getElementById('popup-overlay').classList.remove('activo');
     document.getElementById('form-evento-overlay').classList.remove('activo');
+    document.getElementById('form-directorio-overlay').classList.remove('activo');
+    document.getElementById('contacto-overlay').classList.remove('activo');
     document.getElementById('panel-mob').classList.remove('abierto');
     document.body.style.overflow = '';
   }

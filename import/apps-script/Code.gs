@@ -1,5 +1,6 @@
 /**
- * hayminga.org — Carga manual de eventos: por mail y por formulario web.
+ * hayminga.org — Carga manual de eventos (mail + formulario) y directorio
+ * de personas con contacto por doble opt-in.
  *
  * 1) Por mail: revisarBandeja() busca en Gmail mails con el asunto
  *    etiquetado (SUBJECT_TAG) y un flyer adjunto, guarda la imagen en
@@ -8,14 +9,23 @@
  *    después, con extracción por IA — el organizador escribe en texto
  *    libre).
  *
- * 2) Por formulario: doPost() recibe el submit del modal de hayminga.org
- *    (campos ya estructurados, sin necesidad de IA) y escribe la fila
- *    directo en "Eventos" — se publica de inmediato, sin esperar la
- *    corrida diaria del pipeline de Python.
+ * 2) Por formulario de evento: doPost() con accion="evento" (default,
+ *    compatibilidad con el modal viejo que no manda accion) recibe
+ *    campos ya estructurados y escribe la fila directo en "Eventos" —
+ *    se publica de inmediato, sin esperar la corrida diaria de Python.
  *
- * IMPORTANTE sobre la casilla monitoreada: Apps Script siempre lee el
- * Gmail de la cuenta de Google dueña de este proyecto de script. Hoy
- * corre bajo germanv@gmail.com. Para cambiar a otra dirección (ej.
+ * 3) Directorio de personas: doPost() con accion="directorio_alta" suma
+ *    una persona a la hoja "Directorio" (público en el sitio, pero SIN
+ *    el email). accion="directorio_contacto" registra un pedido de
+ *    contacto y le manda un mail a la persona pedida con un link de
+ *    aceptación; doGet() atiende ese link — si acepta, les manda un mail
+ *    de presentación a los dos. El email nunca se expone directo en el
+ *    sitio, solo se comparte si la persona da el OK.
+ *
+ * IMPORTANTE sobre la casilla monitoreada / remitente: Apps Script
+ * siempre usa la cuenta de Google dueña de este proyecto de script (para
+ * leer Gmail Y para mandar mail con MailApp). Hoy corre bajo
+ * germanv@gmail.com. Para cambiar a otra dirección (ej.
  * eventos@hayminga.org) más adelante, hay que crear/copiar este mismo
  * proyecto de Apps Script logueado con esa otra cuenta — no alcanza con
  * cambiar una constante acá.
@@ -38,6 +48,11 @@ var QUEUE_HEADERS = ['Timestamp', 'Remitente', 'Asunto', 'CodigoReferencia', 'Cu
 var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
 
+var DIRECTORIO_SHEET_NAME = 'Directorio';
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Descripcion', 'Provincia', 'Email'];
+var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
+var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
+
 
 // ---- Formulario web (POST desde hayminga.org) ----
 
@@ -49,15 +64,144 @@ function doPost(e) {
     // honeypot anti-spam: campo oculto que un humano nunca completa
     if (data.web) {
       respuesta = { success: true, id: null };
+    } else if (data.accion === 'directorio_alta') {
+      respuesta = { success: true, id: crearPersonaDirectorio_(data) };
+    } else if (data.accion === 'directorio_contacto') {
+      respuesta = { success: true, id: solicitarContacto_(data) };
     } else {
-      var id = crearEventoManual_(data);
-      respuesta = { success: true, id: id };
+      // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
+      respuesta = { success: true, id: crearEventoManual_(data) };
     }
   } catch (err) {
     respuesta = { success: false, error: String(err) };
   }
   return ContentService.createTextOutput(JSON.stringify(respuesta))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// ---- Directorio: alta, solicitud de contacto y aceptación ----
+
+function crearPersonaDirectorio_(data) {
+  if (!data.nombre || !data.email) {
+    throw new Error('Faltan campos requeridos (nombre, email)');
+  }
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
+  sheet.appendRow([id, String(data.nombre).trim(), data.descripcion || '', data.provincia || '', String(data.email).trim()]);
+  return id;
+}
+
+
+function solicitarContacto_(data) {
+  if (!data.directorioId || !data.solicitanteNombre || !data.solicitanteEmail) {
+    throw new Error('Faltan campos requeridos (directorioId, solicitanteNombre, solicitanteEmail)');
+  }
+
+  var persona = buscarPersonaDirectorio_(data.directorioId);
+  if (!persona) throw new Error('No se encontró esa persona en el directorio');
+
+  var sheet = getOrCreateSheetWithHeaders_(SOLICITUDES_SHEET_NAME, SOLICITUDES_HEADERS);
+  var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
+  var token = Utilities.getUuid().replace(/-/g, '');
+
+  sheet.appendRow([
+    id, data.directorioId, String(data.solicitanteNombre).trim(),
+    String(data.solicitanteEmail).trim(), data.mensaje || '', token, 'pendiente', new Date(),
+  ]);
+
+  var scriptUrl = ScriptApp.getService().getUrl();
+  var linkAceptar = scriptUrl + '?token=' + token;
+
+  MailApp.sendEmail({
+    to: persona.email,
+    subject: 'Alguien quiere contactarte a través de HayMinga',
+    body:
+      'Hola ' + persona.nombre + '!\n\n' +
+      data.solicitanteNombre + ' (' + data.solicitanteEmail + ') te vio en el directorio ' +
+      'de hayminga.org y quiere contactarte' + (data.mensaje ? ':\n\n"' + data.mensaje + '"\n\n' : '.\n\n') +
+      'Si querés que los pongamos en contacto, hacé clic acá:\n' + linkAceptar + '\n\n' +
+      'Si no te interesa, no hace falta que hagas nada — no se comparte tu email a menos que aceptes.\n\n' +
+      '— hayminga.org',
+  });
+
+  return id;
+}
+
+
+function doGet(e) {
+  var token = e.parameter.token;
+  if (!token) {
+    return HtmlService.createHtmlOutput('<p>Falta el token.</p>');
+  }
+
+  var resultado = aceptarSolicitudContacto_(token);
+  var mensaje = resultado
+    ? '<h2>¡Listo!</h2><p>Les mandamos un mail a los dos presentándolos. Ya te podés cerrar esta pestaña 🌿</p>'
+    : '<h2>Este link ya no es válido</h2><p>O ya fue usado, o la solicitud no existe.</p>';
+  return HtmlService.createHtmlOutput(
+    '<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;color:#2A1A0A;">' + mensaje + '</body>'
+  );
+}
+
+
+function aceptarSolicitudContacto_(token) {
+  var sheet = getOrCreateSheetWithHeaders_(SOLICITUDES_SHEET_NAME, SOLICITUDES_HEADERS);
+  var datos = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < datos.length; i++) {
+    var fila = datos[i];
+    if (fila[5] !== token) continue; // columna Token
+    if (fila[6] === 'aceptado') return false; // ya usado
+
+    var persona = buscarPersonaDirectorio_(fila[1]);
+    if (!persona) return false;
+
+    var solicitanteNombre = fila[2];
+    var solicitanteEmail  = fila[3];
+    var mensaje           = fila[4];
+
+    sheet.getRange(i + 1, 7).setValue('aceptado'); // columna Estado
+
+    var cuerpoComun =
+      'Se conocieron a través del directorio de hayminga.org' +
+      (mensaje ? '.\n\nMensaje original: "' + mensaje + '"' : '.') +
+      '\n\nDe acá en más, escribanse directo — nosotros ya hicimos la presentación 🌿\n\n— hayminga.org';
+
+    MailApp.sendEmail({
+      to: solicitanteEmail,
+      cc: persona.email,
+      subject: 'Te presentamos a ' + persona.nombre + ' — hayminga.org',
+      body: 'Hola ' + solicitanteNombre + ', te presentamos a ' + persona.nombre +
+        ' (' + persona.email + ').\n\n' + cuerpoComun,
+    });
+
+    return true;
+  }
+  return false;
+}
+
+
+function buscarPersonaDirectorio_(id) {
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var datos = sheet.getDataRange().getValues();
+  for (var i = 1; i < datos.length; i++) {
+    if (datos[i][0] === id) {
+      return { id: datos[i][0], nombre: datos[i][1], descripcion: datos[i][2], provincia: datos[i][3], email: datos[i][4] };
+    }
+  }
+  return null;
+}
+
+
+function getOrCreateSheetWithHeaders_(nombre, headers) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(nombre);
+  if (!sheet) {
+    sheet = ss.insertSheet(nombre);
+    sheet.appendRow(headers);
+  }
+  return sheet;
 }
 
 
@@ -142,7 +286,7 @@ function revisarBandeja() {
   }
 
   var folder = getOrCreateFolder_(DRIVE_FOLDER_NAME);
-  var sheet  = getOrCreateQueueSheet_();
+  var sheet  = getOrCreateSheetWithHeaders_(QUEUE_SHEET_NAME, QUEUE_HEADERS);
 
   threads.forEach(function (thread) {
     var messages = thread.getMessages();
@@ -211,12 +355,3 @@ function getOrCreateLabel_(name) {
 }
 
 
-function getOrCreateQueueSheet_() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(QUEUE_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(QUEUE_SHEET_NAME);
-    sheet.appendRow(QUEUE_HEADERS);
-  }
-  return sheet;
-}

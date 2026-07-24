@@ -76,6 +76,28 @@ ya desplegada automáticamente. Hay que ir de nuevo a Implementar →
 Administrar implementaciones → ✏️ (editar) → Nueva versión → Implementar.
 La URL no cambia, así que no hace falta tocar `index.html` de nuevo.
 
+## Directorio de personas (contacto por doble opt-in)
+
+Mismo Web App (`doPost`/`doGet`), dos acciones más:
+
+- **Alta** (`accion: "directorio_alta"`, modal "+ Sumarme"): escribe una
+  fila en la hoja `Directorio` (`Id, Nombre, Descripcion, Provincia,
+  Email`). El sitio la lee pública, pero el `Email` nunca se manda al
+  navegador — solo vive en la Sheet.
+- **Solicitar contacto** (`accion: "directorio_contacto"`, botón "Quiero
+  contactar" en cada tarjeta): guarda el pedido en `SolicitudesContacto`
+  y le manda un mail a la persona pedida con un link de aceptación
+  (`doGet` con un token). Si acepta, `MailApp` les manda un mail a los
+  dos presentándolos — recién ahí se cruzan los emails.
+
+Ambas hojas (`Directorio`, `SolicitudesContacto`) se crean solas la
+primera vez que se usan, con `getOrCreateSheetWithHeaders_`. No hace
+falta crearlas a mano.
+
+Deliberadamente mínimo por ahora: sin roles, sin moderación, sin
+categorías — solo nombre + descripción libre + provincia + contacto. Se
+puede complicar después si hace falta.
+
 ## Cómo lo usa un organizador
 
 **Formulario (recomendado):** clic en "+ Nuevo Evento" en el sitio, completa
