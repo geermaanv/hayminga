@@ -107,7 +107,7 @@ function crearPersonaDirectorio_(data) {
   var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
   var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
   var intereses = Array.isArray(data.intereses) ? data.intereses.join(', ') : (data.intereses || '');
-  sheet.appendRow([
+  appendRowComoTexto_(sheet, [
     id,
     String(data.nombre).trim(),
     data.provincia || '',
@@ -116,6 +116,7 @@ function crearPersonaDirectorio_(data) {
     String(data.email).trim(),
     data.whatsapp || '',
   ]);
+
   return id;
 }
 
@@ -132,10 +133,10 @@ function solicitarContacto_(data) {
   var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
   var token = Utilities.getUuid().replace(/-/g, '');
 
-  sheet.appendRow([
+  appendRowComoTexto_(sheet, [
     id, data.directorioId, String(data.solicitanteNombre).trim(),
     String(data.solicitanteEmail).trim(), data.mensaje || '', token, 'pendiente', new Date(),
-  ]);
+  ], [8]); // columna 8 = Timestamp, es un Date de verdad
 
   var scriptUrl = ScriptApp.getService().getUrl();
   var linkAceptar = scriptUrl + '?token=' + token;
@@ -225,6 +226,29 @@ function buscarPersonaDirectorio_(id) {
 }
 
 
+/**
+ * appendRow()/setValues() coacciona valores según el mismo parser que la
+ * UI de Sheets: "true"/"false" se vuelven booleanos, y cualquier texto
+ * que empiece con "+", "=" o "-" (ej. un WhatsApp "+54 9...") se
+ * interpreta como el inicio de una fórmula y puede terminar en #ERROR!.
+ * Forzamos formato de texto plano en toda la fila ANTES de escribir,
+ * igual que valueInputOption=RAW del lado de Python — así no hay que ir
+ * descubriendo columna por columna cuáles rompen (ya pasó dos veces).
+ * `columnasExcluir` (1-indexado) es para las pocas columnas que sí llevan
+ * un objeto Date de verdad (ej. Timestamp), que si se fuerzan a texto se
+ * ven como un número de serie en vez de una fecha legible.
+ */
+function appendRowComoTexto_(sheet, valores, columnasExcluir) {
+  var fila = sheet.getLastRow() + 1;
+  var excluir = columnasExcluir || [];
+  for (var col = 1; col <= valores.length; col++) {
+    if (excluir.indexOf(col) === -1) sheet.getRange(fila, col).setNumberFormat('@');
+  }
+  sheet.getRange(fila, 1, 1, valores.length).setValues([valores]);
+  return fila;
+}
+
+
 function getOrCreateSheetWithHeaders_(nombre, headers) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(nombre);
@@ -283,15 +307,7 @@ function crearEventoManual_(data) {
     'confirmado',
   ];
 
-  var fila = sheet.getLastRow() + 1;
-  // appendRow() auto-convierte texto "true"/"false" a booleano nativo de
-  // Sheets (igual que tipearlo a mano) — eso mezcla tipos con las filas
-  // que escribe Python (texto plano vía valueInputOption=RAW) y rompe la
-  // detección de encabezado del GViz JSON que lee el frontend. Forzamos
-  // formato de texto en esas dos columnas antes de escribir.
-  sheet.getRange(fila, 1).setNumberFormat('@');  // Activo
-  sheet.getRange(fila, 7).setNumberFormat('@');  // Es_Virtual
-  sheet.getRange(fila, 1, 1, valores.length).setValues([valores]);
+  appendRowComoTexto_(sheet, valores);
 
   return id;
 }
@@ -355,7 +371,7 @@ function procesarMensaje_(msg, folder, sheet) {
   var cuerpo    = msg.getPlainBody().substring(0, 2000);
   var codigo    = extraerCodigo_(asunto + ' ' + cuerpo);
 
-  sheet.appendRow([
+  appendRowComoTexto_(sheet, [
     new Date(),
     remitente,
     asunto,
@@ -363,7 +379,7 @@ function procesarMensaje_(msg, folder, sheet) {
     cuerpo,
     driveUrl,
     '', // Procesado — lo completa el pipeline de Python
-  ]);
+  ], [1]); // columna 1 = Timestamp, es un Date de verdad
 
   Logger.log('Encolado: ' + asunto + ' (' + remitente + ')');
 }
