@@ -16,17 +16,23 @@
 
 // ---- Configuración (esto sí es lo fácil de cambiar) ----
 var SPREADSHEET_ID = 'PEGAR_AQUI_EL_MISMO_ID_QUE_GOOGLE_SPREADSHEET_ID_EN_GITHUB';
-var SUBJECT_TAG     = '[Evento]';           // el organizador debe poner esto en el asunto
+// OJO: Gmail no busca "[Evento]" como texto literal con corchetes — los
+// corchetes se ignoran y termina buscando la palabra "evento" en CUALQUIER
+// lado del asunto, incluido años de mail viejo sin relación (así se coló
+// mail de 2007-2018 la primera vez que se probó esto). Por eso el tag es
+// una sola palabra rara, sin espacios ni símbolos.
+var SUBJECT_TAG     = 'HAYMINGAEVENTO';     // el organizador debe poner esto en el asunto
 var QUEUE_SHEET_NAME = 'Cola_Manual';
 var DRIVE_FOLDER_NAME = 'hayminga - flyers manuales';
 var GMAIL_LABEL_PROCESADO = 'hayminga-procesado';
+var DIAS_ATRAS_MAX = 3; // red de seguridad extra: nunca mirar mail más viejo que esto
 
 var QUEUE_HEADERS = ['Timestamp', 'Remitente', 'Asunto', 'CodigoReferencia', 'CuerpoTexto', 'ImagenDriveUrl', 'Procesado'];
 
 
 function revisarBandeja() {
   var label = getOrCreateLabel_(GMAIL_LABEL_PROCESADO);
-  var query = 'subject:"' + SUBJECT_TAG + '" has:attachment -label:' + GMAIL_LABEL_PROCESADO;
+  var query = 'subject:' + SUBJECT_TAG + ' has:attachment newer_than:' + DIAS_ATRAS_MAX + 'd -label:' + GMAIL_LABEL_PROCESADO;
   var threads = GmailApp.search(query, 0, 20);
 
   if (threads.length === 0) {

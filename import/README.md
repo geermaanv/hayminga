@@ -182,8 +182,8 @@ del Sheet.
 
 Ver [`apps-script/README.md`](apps-script/README.md) para el setup completo
 (una sola vez, hay que pegar un script en script.google.com — no se puede
-hacer por API). Resumen: un organizador manda un mail con `[Evento]` en el
-asunto y el flyer adjunto (el botón "+ Nuevo Evento" del sitio ya arma el
+hacer por API). Resumen: un organizador manda un mail con `HAYMINGAEVENTO`
+en el asunto y el flyer adjunto (el botón "+ Nuevo Evento" del sitio ya arma el
 mail en ese formato); un Apps Script lo guarda en Drive y anota la fila en
 una hoja nueva `Cola_Manual`; `main.py` la procesa en cada corrida diaria
 reusando el mismo `extract_event_data` del scraping — el cuerpo del mail

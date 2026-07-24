@@ -44,7 +44,10 @@ def ensure_header(service):
         .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!1:1")
         .execute()
     )
-    if not result.get("values"):
+    current = result.get("values", [[]])
+    current = current[0] if current else []
+
+    if not current:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
             range=f"{SHEET_NAME}!A1",
@@ -52,6 +55,30 @@ def ensure_header(service):
             body={"values": [COLUMNS]},
         ).execute()
         print("[sheets] Header creado")
+    elif current != COLUMNS[: len(current)]:
+        # el header existente no coincide con el prefijo esperado — no lo
+        # tocamos para no romper una hoja con columnas reordenadas a mano
+        print(f"[sheets] AVISO: header de la hoja no coincide con COLUMNS: {current}")
+    elif len(current) < len(COLUMNS):
+        # header viejo (de antes de agregar columnas nuevas al final):
+        # completar las que faltan sin tocar las existentes
+        faltantes = COLUMNS[len(current):]
+        service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{SHEET_NAME}!{_col_letter(len(current) + 1)}1",
+            valueInputOption="RAW",
+            body={"values": [faltantes]},
+        ).execute()
+        print(f"[sheets] Header actualizado, columnas agregadas: {faltantes}")
+
+
+def _col_letter(n: int) -> str:
+    """1 -> A, 27 -> AA, etc."""
+    letters = ""
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
 
 
 def load_processed_names(service) -> set:
