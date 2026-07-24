@@ -12,8 +12,9 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from src.state import image_hash, load_seen_hashes, load_seen_links
+
 IMAGES_DIR  = Path("images")
-SEEN_FILE   = Path("seen_hashes.txt")
 CONFIG_FILE = Path("config.json")
 
 HEADERS = {
@@ -43,21 +44,6 @@ def get_queries_for_today(config: dict) -> list[str]:
     queries = grupos[idx]
     print(f"[scraper] Grupo {idx + 1}/{len(grupos)} — {len(queries)} queries")
     return queries
-
-
-def load_seen_hashes() -> set:
-    if not SEEN_FILE.exists():
-        return set()
-    return set(SEEN_FILE.read_text().splitlines())
-
-
-def save_hash(h: str):
-    with open(SEEN_FILE, "a") as f:
-        f.write(h + "\n")
-
-
-def image_hash(data: bytes) -> str:
-    return hashlib.md5(data).hexdigest()
 
 
 def is_valid_image(data: bytes) -> tuple[bool, str]:
@@ -110,7 +96,9 @@ def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
     return results
 
 
-def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple[Path, dict]]:
+def download_images_for_query(
+    query: str, max_new: int, seen: set, seen_links: set
+) -> list[tuple[Path, dict]]:
     IMAGES_DIR.mkdir(exist_ok=True)
     items = fetch_image_data(query, max_results=max_new * 3)
 
@@ -118,6 +106,11 @@ def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple
     for item in items:
         if len(downloaded) >= max_new:
             break
+
+        link = item.get("link", "")
+        if link and link in seen_links:
+            continue  # mismo post ya descargado (esta corrida o una anterior)
+
         try:
             resp = requests.get(item["thumbnail"], headers=HEADERS, timeout=10)
             if resp.status_code != 200:
@@ -135,10 +128,18 @@ def download_images_for_query(query: str, max_new: int, seen: set) -> list[tuple
             slug     = hashlib.md5(query.encode()).hexdigest()[:6]
             filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
-            save_hash(h)
+            # sidecar de metadata: permite reintentar más tarde sin perder el link original
+            filename.with_suffix(filename.suffix + ".json").write_text(
+                json.dumps({"link": link, "thumbnail": item.get("thumbnail", "")})
+            )
+
+            # dedup dentro de esta corrida; se persiste recién si processor.py confirma un resultado
             seen.add(h)
+            if link:
+                seen_links.add(link)
+            item["hash"] = h
             downloaded.append((filename, item))
-            print(f"[scraper] ✓ {filename.name} — {item.get('link','')[:50]}")
+            print(f"[scraper] ✓ {filename.name} — {link[:50]}")
             time.sleep(0.3)
 
         except Exception as e:
@@ -152,11 +153,12 @@ def download_all() -> list[tuple[Path, dict]]:
     queries       = get_queries_for_today(config)
     max_por_query = config.get("max_imagenes_por_query", 10)
 
-    seen      = load_seen_hashes()
-    all_items = []
+    seen       = load_seen_hashes()
+    seen_links = load_seen_links()
+    all_items  = []
 
     for query in queries:
-        items = download_images_for_query(query, max_por_query, seen)
+        items = download_images_for_query(query, max_por_query, seen, seen_links)
         all_items.extend(items)
         print(f"      {len(items)} imagen(es) nueva(s)")
         time.sleep(1)
