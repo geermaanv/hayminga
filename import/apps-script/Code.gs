@@ -305,6 +305,7 @@ function crearEventoManual_(data) {
     id,
     data.contacto || '',
     'confirmado',
+    'Argentina', // el form web es para eventos locales; no se pregunta país
   ];
 
   appendRowComoTexto_(sheet, valores);

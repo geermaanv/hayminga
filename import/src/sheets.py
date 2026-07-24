@@ -3,7 +3,7 @@ sheets.py
 Escribe los eventos en Google Sheets con el schema exacto de hayminga.org.
 Columnas: Activo, Nombre, Dirección, Periodo, Fecha_Inicio, Fecha_Fin,
           Es_Virtual, Provincia, Descripción, Organizador, Link_Promocion,
-          Tipo_Evento, img, procesado, Id, Contacto, Estado
+          Tipo_Evento, img, procesado, Id, Contacto, Estado, Pais
 """
 
 import os
@@ -23,7 +23,7 @@ COLUMNS = [
     "Activo", "Nombre", "Dirección", "Periodo", "Fecha_Inicio", "Fecha_Fin",
     "Es_Virtual", "Provincia", "Descripción", "Organizador",
     "Link_Promocion", "Tipo_Evento", "img", "procesado",
-    "Id", "Contacto", "Estado",
+    "Id", "Contacto", "Estado", "Pais",
 ]
 
 
@@ -115,6 +115,7 @@ def event_to_row(event: dict) -> list:
         event.get("id") or generate_id(),
         event.get("contacto") or "",
         event.get("estado") or ("confirmado" if event.get("activo") else "pendiente"),
+        event.get("pais") or "",
     ]
 
 
