@@ -494,7 +494,12 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <script>
 var SHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
-var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Eventos';
+// headers=1 le pide a GViz que trate SIEMPRE la fila 1 como encabezado.
+// Sin esto, GViz decide "a ojo" comparando tipos de datos por columna, y
+// cuando una columna es 100% texto (como Activo: "true"/"false" en vez
+// de booleano nativo) no puede distinguir el header de una fila de datos
+// — a veces acierta, a veces no. Con headers=1 es determinístico siempre.
+var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Eventos&headers=1';
 // URL del Web App de Apps Script (import/apps-script/Code.gs) — se completa
 // después de desplegarlo: Implementar > Nueva implementación > Aplicación web
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVjevBJdUwh0xrusFIrRSI647HkUna9zZBR_dHTbKotBfgk_8byPmdDzeP9dBnzDCy/exec';
@@ -507,8 +512,8 @@ function cargarDatos() {
     .then(function(texto) {
       var json = JSON.parse(texto.substring(47, texto.length - 2));
       var filas = json.table.rows;
-      var cols = filas[0].c.map(function(c) { return c ? c.v : ''; });
-      todosLosEventos = filas.slice(1)
+      var cols = json.table.cols.map(function(c) { return c.label; });
+      todosLosEventos = filas
         .filter(function(f) { return f && f.c; })
         .map(function(f) {
           var obj = {};
@@ -971,7 +976,7 @@ function enviarEvento(e) {
 }
 
 // ---- Directorio ----
-var directorioApiUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Directorio';
+var directorioApiUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Directorio&headers=1';
 var directorioCargado = false;
 var personasDirectorio = [];
 
@@ -992,8 +997,8 @@ function cargarDirectorio() {
       var json = JSON.parse(texto.substring(47, texto.length - 2));
       var filas = json.table.rows;
       if (!filas || !filas.length) { personasDirectorio = []; renderDirectorio(); return; }
-      var cols = filas[0].c.map(function(c) { return c ? c.v : ''; });
-      personasDirectorio = filas.slice(1)
+      var cols = json.table.cols.map(function(c) { return c.label; });
+      personasDirectorio = filas
         .filter(function(f) { return f && f.c; })
         .map(function(f) {
           var obj = {};
