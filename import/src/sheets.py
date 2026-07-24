@@ -3,11 +3,12 @@ sheets.py
 Escribe los eventos en Google Sheets con el schema exacto de hayminga.org.
 Columnas: Activo, Nombre, Dirección, Periodo, Fecha_Inicio, Fecha_Fin,
           Es_Virtual, Provincia, Descripción, Organizador, Link_Promocion,
-          Tipo_Evento, img, procesado
+          Tipo_Evento, img, procesado, Id, Contacto, Estado
 """
 
 import os
 import json
+import uuid
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
@@ -15,11 +16,19 @@ SCOPES          = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID  = os.environ["GOOGLE_SPREADSHEET_ID"]
 SHEET_NAME      = "Eventos"
 
+# Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
+# columnas existentes no cambian de letra y no rompen los rangos fijos
+# (ej. load_processed_names usa N:N para 'procesado').
 COLUMNS = [
     "Activo", "Nombre", "Dirección", "Periodo", "Fecha_Inicio", "Fecha_Fin",
     "Es_Virtual", "Provincia", "Descripción", "Organizador",
     "Link_Promocion", "Tipo_Evento", "img", "procesado",
+    "Id", "Contacto", "Estado",
 ]
+
+
+def generate_id() -> str:
+    return uuid.uuid4().hex[:10]
 
 
 def get_service():
@@ -76,6 +85,9 @@ def event_to_row(event: dict) -> list:
         event.get("tipo_evento") or "",
         event.get("imagen_url") or "",
         nombre.lower(),  # procesado — clave de deduplicación
+        event.get("id") or generate_id(),
+        event.get("contacto") or "",
+        event.get("estado") or ("confirmado" if event.get("activo") else "pendiente"),
     ]
 
 

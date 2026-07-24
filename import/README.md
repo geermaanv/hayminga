@@ -21,6 +21,17 @@ Google Images (SerpAPI, site:instagram.com + queries de config.json)
   sheets.py — escribe en la Google Sheet "Eventos"
         ↓
   hayminga.org lee esa Sheet vía GViz JSON al cargar la página
+
+En paralelo, carga manual por mail:
+  organizador manda un mail con el flyer adjunto
+        ↓
+  Apps Script (apps-script/Code.gs) lo guarda en Drive + anota en "Cola_Manual"
+        ↓
+  email_intake.py (paso 4/4 de main.py) lo procesa con el MISMO extractor
+  de arriba — el cuerpo del mail hace el papel del caption
+        ↓
+  sheets.py — Activo=true, Estado=confirmado directo (sin el filtro de
+  país/fecha del scraping automático)
 ```
 
 Vive dentro del repo `hayminga` (junto al frontend) y corre todos los días a las
@@ -102,7 +113,16 @@ gh run watch -R geermaanv/hayminga
 
 Columnas exactas en `src/sheets.py`: `Activo, Nombre, Dirección, Periodo, Fecha_Inicio,
 Fecha_Fin, Es_Virtual, Provincia, Descripción, Organizador, Link_Promocion, Tipo_Evento,
-img, procesado`.
+img, procesado, Id, Contacto, Estado`. Las últimas tres se agregaron al final a propósito
+para no correr de letra las columnas existentes (`load_processed_names` usa el rango
+fijo `N:N` para `procesado`).
+
+- `Id`: identificador corto único por evento, generado al insertarse.
+- `Contacto`: email o WhatsApp del organizador, si el extractor lo encontró
+  en la imagen o el caption/cuerpo del mail.
+- `Estado`: `confirmado` (scraping con `activo=true`, o cualquier carga
+  manual) / `pendiente` (scraping con `activo=false` — pasado, fuera de
+  Argentina, o sin fecha determinable).
 
 Gemini marca `activo=true` solo si el evento es en Argentina y la fecha de
 inicio es futura; el resto entra con `Activo=false` (visible en la Sheet pero
@@ -155,9 +175,22 @@ misma categoría "segura" que el thumbnail (copia cacheada por Google, no
 un pedido en vivo a Instagram). El caption suele tener información que no
 está en la imagen (fecha exacta, dirección, WhatsApp de contacto) y se le
 pasa a Gemini/Claude junto con la imagen. El campo `contacto` del JSON de
-salida (email o WhatsApp) sale de ahí — por ahora se extrae pero todavía
-no se escribe en la Sheet (queda para cuando se defina el flujo de
-confirmación con el organizador).
+salida (email o WhatsApp) sale de ahí y se guarda en la columna `Contacto`
+del Sheet.
+
+## Carga manual por mail
+
+Ver [`apps-script/README.md`](apps-script/README.md) para el setup completo
+(una sola vez, hay que pegar un script en script.google.com — no se puede
+hacer por API). Resumen: un organizador manda un mail con `[Evento]` en el
+asunto y el flyer adjunto (el botón "+ Nuevo Evento" del sitio ya arma el
+mail en ese formato); un Apps Script lo guarda en Drive y anota la fila en
+una hoja nueva `Cola_Manual`; `main.py` la procesa en cada corrida diaria
+reusando el mismo `extract_event_data` del scraping — el cuerpo del mail
+juega el rol del caption. A diferencia del scraping automático, la carga
+manual se publica directo (`Activo=true`, `Estado=confirmado`) sin el
+filtro de país/fecha, porque hay una persona real detrás con intención de
+publicar su propio evento.
 
 ## Por qué no usamos la imagen "original" ni Bing Images
 
