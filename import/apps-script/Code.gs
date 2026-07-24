@@ -88,7 +88,7 @@ function crearEventoManual_(data) {
 
   // mismo orden que COLUMNS en import/src/sheets.py — si se agrega una
   // columna ahí, hay que agregarla acá también en la misma posición
-  sheet.appendRow([
+  var valores = [
     'true',
     nombre,
     data.direccion || '',
@@ -106,7 +106,17 @@ function crearEventoManual_(data) {
     id,
     data.contacto || '',
     'confirmado',
-  ]);
+  ];
+
+  var fila = sheet.getLastRow() + 1;
+  // appendRow() auto-convierte texto "true"/"false" a booleano nativo de
+  // Sheets (igual que tipearlo a mano) — eso mezcla tipos con las filas
+  // que escribe Python (texto plano vía valueInputOption=RAW) y rompe la
+  // detección de encabezado del GViz JSON que lee el frontend. Forzamos
+  // formato de texto en esas dos columnas antes de escribir.
+  sheet.getRange(fila, 1).setNumberFormat('@');  // Activo
+  sheet.getRange(fila, 7).setNumberFormat('@');  // Es_Virtual
+  sheet.getRange(fila, 1, 1, valores.length).setValues([valores]);
 
   return id;
 }
