@@ -31,6 +31,19 @@
  * cambiar una constante acá.
  */
 
+/**
+ * Corré esta función UNA VEZ manualmente desde el editor (▶ Ejecutar,
+ * eligiéndola del desplegable) para que aparezca el cartel de
+ * autorización del permiso de envío de mail (MailApp). doGet/doPost no
+ * sirven para esto: solo piden el permiso nuevo cuando el código
+ * realmente llega a ejecutar una línea de MailApp, y con un token vacío
+ * nunca llegan a esa línea.
+ */
+function autorizarEnvioDeMail() {
+  MailApp.sendEmail(Session.getActiveUser().getEmail(), 'hayminga — autorización de mail OK', 'Si ves este mail, el permiso ya está concedido.');
+}
+
+
 // ---- Configuración (esto sí es lo fácil de cambiar) ----
 // Mismo ID que GOOGLE_SPREADSHEET_ID en los secrets de GitHub. No es
 // secreto (ya está público en index.html como SHEET_ID), así que va
