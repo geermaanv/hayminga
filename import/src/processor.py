@@ -53,6 +53,7 @@ Formato exacto de respuesta:
   "descripcion": "una línea descriptiva del evento o null",
   "organizador": "nombre del organizador o null",
   "direccion": "dirección o ciudad o null",
+  "contacto": "email o número de WhatsApp del organizador si aparece escrito en la imagen o el caption, o null",
   "confianza": "alta | media | baja",
   "activo": true o false
 }}
@@ -91,12 +92,21 @@ def parse_fecha(fecha_str: str | None) -> tuple[str, str]:
     return fecha_str, ""
 
 
-def _call_gemini(image_bytes: bytes, media_type: str) -> str:
+def _build_prompt_text(caption: str) -> str:
+    if not caption:
+        return PROMPT_TEXT
+    return (
+        f"{PROMPT_TEXT}\n\nCaption real del post (texto de Instagram, puede "
+        f"tener fecha/lugar/contacto que no está en la imagen):\n{caption}"
+    )
+
+
+def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
     response = client_gemini.models.generate_content(
         model=GEMINI_MODEL,
         contents=[
             types.Part.from_bytes(data=image_bytes, mime_type=media_type),
-            PROMPT_TEXT,
+            prompt_text,
         ],
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
@@ -107,7 +117,7 @@ def _call_gemini(image_bytes: bytes, media_type: str) -> str:
     return (response.text or "").strip()
 
 
-def _call_claude(image_bytes: bytes, media_type: str) -> str:
+def _call_claude(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
     if client_claude is None:
         raise RuntimeError("ANTHROPIC_API_KEY no configurada — sin fallback disponible")
     response = client_claude.messages.create(
@@ -125,7 +135,7 @@ def _call_claude(image_bytes: bytes, media_type: str) -> str:
                         "data": base64.standard_b64encode(image_bytes).decode("utf-8"),
                     },
                 },
-                {"type": "text", "text": PROMPT_TEXT},
+                {"type": "text", "text": prompt_text},
             ],
         }],
     )
@@ -141,12 +151,12 @@ def _is_quota_error(e: Exception) -> bool:
     return False
 
 
-def _get_raw_json(image_path: Path, image_bytes: bytes, media_type: str) -> str | None:
+def _get_raw_json(image_path: Path, image_bytes: bytes, media_type: str, prompt_text: str) -> str | None:
     """Intenta Gemini primero, cae a Claude si falla. Retorna None si ambos
     proveedores fallan (o no hay ninguno disponible)."""
     if not _batch_state["gemini_exhausted"]:
         try:
-            return _call_gemini(image_bytes, media_type)
+            return _call_gemini(image_bytes, media_type, prompt_text)
         except Exception as e:
             if _is_quota_error(e):
                 _batch_state["gemini_exhausted"] = True
@@ -157,7 +167,7 @@ def _get_raw_json(image_path: Path, image_bytes: bytes, media_type: str) -> str 
     if _batch_state["claude_exhausted"]:
         return None
     try:
-        return _call_claude(image_bytes, media_type)
+        return _call_claude(image_bytes, media_type, prompt_text)
     except Exception as e:
         if _is_quota_error(e):
             _batch_state["claude_exhausted"] = True
@@ -171,7 +181,8 @@ def extract_event_data(image_path: Path, metadata: dict):
     """Retorna dict (evento extraído), None (confirmado que no es un flyer
     de evento) o RETRY (ambos proveedores fallaron, reintentar más tarde)."""
     image_bytes, media_type = read_image(image_path)
-    raw = _get_raw_json(image_path, image_bytes, media_type)
+    prompt_text = _build_prompt_text(metadata.get("caption", ""))
+    raw = _get_raw_json(image_path, image_bytes, media_type, prompt_text)
     if raw is None:
         return RETRY
 

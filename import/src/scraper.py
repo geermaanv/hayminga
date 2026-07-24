@@ -5,17 +5,25 @@ y tamaño grande (isz:l, qdr:w). Descarga thumbnails evitando duplicados.
 """
 
 import os
+import io
 import time
 import hashlib
 import requests
 import json
 from pathlib import Path
 from datetime import datetime
+from PIL import Image
 
 from src.state import image_hash, load_seen_hashes, load_seen_links
 
 IMAGES_DIR  = Path("images")
 CONFIG_FILE = Path("config.json")
+
+# Filtro heurístico gratis (sin IA): descarta fotos de perfil/avatares antes
+# de gastar cuota de Vision. Medido: avatares de Google bajan ~9-10KB,
+# thumbnails de flyers reales ~36-45KB — el piso de bytes ya separa bastante.
+MIN_IMAGE_BYTES = 15_000
+MIN_IMAGE_DIM   = 200  # px, en el lado más largo
 
 HEADERS = {
     "User-Agent": (
@@ -51,6 +59,45 @@ def is_valid_image(data: bytes) -> tuple[bool, str]:
         if data[:len(magic)] == magic:
             return True, ext
     return False, ''
+
+
+def passes_quality_filter(data: bytes) -> bool:
+    """Descarta imágenes demasiado chicas para ser un flyer legible
+    (avatares, íconos) sin gastar ninguna llamada a IA."""
+    if len(data) < MIN_IMAGE_BYTES:
+        return False
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            w, h = im.size
+    except Exception:
+        return False
+    return max(w, h) >= MIN_IMAGE_DIM
+
+
+def fetch_caption(link: str) -> str:
+    """Busca el snippet de caption real del post vía Google Search normal
+    (no Images) — es la copia cacheada por Google, no un pedido a Instagram.
+    Se usa solo para imágenes que ya pasaron el filtro de calidad, para no
+    duplicar el costo de SerpAPI en las que se van a descartar igual."""
+    api_key = os.getenv("SERPAPI_KEY")
+    if not api_key or not link:
+        return ""
+
+    try:
+        resp = requests.get("https://serpapi.com/search", params={
+            "engine": "google",
+            "q":      link,
+            "api_key": api_key,
+            "hl": "es", "gl": "ar",
+        }, timeout=15)
+        if resp.status_code != 200:
+            return ""
+        for r in resp.json().get("organic_results", []):
+            if r.get("link", "").rstrip("/") == link.rstrip("/"):
+                return r.get("snippet", "")
+    except Exception as e:
+        print(f"[scraper] Error buscando caption: {e}")
+    return ""
 
 
 def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
@@ -121,16 +168,24 @@ def download_images_for_query(
             if not valid:
                 continue
 
+            if not passes_quality_filter(data):
+                continue
+
             h = image_hash(data)
             if h in seen:
                 continue
+
+            # solo acá (imagen ya validada+filtrada) vale la pena gastar otra
+            # llamada de SerpAPI en buscar el caption real del post
+            caption = fetch_caption(link) if link else ""
+            item["caption"] = caption
 
             slug     = hashlib.md5(query.encode()).hexdigest()[:6]
             filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             # sidecar de metadata: permite reintentar más tarde sin perder el link original
             filename.with_suffix(filename.suffix + ".json").write_text(
-                json.dumps({"link": link, "thumbnail": item.get("thumbnail", "")})
+                json.dumps({"link": link, "thumbnail": item.get("thumbnail", ""), "caption": caption})
             )
 
             # dedup dentro de esta corrida; se persiste recién si processor.py confirma un resultado
@@ -139,7 +194,7 @@ def download_images_for_query(
                 seen_links.add(link)
             item["hash"] = h
             downloaded.append((filename, item))
-            print(f"[scraper] ✓ {filename.name} — {link[:50]}")
+            print(f"[scraper] ✓ {filename.name} — {link[:50]}" + (" (con caption)" if caption else ""))
             time.sleep(0.3)
 
         except Exception as e:

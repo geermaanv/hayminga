@@ -9,9 +9,13 @@ misma Google Sheet que lee [hayminga.org](../index.html) directamente (sin Glide
 ```
 Google Images (SerpAPI, site:instagram.com + queries de config.json)
         ↓
-  scraper.py — descarga imágenes nuevas, evita duplicados por hash
+  scraper.py — descarga imágenes nuevas, filtra avatares/íconos por
+               peso+dimensión antes de gastar cuota de IA, dedup por hash
+               y por link, y busca el caption real del post vía Google
+               Search (no Images) para las que pasan el filtro
         ↓
-  processor.py — Gemini Vision extrae nombre, fecha, lugar, tipo, etc.
+  processor.py — Gemini Vision (imagen + caption) extrae nombre, fecha,
+                 lugar, tipo, contacto, etc.
                  (si falla o se queda sin cuota, reintenta esa imagen con Claude)
         ↓
   sheets.py — escribe en la Google Sheet "Eventos"
@@ -135,6 +139,25 @@ un tercio de las descargas eran reapariciones del mismo post). Por eso,
 además del hash de imagen, `scraper.py` deduplica por `link` del post
 (`seen_links.txt`, mismo mecanismo que `seen_hashes.txt`: se marca recién
 cuando `processor.py` confirma un resultado definitivo).
+
+## Filtro heurístico y caption real (sin gastar IA de más)
+
+Antes de pasar cualquier imagen a Gemini/Claude, `scraper.py` descarta las
+que claramente no son un flyer: menos de `MIN_IMAGE_BYTES` (15KB — medido:
+avatares de Google bajan ~9-10KB, thumbnails de flyers reales ~36-45KB) o
+menos de `MIN_IMAGE_DIM` (200px) en el lado más largo. Es gratis (no llama a
+ninguna IA) y en una prueba real bajó 24 resultados crudos a 6 candidatos.
+
+Solo para las imágenes que sobreviven ese filtro, se busca el **caption
+real del post** vía una búsqueda de Google Search normal (`engine: google`,
+no `google_images`) usando el link exacto del post como query — es la
+misma categoría "segura" que el thumbnail (copia cacheada por Google, no
+un pedido en vivo a Instagram). El caption suele tener información que no
+está en la imagen (fecha exacta, dirección, WhatsApp de contacto) y se le
+pasa a Gemini/Claude junto con la imagen. El campo `contacto` del JSON de
+salida (email o WhatsApp) sale de ahí — por ahora se extrae pero todavía
+no se escribe en la Sheet (queda para cuando se defina el flujo de
+confirmación con el organizador).
 
 ## Por qué no usamos la imagen "original" ni Bing Images
 
