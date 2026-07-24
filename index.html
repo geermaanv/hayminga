@@ -86,6 +86,7 @@ select:focus{border-color:var(--tierra);}
   .filtros-row1{gap:0.5rem;}
   #filtro-tipo{display:none;}
   #filtro-provincia{display:none;}
+  .vista-btn{padding:0.32rem 0.6rem;font-size:0.72rem;}
 }
 .conteo{max-width:1100px;margin:1.25rem auto 0.4rem;padding:0 1.5rem;font-size:0.83rem;color:var(--texto-suave);}
 .grilla{max-width:1100px;margin:0 auto;padding:0.75rem 1.5rem 3rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.1rem;}
@@ -193,19 +194,19 @@ footer a{color:var(--tierra);text-decoration:none;}
 <body>
 
 <header>
-  <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
+    <div class="vista-toggle" style="margin:0;padding:0;max-width:none;">
+      <button class="vista-btn on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">Eventos</button>
+      <button class="vista-btn" id="vista-btn-directorio" onclick="mostrarVista('directorio')">Directorio</button>
+    </div>
+  </div>
   <nav>
     <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
-    <button class="nav-link" onclick="abrirPopup()">hayminga en tu email</button>
     <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()">+ Nuevo Evento</button>
     <button class="nav-btn" style="border:none;cursor:pointer;background:var(--verde);" onclick="abrirFormDirectorio()">+ Sumarme</button>
   </nav>
 </header>
-
-<div class="vista-toggle">
-  <button class="vista-btn on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">Eventos</button>
-  <button class="vista-btn" id="vista-btn-directorio" onclick="mostrarVista('directorio')">Directorio</button>
-</div>
 
 <div id="vista-eventos">
 
@@ -299,6 +300,11 @@ footer a{color:var(--tierra);text-decoration:none;}
 <!-- /vista-eventos -->
 
 <div id="vista-directorio" style="display:none;">
+  <div class="filtros-container" style="position:static;box-shadow:none;">
+    <div class="filtros-inner" style="max-width:1100px;">
+      <select id="filtro-directorio-provincia" onchange="renderDirectorio()"><option value="">Todas las provincias</option></select>
+    </div>
+  </div>
   <div class="conteo" id="conteo-directorio"></div>
   <div class="grilla" id="grilla-directorio">
     <div class="loading"><div class="spinner"></div><p>Cargando directorio...</p></div>
@@ -307,23 +313,6 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
   <div class="modal"><div id="modal-contenido"></div></div>
-</div>
-
-<div class="popup-overlay" id="popup-overlay" onclick="cerrarPopup(event)">
-  <div class="popup">
-    <button class="popup-cerrar" onclick="cerrarPopup()">✕</button>
-    <h3>hayminga <em>en tu email</em></h3>
-    <p>Te avisamos cuando hay nuevos eventos y novedades de la comunidad</p>
-    <form id="form-email" onsubmit="enviarEmail(event)">
-      <input type="email" id="input-email" placeholder="tu@email.com" required
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <button type="submit"
-        style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
-        Suscribirme
-      </button>
-      <p id="form-msg" style="margin-top:0.75rem;font-size:0.82rem;color:#E8D5A8;text-align:center;display:none;"></p>
-    </form>
-  </div>
 </div>
 
 <div class="modal-overlay" id="form-evento-overlay" onclick="cerrarFormEvento(event)">
@@ -424,10 +413,20 @@ footer a{color:var(--tierra);text-decoration:none;}
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
       <input type="email" id="directorio-email" placeholder="tu@email.com (no se muestra público)" required
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <input type="text" id="directorio-provincia" placeholder="Provincia"
+      <input type="text" id="directorio-whatsapp" placeholder="Tu WhatsApp (opcional, no se muestra público)"
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <textarea id="directorio-descripcion" placeholder="¿Qué te interesa o en qué podés ayudar?" rows="3"
+      <select id="directorio-provincia" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+        <option value="">Elegí tu provincia...</option>
+      </select>
+      <p style="font-size:0.8rem;color:var(--paja-oscuro);margin-bottom:0.4rem;">¿Qué te interesa? (elegí una o más)</p>
+      <div id="directorio-intereses" style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:0.75rem;font-size:0.88rem;color:var(--paja);"></div>
+      <textarea id="directorio-descripcion" placeholder="Contanos algo más (opcional)" rows="2"
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
+      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--paja-oscuro);margin-bottom:0.75rem;opacity:0.85;">
+        <input type="checkbox" checked disabled>
+        Autorizo a que me manden novedades y avisos de HayMinga por email
+      </label>
       <button type="submit" id="btn-publicar-directorio"
         style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
         Sumarme
@@ -853,35 +852,6 @@ function cerrarModal(ev) {
   document.body.style.overflow = '';
 }
 
-function abrirPopup() {
-  document.getElementById('popup-overlay').classList.add('activo');
-  document.body.style.overflow = 'hidden';
-}
-
-function cerrarPopup(ev) {
-  if (ev && ev.target !== document.getElementById('popup-overlay')) return;
-  document.getElementById('popup-overlay').classList.remove('activo');
-  document.body.style.overflow = '';
-}
-
-function enviarEmail(e) {
-  e.preventDefault();
-  var email = document.getElementById('input-email').value;
-  var url = 'https://docs.google.com/forms/d/e/1FAIpQLSdn3ZaR97DOWVTE6h1gMua_QYS2bVaOt6KC-LnoAGJqHLoQEw/formResponse';
-  var data = new FormData();
-  data.append('entry.293224825', email);
-  fetch(url, { method:'POST', mode:'no-cors', body:data })
-    .then(function() {
-      document.getElementById('form-msg').style.display = 'block';
-      document.getElementById('form-msg').textContent = '¡Listo! Te avisamos cuando haya novedades.';
-      document.getElementById('input-email').value = '';
-    })
-    .catch(function() {
-      document.getElementById('form-msg').style.display = 'block';
-      document.getElementById('form-msg').textContent = 'Algo salió mal, intentá de nuevo.';
-    });
-}
-
 function abrirFormEvento() {
   document.getElementById('form-evento-overlay').classList.add('activo');
   document.body.style.overflow = 'hidden';
@@ -980,6 +950,36 @@ var directorioApiUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/
 var directorioCargado = false;
 var personasDirectorio = [];
 
+var PROVINCIAS_ARGENTINA = [
+  'Buenos Aires', 'CABA', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
+  'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones',
+  'Neuquén', 'Río Negro', 'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe',
+  'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
+];
+
+var INTERESES_CATEGORIAS = [
+  'Aprender bioconstrucción', 'Dar talleres / enseñar', 'Organizar mingas',
+  'Profesional (arquitectura, construcción, oficios)', 'Permacultura y agroecología',
+  'Vida en comunidad / ecoaldeas'
+];
+
+function poblarProvinciasDirectorio() {
+  var opciones = PROVINCIAS_ARGENTINA.map(function(p) { return '<option>' + p + '</option>'; }).join('');
+  var selectForm = document.getElementById('directorio-provincia');
+  if (selectForm) selectForm.innerHTML = '<option value="">Elegí tu provincia...</option>' + opciones;
+  var selectFiltro = document.getElementById('filtro-directorio-provincia');
+  if (selectFiltro) selectFiltro.innerHTML = '<option value="">Todas las provincias</option>' + opciones;
+}
+
+function poblarInteresesDirectorio() {
+  var cont = document.getElementById('directorio-intereses');
+  if (!cont) return;
+  cont.innerHTML = INTERESES_CATEGORIAS.map(function(i, idx) {
+    return '<label style="display:flex;align-items:center;gap:0.4rem;">'
+      + '<input type="checkbox" class="directorio-interes-check" value="' + i + '" id="interes-' + idx + '">' + i + '</label>';
+  }).join('');
+}
+
 function mostrarVista(vista) {
   var esEventos = vista === 'eventos';
   document.getElementById('vista-eventos').style.display = esEventos ? '' : 'none';
@@ -1019,17 +1019,28 @@ function cargarDirectorio() {
 
 function renderDirectorio() {
   var g = document.getElementById('grilla-directorio');
-  var n = personasDirectorio.length;
+  var filtroProv = document.getElementById('filtro-directorio-provincia') ? document.getElementById('filtro-directorio-provincia').value : '';
+  var personas = personasDirectorio.filter(function(p) {
+    return !filtroProv || p['Provincia'] === filtroProv;
+  });
+  var n = personas.length;
   document.getElementById('conteo-directorio').textContent = n === 0 ? 'Sin resultados' : n + ' persona' + (n !== 1 ? 's' : '');
   if (n === 0) {
     g.innerHTML = '<div class="empty"><div class="empty-icon">🌿</div><h3>Todavía no hay nadie</h3><p>Sé el primero en sumarte</p></div>';
     return;
   }
   var html = '';
-  personasDirectorio.forEach(function(p) {
+  personas.forEach(function(p) {
+    var intereses = (p['Intereses'] || '').split(',').map(function(i) { return i.trim(); }).filter(Boolean);
+    var interesesHtml = intereses.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;">' + intereses.map(function(i) {
+          return '<span class="card-tipo">' + i + '</span>';
+        }).join('') + '</div>'
+      : '';
     html += '<div class="persona-card">'
       + '<div class="persona-nombre">' + p['Nombre'] + '</div>'
       + (p['Provincia'] ? '<div class="persona-provincia">' + p['Provincia'] + '</div>' : '')
+      + interesesHtml
       + (p['Descripcion'] ? '<div class="persona-desc">' + p['Descripcion'] + '</div>' : '')
       + '<button class="btn-contactar" onclick="abrirSolicitarContacto(\'' + p['Id'] + '\',' + JSON.stringify(p['Nombre']) + ')">Quiero contactar</button>'
       + '</div>';
@@ -1051,12 +1062,15 @@ function enviarDirectorio(e) {
   e.preventDefault();
   var btn = document.getElementById('btn-publicar-directorio');
   var msg = document.getElementById('directorio-form-msg');
+  var intereses = Array.prototype.slice.call(document.querySelectorAll('.directorio-interes-check:checked')).map(function(c) { return c.value; });
   var payload = {
     accion: 'directorio_alta',
     web: document.querySelector('#form-directorio .honeypot-field').value,
     nombre: document.getElementById('directorio-nombre').value,
     email: document.getElementById('directorio-email').value,
+    whatsapp: document.getElementById('directorio-whatsapp').value,
     provincia: document.getElementById('directorio-provincia').value,
+    intereses: intereses,
     descripcion: document.getElementById('directorio-descripcion').value
   };
   btn.disabled = true;
@@ -1066,7 +1080,9 @@ function enviarDirectorio(e) {
       msg.textContent = '¡Listo! Ya estás en el directorio 🌿';
       document.getElementById('form-directorio').reset();
       btn.disabled = false;
-      directorioCargado = false; // fuerza recarga la próxima vez que se abra
+      // recarga en el momento (no solo la próxima vez que se abra la vista),
+      // así se ve reflejado sin tener que ir a Eventos y volver
+      cargarDirectorio();
       setTimeout(function() { cerrarFormDirectorio(); }, 1800);
     })
     .catch(function() {
@@ -1075,6 +1091,9 @@ function enviarDirectorio(e) {
       btn.disabled = false;
     });
 }
+
+poblarProvinciasDirectorio();
+poblarInteresesDirectorio();
 
 var contactoDirectorioId = null;
 
@@ -1120,7 +1139,6 @@ function enviarSolicitudContacto(e) {
 document.addEventListener('keydown', function(ev) {
   if (ev.key === 'Escape') {
     document.getElementById('modal-overlay').classList.remove('activo');
-    document.getElementById('popup-overlay').classList.remove('activo');
     document.getElementById('form-evento-overlay').classList.remove('activo');
     document.getElementById('form-directorio-overlay').classList.remove('activo');
     document.getElementById('contacto-overlay').classList.remove('activo');

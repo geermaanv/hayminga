@@ -67,7 +67,7 @@ var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
 
 var DIRECTORIO_SHEET_NAME = 'Directorio';
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Descripcion', 'Provincia', 'Email'];
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -106,7 +106,16 @@ function crearPersonaDirectorio_(data) {
   }
   var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
   var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
-  sheet.appendRow([id, String(data.nombre).trim(), data.descripcion || '', data.provincia || '', String(data.email).trim()]);
+  var intereses = Array.isArray(data.intereses) ? data.intereses.join(', ') : (data.intereses || '');
+  sheet.appendRow([
+    id,
+    String(data.nombre).trim(),
+    data.provincia || '',
+    intereses,
+    data.descripcion || '',
+    String(data.email).trim(),
+    data.whatsapp || '',
+  ]);
   return id;
 }
 
@@ -205,7 +214,11 @@ function buscarPersonaDirectorio_(id) {
   var datos = sheet.getDataRange().getValues();
   for (var i = 1; i < datos.length; i++) {
     if (datos[i][0] === id) {
-      return { id: datos[i][0], nombre: datos[i][1], descripcion: datos[i][2], provincia: datos[i][3], email: datos[i][4] };
+      return {
+        id: datos[i][0], nombre: datos[i][1], provincia: datos[i][2],
+        intereses: datos[i][3], descripcion: datos[i][4],
+        email: datos[i][5], whatsapp: datos[i][6],
+      };
     }
   }
   return null;

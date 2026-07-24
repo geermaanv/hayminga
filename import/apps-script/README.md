@@ -78,14 +78,22 @@ La URL no cambia, así que no hace falta tocar `index.html` de nuevo.
 Mismo Web App (`doPost`/`doGet`), dos acciones más:
 
 - **Alta** (`accion: "directorio_alta"`, modal "+ Sumarme"): escribe una
-  fila en la hoja `Directorio` (`Id, Nombre, Descripcion, Provincia,
-  Email`). El sitio la lee pública, pero el `Email` nunca se manda al
-  navegador — solo vive en la Sheet.
+  fila en la hoja `Directorio` (`Id, Nombre, Provincia, Intereses,
+  Descripcion, Email, Whatsapp`). El sitio la lee pública, pero `Email` y
+  `Whatsapp` nunca se mandan al navegador — solo viven en la Sheet.
+  `Provincia` sale de una lista fija de las 24 provincias argentinas
+  (definida en `index.html` como `PROVINCIAS_ARGENTINA`, no texto libre,
+  para no ensuciar el dato). `Intereses` son checkboxes de una lista fija
+  también (`INTERESES_CATEGORIAS` en `index.html`), guardados como texto
+  separado por comas.
 - **Solicitar contacto** (`accion: "directorio_contacto"`, botón "Quiero
   contactar" en cada tarjeta): guarda el pedido en `SolicitudesContacto`
   y le manda un mail a la persona pedida con un link de aceptación
   (`doGet` con un token). Si acepta, `MailApp` les manda un mail a los
   dos presentándolos — recién ahí se cruzan los emails.
+
+El sitio también deja filtrar el directorio por provincia (mismo select
+fijo) arriba de la grilla.
 
 Ambas hojas (`Directorio`, `SolicitudesContacto`) se crean solas la
 primera vez que se usan, con `getOrCreateSheetWithHeaders_`. No hace
