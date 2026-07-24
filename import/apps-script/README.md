@@ -34,18 +34,15 @@ por algún motivo.
 1. Entrá a [script.google.com](https://script.google.com) logueado con
    `germanv@gmail.com` (la cuenta que va a "ser" la casilla monitoreada).
 2. **Proyecto nuevo** (o el existente, si estás actualizando) → pegá el
-   contenido de [`Code.gs`](Code.gs), reemplazando todo lo anterior.
-3. Arriba del archivo, reemplazá:
-   ```
-   var SPREADSHEET_ID = 'PEGAR_AQUI_EL_MISMO_ID_QUE_GOOGLE_SPREADSHEET_ID_EN_GITHUB';
-   ```
-   por el mismo ID que ya tenés cargado como secret `GOOGLE_SPREADSHEET_ID`
-   en GitHub (está en la URL de la Sheet: `spreadsheets/d/ESTE_ID/edit`).
-4. Guardá el proyecto (podés nombrarlo "hayminga - cola manual").
-5. **Ejecutar → revisarBandeja** una vez manualmente desde el editor. Te va
+   contenido de [`Code.gs`](Code.gs) tal cual, reemplazando todo lo
+   anterior. El `SPREADSHEET_ID` ya viene hardcodeado en el archivo (no es
+   secreto, es el mismo que `SHEET_ID` en `index.html`) — no hace falta
+   editar nada antes de guardar.
+3. Guardá el proyecto (podés nombrarlo "hayminga - cola manual").
+4. **Ejecutar → revisarBandeja** una vez manualmente desde el editor. Te va
    a pedir autorizar permisos (Gmail, Drive, Sheets) — es normal, es tu
    propia cuenta autorizando a tu propio script.
-6. **Triggers (el ícono de reloj, a la izquierda)** → revisá que exista un
+5. **Triggers (el ícono de reloj, a la izquierda)** → revisá que exista un
    trigger de `revisarBandeja` (Time-driven, cada 15-30 min). Si ya lo
    habías creado con la versión vieja, no hace falta recrearlo — el código
    nuevo lo va a usar automáticamente.

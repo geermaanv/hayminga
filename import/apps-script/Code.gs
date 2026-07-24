@@ -32,7 +32,12 @@
  */
 
 // ---- Configuración (esto sí es lo fácil de cambiar) ----
-var SPREADSHEET_ID = 'PEGAR_AQUI_EL_MISMO_ID_QUE_GOOGLE_SPREADSHEET_ID_EN_GITHUB';
+// Mismo ID que GOOGLE_SPREADSHEET_ID en los secrets de GitHub. No es
+// secreto (ya está público en index.html como SHEET_ID), así que va
+// hardcodeado acá a propósito: si en algún momento hay que volver a pegar
+// Code.gs entero en script.google.com, no hace falta acordarse de
+// completar este valor de nuevo.
+var SPREADSHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
 // OJO: Gmail no busca "[Evento]" como texto literal con corchetes — los
 // corchetes se ignoran y termina buscando la palabra "evento" en CUALQUIER
 // lado del asunto, incluido años de mail viejo sin relación (así se coló
