@@ -178,19 +178,27 @@ pasa a Gemini/Claude junto con la imagen. El campo `contacto` del JSON de
 salida (email o WhatsApp) sale de ahí y se guarda en la columna `Contacto`
 del Sheet.
 
-## Carga manual por mail
+## Carga manual: formulario y mail
 
 Ver [`apps-script/README.md`](apps-script/README.md) para el setup completo
 (una sola vez, hay que pegar un script en script.google.com — no se puede
-hacer por API). Resumen: un organizador manda un mail con `HAYMINGAEVENTO`
-en el asunto y el flyer adjunto (el botón "+ Nuevo Evento" del sitio ya arma el
-mail en ese formato); un Apps Script lo guarda en Drive y anota la fila en
-una hoja nueva `Cola_Manual`; `main.py` la procesa en cada corrida diaria
-reusando el mismo `extract_event_data` del scraping — el cuerpo del mail
-juega el rol del caption. A diferencia del scraping automático, la carga
-manual se publica directo (`Activo=true`, `Estado=confirmado`) sin el
-filtro de país/fecha, porque hay una persona real detrás con intención de
-publicar su propio evento.
+hacer por API). Dos caminos, mismo Apps Script:
+
+- **Formulario** (modal "+ Nuevo Evento" en el sitio): campos ya
+  estructurados + flyer subido directo. El Apps Script (`doPost`) sube la
+  imagen a Drive y escribe la fila **directo en "Eventos"**, sin IA ni
+  espera — se publica al instante.
+- **Mail** (alternativa, dentro del mismo modal): un organizador manda un
+  mail con `HAYMINGAEVENTO` en el asunto y el flyer adjunto; el Apps
+  Script lo guarda en Drive y anota una fila en `Cola_Manual`; `main.py`
+  la procesa en la corrida diaria reusando el mismo `extract_event_data`
+  del scraping — el cuerpo del mail juega el rol del caption. Pensado para
+  texto libre en vez de completar campos.
+
+En ambos casos la carga se publica directo (`Activo=true`,
+`Estado=confirmado`) sin el filtro de país/fecha que aplica al scraping
+automático, porque hay una persona real detrás con intención de publicar
+su propio evento.
 
 ## Por qué no usamos la imagen "original" ni Bing Images
 

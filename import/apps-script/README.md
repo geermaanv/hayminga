@@ -1,10 +1,18 @@
-# Cola de carga manual por mail — setup (una sola vez)
+# Carga manual de eventos — setup (una sola vez)
 
-Este script lee la casilla de Gmail de la cuenta que lo despliegue (hoy
-`germanv@gmail.com`), busca mails con `HAYMINGAEVENTO` en el asunto y un
-flyer adjunto, y anota una fila en la hoja `Cola_Manual` del mismo Google
-Sheet que ya usa el pipeline de Python. `main.py` (paso 4/4) la procesa
-automáticamente en cada corrida diaria — no hace falta correr nada más.
+Dos formas de cargar un evento a mano, mismo script:
+
+1. **Por mail** (`revisarBandeja`): lee la casilla de Gmail de la cuenta
+   que despliega el script (hoy `germanv@gmail.com`), busca mails con
+   `HAYMINGAEVENTO` en el asunto y un flyer adjunto, y anota una fila en
+   `Cola_Manual`. `main.py` (paso 4/4) la procesa en la corrida diaria,
+   extrayendo los datos con IA (Gemini/Claude) — pensado para texto libre.
+
+2. **Por formulario** (`doPost`): el modal "+ Nuevo Evento" de
+   hayminga.org manda los campos ya estructurados (el organizador los
+   tipeó) más el flyer en base64. El script sube la imagen a Drive y
+   escribe la fila **directo en "Eventos"** — sin pasar por IA ni esperar
+   la corrida diaria, se publica al instante.
 
 ## ⚠️ Si ya desplegaste una versión anterior de este script
 
@@ -42,17 +50,45 @@ por algún motivo.
    habías creado con la versión vieja, no hace falta recrearlo — el código
    nuevo lo va a usar automáticamente.
 
-Listo — de ahí en más corre solo.
+Listo — de ahí en más el mail corre solo.
+
+## Desplegar el formulario web (doPost)
+
+Esto es aparte del trigger de mail — es lo que le da vida al modal
+"+ Nuevo Evento" del sitio.
+
+1. En el mismo proyecto de Apps Script → **Implementar** (arriba a la
+   derecha) → **Nueva implementación**.
+2. Tipo: **Aplicación web**.
+3. Configuración:
+   - Ejecutar como: **Yo** (tu cuenta)
+   - Quién tiene acceso: **Cualquier usuario** (tiene que ser público para
+     que el sitio le pueda mandar el POST desde el navegador de cualquiera)
+4. **Implementar** → copiá la URL que te da (termina en `/exec`).
+5. En `index.html`, buscá esta línea (cerca del principio del `<script>`):
+   ```js
+   var APPS_SCRIPT_URL = 'PEGAR_AQUI_LA_URL_DEL_WEB_APP_DESPLEGADO';
+   ```
+   y pegá la URL copiada. Commiteá y pusheá — GitHub Pages lo publica solo.
+
+**Si después modificás `Code.gs`**: los cambios no se reflejan en la URL
+ya desplegada automáticamente. Hay que ir de nuevo a Implementar →
+Administrar implementaciones → ✏️ (editar) → Nueva versión → Implementar.
+La URL no cambia, así que no hace falta tocar `index.html` de nuevo.
 
 ## Cómo lo usa un organizador
 
-Le pedís que mande un mail a `germanv@gmail.com` con:
+**Formulario (recomendado):** clic en "+ Nuevo Evento" en el sitio, completa
+los campos y sube el flyer — se publica al toque, sin esperar nada.
+
+**Por mail (alternativa):** mandar un mail a `germanv@gmail.com` con:
 - Asunto: que contenga `HAYMINGAEVENTO` (ej. `HAYMINGAEVENTO Taller de adobe`)
 - El flyer adjunto (como imagen, en la resolución que tenga)
 - En el cuerpo: fecha, lugar, y cualquier dato de contacto — se lo pasamos
   tal cual a la IA como contexto extra, igual que el caption de Instagram
 
-El botón "+ Nuevo Evento" del sitio ya arma este formato automáticamente.
+El modal del formulario tiene un link a este mail como alternativa, por si
+alguien prefiere mandarlo así en vez de completar los campos.
 
 ## Cuando se quiera pasar a una casilla del dominio (eventos@hayminga.org)
 
@@ -77,3 +113,11 @@ veces.
   de `Cola_Manual` que no pudo procesar (imagen no descargable, o el
   extractor no la reconoció como evento) — quedan visibles en esa hoja
   para revisar a mano, no se pierden ni se reintentan solas.
+- El formulario web rechaza imágenes de más de 8MB y tiene un campo
+  honeypot (`web`) para filtrar spam automático básico — no es protección
+  fuerte, pero corta bots genéricos sin agregar un captcha.
+- `doPost` no valida quién manda el POST (tiene que ser público para que
+  el sitio le llegue) — cualquiera que descubra la URL del Web App podría
+  mandar datos directo. Es el mismo nivel de exposición que un Google Form
+  público; si se vuelve un problema, la solución es agregar moderación
+  (Estado=pendiente en vez de confirmado) en vez de autenticación.

@@ -155,6 +155,30 @@ select:focus{border-color:var(--tierra);}
 .vision-firma{padding:0.5rem 1rem;background:var(--paja);border-radius:20px;font-size:0.85rem;color:var(--tierra-oscuro);font-weight:500;}
 footer{text-align:center;padding:2rem 1.5rem;color:var(--texto-suave);font-size:0.8rem;border-top:1px solid var(--paja-oscuro);}
 footer a{color:var(--tierra);text-decoration:none;}
+.evento-form-inner{background:var(--blanco);border-radius:var(--radio);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:1.5rem;position:relative;}
+.evento-form-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.3rem;}
+.evento-form-header h3{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:500;color:var(--texto);}
+.evento-form-sub{font-size:0.85rem;color:var(--texto-suave);margin-bottom:1.25rem;}
+.evento-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;}
+.evento-grid .full{grid-column:1/-1;}
+@media(max-width:520px){.evento-grid{grid-template-columns:1fr;}}
+.campo-label{display:block;font-size:0.78rem;color:var(--texto-suave);margin-bottom:0.3rem;}
+.campo-label .req{color:var(--tierra-claro);}
+.evento-grid input[type="text"],.evento-grid input[type="date"],.evento-grid input[type="email"],.evento-grid select,.evento-grid textarea{
+  width:100%;padding:0.6rem 0.8rem;border:1.5px solid var(--paja-oscuro);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--fondo);color:var(--texto);outline:none;
+}
+.evento-grid input:focus,.evento-grid select:focus,.evento-grid textarea:focus{border-color:var(--tierra);}
+.evento-grid textarea{resize:vertical;min-height:70px;}
+.evento-check{display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--texto);padding-top:0.4rem;}
+.evento-imagen-wrap{border:1.5px dashed var(--paja-oscuro);border-radius:8px;padding:1rem;text-align:center;background:var(--fondo);}
+.evento-imagen-wrap.tiene-imagen{border-style:solid;border-color:var(--tierra-claro);}
+.evento-imagen-preview{max-height:140px;border-radius:6px;margin-bottom:0.5rem;display:none;}
+.honeypot-field{position:absolute;left:-9999px;top:-9999px;opacity:0;pointer-events:none;}
+.btn-publicar{width:100%;padding:0.8rem;background:var(--tierra-claro);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;margin-top:1.25rem;}
+.btn-publicar:hover{background:var(--tierra-oscuro);}
+.btn-publicar:disabled{opacity:0.6;cursor:default;}
+.evento-form-alt{text-align:center;font-size:0.8rem;color:var(--texto-suave);margin-top:0.75rem;}
+.evento-form-alt a{color:var(--tierra-claro);}
 </style>
 </head>
 <body>
@@ -164,7 +188,7 @@ footer a{color:var(--tierra);text-decoration:none;}
   <nav>
     <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
     <button class="nav-link" onclick="abrirPopup()">hayminga en tu email</button>
-    <a class="nav-btn" href="mailto:germanv@gmail.com?subject=HAYMINGAEVENTO%20Nuevo%20evento%20para%20HayMinga&body=Hola!%20Les%20comparto%20un%20evento%20de%20bioconstrucci%C3%B3n%20para%20HayMinga.%0A%0A%E2%9A%A0%EF%B8%8F%20Importante%3A%20adjunt%C3%A1%20el%20flyer%20del%20evento%20como%20imagen%20a%20este%20mail.%0A%0ANombre%20del%20evento%3A%20%0AFecha%3A%20%0ALugar%3A%20%0AContacto%3A%20%0A%0AGracias!">+ Nuevo Evento</a>
+    <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()">+ Nuevo Evento</button>
   </nav>
 </header>
 
@@ -275,6 +299,93 @@ footer a{color:var(--tierra);text-decoration:none;}
   </div>
 </div>
 
+<div class="modal-overlay" id="form-evento-overlay" onclick="cerrarFormEvento(event)">
+  <div class="evento-form-inner">
+    <div class="evento-form-header">
+      <h3>Publicá tu <em style="font-style:italic;color:var(--tierra-claro);">evento</em></h3>
+      <button class="btn-cerrar" onclick="cerrarFormEvento()">✕</button>
+    </div>
+    <p class="evento-form-sub">Completá los datos y se publica al instante — gratis, sin intermediarios.</p>
+
+    <form id="form-evento" onsubmit="enviarEvento(event)">
+      <input type="text" name="web" class="honeypot-field" tabindex="-1" autocomplete="off">
+
+      <div class="evento-grid">
+        <div class="full">
+          <label class="campo-label">Nombre del evento <span class="req">*</span></label>
+          <input type="text" id="evento-nombre" required>
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Flyer del evento <span class="req">*</span></label>
+          <div class="evento-imagen-wrap" id="evento-imagen-wrap">
+            <img class="evento-imagen-preview" id="evento-imagen-preview">
+            <input type="file" id="evento-imagen" accept="image/*" required
+              onchange="previsualizarImagen(this)">
+          </div>
+        </div>
+
+        <div>
+          <label class="campo-label">Tipo de evento <span class="req">*</span></label>
+          <select id="evento-tipo" required>
+            <option value="">Elegir...</option>
+            <option>Curso</option><option>Taller</option><option>Minga</option>
+            <option>Charla</option><option>Evento</option><option>Residencia</option><option>Festival</option>
+          </select>
+        </div>
+        <div>
+          <label class="campo-label">Provincia</label>
+          <input type="text" id="evento-provincia" placeholder="ej. Buenos Aires">
+        </div>
+
+        <div>
+          <label class="campo-label">Fecha de inicio <span class="req">*</span></label>
+          <input type="date" id="evento-fecha-inicio" required>
+        </div>
+        <div>
+          <label class="campo-label">Fecha de fin (opcional)</label>
+          <input type="date" id="evento-fecha-fin">
+        </div>
+
+        <div class="full evento-check">
+          <input type="checkbox" id="evento-virtual">
+          <label for="evento-virtual">Es un evento virtual</label>
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Dirección o ciudad</label>
+          <input type="text" id="evento-direccion">
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Descripción</label>
+          <textarea id="evento-descripcion"></textarea>
+        </div>
+
+        <div>
+          <label class="campo-label">Organizador</label>
+          <input type="text" id="evento-organizador">
+        </div>
+        <div>
+          <label class="campo-label">Contacto (email o WhatsApp)</label>
+          <input type="text" id="evento-contacto">
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Link de Instagram u otra publicación (opcional)</label>
+          <input type="text" id="evento-link" placeholder="https://instagram.com/p/...">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-publicar" id="btn-publicar-evento">Publicar evento</button>
+      <p id="evento-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
+      <p class="evento-form-alt">¿Preferís mandarlo por mail? Escribinos a
+        <a href="mailto:germanv@gmail.com?subject=HAYMINGAEVENTO%20Nuevo%20evento%20para%20HayMinga&body=Hola!%20Les%20comparto%20un%20evento%20de%20bioconstrucci%C3%B3n%20para%20HayMinga.%0A%0A%E2%9A%A0%EF%B8%8F%20Importante%3A%20adjunt%C3%A1%20el%20flyer%20del%20evento%20como%20imagen%20a%20este%20mail.%0A%0ANombre%20del%20evento%3A%20%0AFecha%3A%20%0ALugar%3A%20%0AContacto%3A%20%0A%0AGracias!">germanv@gmail.com</a>
+        con el asunto <code>HAYMINGAEVENTO</code> y el flyer adjunto.</p>
+    </form>
+  </div>
+</div>
+
 <section class="vision" id="vision">
   <div class="vision-inner">
     <h2 class="vision-titulo">¿Qué es <em>hayminga</em>?</h2>
@@ -312,6 +423,9 @@ footer a{color:var(--tierra);text-decoration:none;}
 <script>
 var SHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
 var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Eventos';
+// URL del Web App de Apps Script (import/apps-script/Code.gs) — se completa
+// después de desplegarlo: Implementar > Nueva implementación > Aplicación web
+var APPS_SCRIPT_URL = 'PEGAR_AQUI_LA_URL_DEL_WEB_APP_DESPLEGADO';
 var todosLosEventos = [];
 var eventosFiltrados = [];
 
@@ -691,10 +805,104 @@ function enviarEmail(e) {
     });
 }
 
+function abrirFormEvento() {
+  document.getElementById('form-evento-overlay').classList.add('activo');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarFormEvento(ev) {
+  if (ev && ev.target !== document.getElementById('form-evento-overlay')) return;
+  document.getElementById('form-evento-overlay').classList.remove('activo');
+  document.body.style.overflow = '';
+}
+
+function previsualizarImagen(input) {
+  var preview = document.getElementById('evento-imagen-preview');
+  var wrap = document.getElementById('evento-imagen-wrap');
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    preview.src = reader.result;
+    preview.style.display = 'block';
+    wrap.classList.add('tiene-imagen');
+  };
+  reader.readAsDataURL(file);
+}
+
+function enviarEvento(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btn-publicar-evento');
+  var msg = document.getElementById('evento-form-msg');
+  var file = document.getElementById('evento-imagen').files[0];
+
+  function mostrarMsg(texto, ok) {
+    msg.style.display = 'block';
+    msg.style.color = ok ? 'var(--verde)' : '#c0392b';
+    msg.textContent = texto;
+  }
+
+  if (!file) { mostrarMsg('Subí una imagen del flyer.', false); return; }
+  if (file.size > 8 * 1024 * 1024) { mostrarMsg('La imagen pesa más de 8MB, subí una más liviana.', false); return; }
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PEGAR_AQUI') === 0) {
+    mostrarMsg('El formulario todavía no está conectado — mandalo por mail mientras tanto.', false);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Publicando...';
+
+  var reader = new FileReader();
+  reader.onload = function() {
+    var base64 = reader.result.split(',')[1];
+    var payload = {
+      web: document.querySelector('.honeypot-field').value, // honeypot
+      nombre: document.getElementById('evento-nombre').value,
+      tipo_evento: document.getElementById('evento-tipo').value,
+      fecha_inicio: document.getElementById('evento-fecha-inicio').value,
+      fecha_fin: document.getElementById('evento-fecha-fin').value,
+      es_virtual: document.getElementById('evento-virtual').checked,
+      provincia: document.getElementById('evento-provincia').value,
+      direccion: document.getElementById('evento-direccion').value,
+      descripcion: document.getElementById('evento-descripcion').value,
+      organizador: document.getElementById('evento-organizador').value,
+      contacto: document.getElementById('evento-contacto').value,
+      link_promocional: document.getElementById('evento-link').value,
+      imagen_base64: base64,
+      imagen_mime: file.type,
+      imagen_nombre: file.name
+    };
+
+    // mode:'no-cors' + Content-Type text/plain evita el preflight de CORS
+    // que Apps Script Web Apps no maneja bien; no podemos leer la
+    // respuesta (opaca), así que asumimos éxito si el fetch no tira error
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    }).then(function() {
+      mostrarMsg('¡Listo! Tu evento ya está publicado en hayminga.org 🌿', true);
+      document.getElementById('form-evento').reset();
+      document.getElementById('evento-imagen-preview').style.display = 'none';
+      document.getElementById('evento-imagen-wrap').classList.remove('tiene-imagen');
+      btn.disabled = false;
+      btn.textContent = 'Publicar evento';
+      setTimeout(function() { location.reload(); }, 2000);
+    }).catch(function() {
+      mostrarMsg('Algo salió mal, intentá de nuevo o mandalo por mail.', false);
+      btn.disabled = false;
+      btn.textContent = 'Publicar evento';
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
 document.addEventListener('keydown', function(ev) {
   if (ev.key === 'Escape') {
     document.getElementById('modal-overlay').classList.remove('activo');
     document.getElementById('popup-overlay').classList.remove('activo');
+    document.getElementById('form-evento-overlay').classList.remove('activo');
     document.getElementById('panel-mob').classList.remove('abierto');
     document.body.style.overflow = '';
   }
