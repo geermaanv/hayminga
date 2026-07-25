@@ -27,12 +27,9 @@ header{background:#FFFFFF;border-bottom:2px solid #C4763A;padding:0 1.5rem;posit
 .header-left{display:flex;align-items:center;gap:1rem;min-width:0;}
 .logo{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;color:#C4763A;letter-spacing:0px; cursor:pointer; line-height:1;flex-shrink:0; }
 .logo span{color:#8B4513;}
-.txt-mob{display:none;}
 nav{display:flex;align-items:center;gap:20px;}
 .nav-link{font-size:0.78rem;color:var(--tierra-oscuro);text-decoration:none;cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;}
 .nav-link:hover{color:var(--tierra-claro);}
-.nav-btn{font-size:0.78rem;color:#FFFFFF;background:#C4763A;padding:0.3rem 0.8rem;border-radius:8px;text-decoration:none;font-weight:500;white-space:nowrap;}
-.nav-btn:hover{background:var(--tierra-oscuro);}
 .filtros-container{background:var(--blanco);border-bottom:1px solid var(--paja-oscuro);padding:0.7rem 1.5rem;position:sticky;top:56px;z-index:90;box-shadow:0 2px 8px var(--sombra);}
 .filtros-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:0.5rem;}
 .filtros-row1{display:flex;gap:0.6rem;align-items:center;}
@@ -88,18 +85,13 @@ select:focus{border-color:var(--tierra);}
   .filtros-row1{gap:0.5rem;}
   #filtro-tipo{display:none;}
   #filtro-provincia{display:none;}
-  .vista-btn{padding:0.28rem 0.5rem;font-size:0.68rem;}
-  header{padding:0 0.6rem;}
-  .header-left{gap:0.5rem;}
+  .vista-btn{padding:0.32rem 0.55rem;font-size:0.72rem;}
+  header{padding:0 1rem;}
+  .header-left{gap:0.6rem;}
   .logo{font-size:1.05rem;}
-  nav{gap:6px;}
-  .nav-btn{padding:0.28rem 0.5rem;font-size:0.68rem;}
-  .txt-full{display:none;}
-  .txt-mob{display:inline;}
 }
 @media(max-width:360px){
-  .nav-btn{padding:0.24rem 0.4rem;font-size:0.62rem;}
-  .vista-btn{padding:0.24rem 0.4rem;font-size:0.62rem;}
+  .vista-btn{padding:0.28rem 0.45rem;font-size:0.66rem;}
 }
 .conteo{max-width:1100px;margin:1.25rem auto 0.4rem;padding:0 1.5rem;font-size:0.83rem;color:var(--texto-suave);}
 .grilla{max-width:1100px;margin:0 auto;padding:0.75rem 1.5rem 3rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.1rem;}
@@ -194,8 +186,20 @@ footer a{color:var(--tierra);text-decoration:none;}
 .evento-form-alt{text-align:center;font-size:0.8rem;color:var(--texto-suave);margin-top:0.75rem;}
 .evento-form-alt a{color:var(--tierra-claro);}
 .vista-toggle{display:flex;gap:0.4rem;max-width:1100px;margin:1rem auto 0;padding:0 1.5rem;}
-.vista-btn{padding:0.45rem 1rem;border:1.5px solid var(--paja-oscuro);border-radius:20px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:500;cursor:pointer;}
-.vista-btn.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
+.vista-btn{display:flex;align-items:center;gap:0.35rem;padding:0.42rem 0.9rem;border:1.5px solid var(--paja-oscuro);border-radius:20px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:500;cursor:pointer;white-space:nowrap;}
+.vista-btn svg{opacity:0.55;flex-shrink:0;}
+.vista-btn.on svg{opacity:1;}
+/* color por sección: naranja = Eventos (matchea el CTA "+ Nuevo evento"),
+   verde = Directorio (matchea el CTA "+ Sumarme al directorio") */
+.vista-btn.eventos.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
+.vista-btn.directorio.on{background:var(--verde);border-color:var(--verde);color:white;}
+
+.cta-accion{display:block;width:calc(100% - 3rem);max-width:1100px;margin:0.8rem auto 0;padding:0.75rem;border:none;border-radius:10px;color:white;font-family:'DM Sans',sans-serif;font-size:0.92rem;font-weight:600;cursor:pointer;}
+.cta-eventos{background:var(--tierra-claro);}
+.cta-eventos:hover{background:var(--tierra-oscuro);}
+.cta-directorio{background:var(--verde);}
+.cta-directorio:hover{background:#2a4d2c;}
+@media(max-width:640px){.cta-accion{width:calc(100% - 2rem);}}
 .persona-card{background:var(--blanco);border-radius:var(--radio);box-shadow:0 2px 8px var(--sombra);border:1px solid rgba(139,69,19,0.08);padding:1.1rem;display:flex;flex-direction:column;gap:0.5rem;}
 .persona-nombre{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:500;color:var(--texto);}
 .persona-provincia{font-size:0.78rem;color:var(--texto-suave);}
@@ -210,14 +214,18 @@ footer a{color:var(--tierra);text-decoration:none;}
   <div class="header-left">
     <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
     <div class="vista-toggle" style="margin:0;padding:0;max-width:none;">
-      <button class="vista-btn on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">Eventos</button>
-      <button class="vista-btn" id="vista-btn-directorio" onclick="mostrarVista('directorio')">Directorio</button>
+      <button class="vista-btn eventos on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Eventos
+      </button>
+      <button class="vista-btn directorio" id="vista-btn-directorio" onclick="mostrarVista('directorio')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Directorio
+      </button>
     </div>
   </div>
   <nav>
     <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
-    <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()"><span class="txt-full">+ Nuevo Evento</span><span class="txt-mob">+ Evento</span></button>
-    <button class="nav-btn" style="border:none;cursor:pointer;background:var(--verde);" onclick="abrirFormDirectorio()">+ Sumarme</button>
   </nav>
 </header>
 
@@ -261,6 +269,8 @@ footer a{color:var(--tierra);text-decoration:none;}
   <input type="hidden" id="filtro-periodo" value="">
   <label class="check-pasados"><input type="checkbox" id="mostrar-pasados"></label>
 </div>
+
+<button class="cta-accion cta-eventos" onclick="abrirFormEvento()">+ Nuevo evento</button>
 
 <!-- Panel mobile como overlay -->
 <div class="panel-mob" id="panel-mob" onclick="cerrarPanelMobOverlay(event)">
@@ -318,6 +328,7 @@ footer a{color:var(--tierra);text-decoration:none;}
       <select id="filtro-directorio-provincia" onchange="renderDirectorio()"><option value="">Todas las provincias</option></select>
     </div>
   </div>
+  <button class="cta-accion cta-directorio" onclick="abrirFormDirectorio()">+ Sumarme al directorio</button>
   <div class="conteo" id="conteo-directorio"></div>
   <div class="grilla" id="grilla-directorio">
     <div class="loading"><div class="spinner"></div><p>Cargando directorio...</p></div>
