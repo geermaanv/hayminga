@@ -40,6 +40,14 @@ input[type="text"]{width:100%;padding:0.5rem 0.75rem 0.5rem 2.2rem;border:1.5px 
 input[type="text"]:focus{border-color:var(--tierra);}
 select{padding:0.45rem 1.8rem 0.45rem 0.75rem;border:1.5px solid var(--paja-oscuro);border-radius:20px;font-family:'DM Sans',sans-serif;font-size:0.83rem;background-color:var(--fondo);color:var(--texto);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%238B4513' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.5rem center;}
 select:focus{border-color:var(--tierra);}
+.directorio-filtros select{flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;}
+@media(max-width:640px){
+  .directorio-filtros{gap:0.4rem;}
+  .directorio-filtros select{font-size:0.74rem;padding:0.4rem 1.4rem 0.4rem 0.6rem;background-position:right 0.4rem center;}
+}
+@media(max-width:360px){
+  .directorio-filtros select{font-size:0.68rem;padding:0.35rem 1.2rem 0.35rem 0.5rem;}
+}
 .btn-limpiar{padding:0.45rem 0.9rem;border:1.5px solid var(--paja-oscuro);border-radius:20px;background:transparent;color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.83rem;cursor:pointer;white-space:nowrap;}
 .btn-limpiar:hover{border-color:var(--tierra);color:var(--tierra);}
 .check-pasados{display:none;}
@@ -183,6 +191,12 @@ footer a{color:var(--tierra);text-decoration:none;}
 .btn-publicar{width:100%;padding:0.8rem;background:var(--tierra-claro);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;margin-top:1.25rem;}
 .btn-publicar:hover{background:var(--tierra-oscuro);}
 .btn-publicar:disabled{opacity:0.6;cursor:default;}
+.btn-cancelar{width:100%;padding:0.7rem;background:transparent;color:var(--texto-suave);border:1.5px solid var(--paja-oscuro);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.9rem;font-weight:500;cursor:pointer;margin-top:0.6rem;}
+.btn-cancelar:hover{border-color:var(--tierra);color:var(--tierra);}
+/* dentro del popup (fondo oscuro verde) el contraste de arriba no se ve —
+   mismos colores claros que ya usa .popup p/h3 em */
+.popup .btn-cancelar{color:var(--paja-oscuro);border-color:rgba(245,237,214,0.3);}
+.popup .btn-cancelar:hover{border-color:var(--paja);color:var(--paja);}
 .evento-form-alt{text-align:center;font-size:0.8rem;color:var(--texto-suave);margin-top:0.75rem;}
 .evento-form-alt a{color:var(--tierra-claro);}
 .vista-toggle{display:flex;gap:0.4rem;max-width:1100px;margin:1rem auto 0;padding:0 1.5rem;}
@@ -322,7 +336,7 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <div id="vista-directorio" style="display:none;">
   <div class="filtros-container" style="position:static;box-shadow:none;">
-    <div class="filtros-inner" style="max-width:1100px;flex-direction:row;flex-wrap:wrap;">
+    <div class="filtros-inner directorio-filtros" style="max-width:1100px;flex-direction:row;flex-wrap:nowrap;">
       <select id="filtro-directorio-provincia" onchange="renderDirectorio()"><option value="">Todas las provincias</option></select>
       <select id="filtro-directorio-interes" onchange="renderDirectorio()"><option value="">Todos los intereses</option></select>
     </div>
@@ -417,6 +431,7 @@ footer a{color:var(--tierra);text-decoration:none;}
       </div>
 
       <button type="submit" class="btn-publicar" id="btn-publicar-evento">Publicar evento</button>
+      <button type="button" class="btn-cancelar" onclick="cerrarFormEvento()">Cancelar</button>
       <p id="evento-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
       <p class="evento-form-alt">¿Preferís mandarlo por mail? Escribinos a
         <a href="mailto:germanv@gmail.com?subject=HAYMINGAEVENTO%20Nuevo%20evento%20para%20HayMinga&body=Hola!%20Les%20comparto%20un%20evento%20de%20bioconstrucci%C3%B3n%20para%20HayMinga.%0A%0A%E2%9A%A0%EF%B8%8F%20Importante%3A%20adjunt%C3%A1%20el%20flyer%20del%20evento%20como%20imagen%20a%20este%20mail.%0A%0ANombre%20del%20evento%3A%20%0AFecha%3A%20%0ALugar%3A%20%0AContacto%3A%20%0A%0AGracias!">germanv@gmail.com</a>
@@ -454,6 +469,7 @@ footer a{color:var(--tierra);text-decoration:none;}
         style="width:100%;padding:0.7rem;background:var(--verde);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
         Sumarme
       </button>
+      <button type="button" class="btn-cancelar" onclick="cerrarFormDirectorio()">Cancelar</button>
       <p id="directorio-form-msg" style="margin-top:0.75rem;padding:0.6rem;border-radius:8px;font-size:0.9rem;font-weight:500;text-align:center;display:none;"></p>
     </form>
   </div>
