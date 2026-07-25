@@ -16,6 +16,7 @@ from google.genai import errors as genai_errors
 import anthropic
 
 from src.state import save_hash, save_link, image_hash
+from src.scraper import fetch_caption
 
 client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 GEMINI_MODEL = "gemini-flash-latest"
@@ -177,24 +178,55 @@ def _get_raw_json(image_path: Path, image_bytes: bytes, media_type: str, prompt_
         return None
 
 
-def extract_event_data(image_path: Path, metadata: dict):
-    """Retorna dict (evento extraído), None (confirmado que no es un flyer
-    de evento) o RETRY (ambos proveedores fallaron, reintentar más tarde)."""
-    image_bytes, media_type = read_image(image_path)
-    prompt_text = _build_prompt_text(metadata.get("caption", ""))
-    raw = _get_raw_json(image_path, image_bytes, media_type, prompt_text)
-    if raw is None:
-        return RETRY
+def _necesita_caption(data: dict) -> bool:
+    """Solo vale la pena gastar una llamada de SerpAPI en el caption real
+    si el evento ya es real pero la extracción quedó floja: confianza
+    media/baja, o falta fecha/dirección que el caption suele traer."""
+    if data.get("confianza") in ("media", "baja"):
+        return True
+    return not data.get("fecha_inicio") or not data.get("direccion")
 
+
+def _parse_json_evento(raw: str, image_path: Path):
+    """None si no parsea, dict si sí. No confundir con el None de
+    'confirmado que no es evento' — ese se maneja en el caller."""
     try:
-        data = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError as e:
         print(f"[processor] Error JSON en {image_path.name}: {e} | raw: '{raw[:200]}'")
+        return None
+
+
+def extract_event_data(image_path: Path, metadata: dict):
+    """Retorna dict (evento extraído), None (confirmado que no es un flyer
+    de evento) o RETRY (ambos proveedores fallaron, reintentar más tarde).
+
+    Dos pasadas como mucho: la primera sin caption (gratis, no gasta
+    SerpAPI); la segunda con el caption real del post, pero SOLO si la
+    primera dio un evento real con datos flojos — así no se gasta una
+    llamada de SerpAPI en cada imagen que termina siendo basura."""
+    image_bytes, media_type = read_image(image_path)
+
+    raw = _get_raw_json(image_path, image_bytes, media_type, PROMPT_TEXT)
+    if raw is None:
+        return RETRY
+    data = _parse_json_evento(raw, image_path)
+    if data is None:
         return RETRY
 
     if not data.get("es_evento", True):
         print(f"[processor] {image_path.name}: no es evento, saltando")
         return None
+
+    link = metadata.get("link", "")
+    if link and _necesita_caption(data):
+        caption = fetch_caption(link)
+        if caption:
+            prompt_text = _build_prompt_text(caption)
+            raw2 = _get_raw_json(image_path, image_bytes, media_type, prompt_text)
+            data2 = _parse_json_evento(raw2, image_path) if raw2 else None
+            if data2 and data2.get("es_evento", True):
+                data = data2  # el reintento con caption reemplaza al primero
 
     # Enriquecer con metadata de URLs
     data["imagen_url"]       = metadata.get("thumbnail", "")

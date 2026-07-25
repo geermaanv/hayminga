@@ -77,8 +77,8 @@ def passes_quality_filter(data: bytes) -> bool:
 def fetch_caption(link: str) -> str:
     """Busca el snippet de caption real del post vía Google Search normal
     (no Images) — es la copia cacheada por Google, no un pedido a Instagram.
-    Se usa solo para imágenes que ya pasaron el filtro de calidad, para no
-    duplicar el costo de SerpAPI en las que se van a descartar igual."""
+    Cuesta una llamada de SerpAPI, así que processor.py la pide bajo demanda
+    (solo para eventos reales con datos incompletos), no acá al descargar."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key or not link:
         return ""
@@ -175,17 +175,15 @@ def download_images_for_query(
             if h in seen:
                 continue
 
-            # solo acá (imagen ya validada+filtrada) vale la pena gastar otra
-            # llamada de SerpAPI en buscar el caption real del post
-            caption = fetch_caption(link) if link else ""
-            item["caption"] = caption
-
+            # el caption ya NO se busca acá — processor.py lo pide bajo demanda
+            # solo para eventos reales con datos incompletos, para no gastar
+            # una llamada de SerpAPI en cada imagen que después resulta basura
             slug     = hashlib.md5(query.encode()).hexdigest()[:6]
             filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
             # sidecar de metadata: permite reintentar más tarde sin perder el link original
             filename.with_suffix(filename.suffix + ".json").write_text(
-                json.dumps({"link": link, "thumbnail": item.get("thumbnail", ""), "caption": caption})
+                json.dumps({"link": link, "thumbnail": item.get("thumbnail", "")})
             )
 
             # dedup dentro de esta corrida; se persiste recién si processor.py confirma un resultado
@@ -194,7 +192,7 @@ def download_images_for_query(
                 seen_links.add(link)
             item["hash"] = h
             downloaded.append((filename, item))
-            print(f"[scraper] ✓ {filename.name} — {link[:50]}" + (" (con caption)" if caption else ""))
+            print(f"[scraper] ✓ {filename.name} — {link[:50]}")
             time.sleep(0.3)
 
         except Exception as e:

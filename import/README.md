@@ -168,15 +168,28 @@ avatares de Google bajan ~9-10KB, thumbnails de flyers reales ~36-45KB) o
 menos de `MIN_IMAGE_DIM` (200px) en el lado más largo. Es gratis (no llama a
 ninguna IA) y en una prueba real bajó 24 resultados crudos a 6 candidatos.
 
-Solo para las imágenes que sobreviven ese filtro, se busca el **caption
-real del post** vía una búsqueda de Google Search normal (`engine: google`,
-no `google_images`) usando el link exacto del post como query — es la
-misma categoría "segura" que el thumbnail (copia cacheada por Google, no
-un pedido en vivo a Instagram). El caption suele tener información que no
-está en la imagen (fecha exacta, dirección, WhatsApp de contacto) y se le
-pasa a Gemini/Claude junto con la imagen. El campo `contacto` del JSON de
-salida (email o WhatsApp) sale de ahí y se guarda en la columna `Contacto`
-del Sheet.
+El **caption real del post** (vía una búsqueda de Google Search normal,
+`engine: google` no `google_images`, usando el link exacto del post como
+query — misma categoría "segura" que el thumbnail, copia cacheada por
+Google, no un pedido en vivo a Instagram) **cuesta una llamada extra de
+SerpAPI**, así que `processor.py` lo pide bajo demanda en vez de buscarlo
+para toda imagen que sobrevive el filtro de peso/dimensión:
+
+1. Primera pasada: Gemini/Claude ve solo la imagen (gratis, sin SerpAPI).
+2. Si el resultado es `"no es evento"`, listo — nunca se gasta una
+   llamada de caption en algo que iba a descartarse igual (~90-95% de los
+   casos medidos).
+3. Si es un evento real pero con `confianza` media/baja, o le falta
+   `fecha_inicio`/`direccion`, ahí sí se busca el caption y se reintenta
+   la extracción con ese contexto extra.
+
+Se descubrió el problema al revés primero: la versión original pedía el
+caption para *toda* imagen que pasaba el filtro (antes de saber si era
+evento), lo que agotó la cuota de SerpAPI en un solo día (~250 búsquedas,
+la mayoría gastadas en imágenes que terminaban siendo "no es evento"). El
+campo `contacto` del JSON de salida (email o WhatsApp) sigue saliendo del
+caption cuando está disponible, y se guarda en la columna `Contacto` del
+Sheet.
 
 ## Carga manual: formulario y mail
 
