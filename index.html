@@ -24,8 +24,10 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--fondo);color:var(--texto);min-height:100vh;}
 header{background:#FFFFFF;border-bottom:2px solid #C4763A;padding:0 1.5rem;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:56px;}
-.logo{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;color:#C4763A;letter-spacing:0px; cursor:pointer; line-height:1; }
+.header-left{display:flex;align-items:center;gap:1rem;min-width:0;}
+.logo{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;color:#C4763A;letter-spacing:0px; cursor:pointer; line-height:1;flex-shrink:0; }
 .logo span{color:#8B4513;}
+.txt-mob{display:none;}
 nav{display:flex;align-items:center;gap:20px;}
 .nav-link{font-size:0.78rem;color:var(--tierra-oscuro);text-decoration:none;cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;}
 .nav-link:hover{color:var(--tierra-claro);}
@@ -86,7 +88,18 @@ select:focus{border-color:var(--tierra);}
   .filtros-row1{gap:0.5rem;}
   #filtro-tipo{display:none;}
   #filtro-provincia{display:none;}
-  .vista-btn{padding:0.32rem 0.6rem;font-size:0.72rem;}
+  .vista-btn{padding:0.28rem 0.5rem;font-size:0.68rem;}
+  header{padding:0 0.6rem;}
+  .header-left{gap:0.5rem;}
+  .logo{font-size:1.05rem;}
+  nav{gap:6px;}
+  .nav-btn{padding:0.28rem 0.5rem;font-size:0.68rem;}
+  .txt-full{display:none;}
+  .txt-mob{display:inline;}
+}
+@media(max-width:360px){
+  .nav-btn{padding:0.24rem 0.4rem;font-size:0.62rem;}
+  .vista-btn{padding:0.24rem 0.4rem;font-size:0.62rem;}
 }
 .conteo{max-width:1100px;margin:1.25rem auto 0.4rem;padding:0 1.5rem;font-size:0.83rem;color:var(--texto-suave);}
 .grilla{max-width:1100px;margin:0 auto;padding:0.75rem 1.5rem 3rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.1rem;}
@@ -194,7 +207,7 @@ footer a{color:var(--tierra);text-decoration:none;}
 <body>
 
 <header>
-  <div style="display:flex;align-items:center;gap:1rem;">
+  <div class="header-left">
     <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
     <div class="vista-toggle" style="margin:0;padding:0;max-width:none;">
       <button class="vista-btn on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">Eventos</button>
@@ -203,7 +216,7 @@ footer a{color:var(--tierra);text-decoration:none;}
   </div>
   <nav>
     <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
-    <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()">+ Nuevo Evento</button>
+    <button class="nav-btn" style="border:none;cursor:pointer;" onclick="abrirFormEvento()"><span class="txt-full">+ Nuevo Evento</span><span class="txt-mob">+ Evento</span></button>
     <button class="nav-btn" style="border:none;cursor:pointer;background:var(--verde);" onclick="abrirFormDirectorio()">+ Sumarme</button>
   </nav>
 </header>
