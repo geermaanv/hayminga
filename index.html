@@ -20,11 +20,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=DM+Sans:wght@400;500&family=Syne:wght@700&display=swap" rel="stylesheet">
 <style>
-:root{--tierra:#8B4513;--tierra-claro:#C4763A;--tierra-oscuro:#5C2D0A;--paja:#F5EDD6;--paja-oscuro:#E8D5A8;--verde:#3D6B3F;--barro:#A0784A;--texto:#2A1A0A;--texto-suave:#6B4E2A;--fondo:#FAF6EE;--blanco:#FFFFFF;--sombra:rgba(139,69,19,0.12);--radio:12px;}
+:root{--tierra:#8B4513;--tierra-claro:#C4763A;--tierra-oscuro:#5C2D0A;--paja:#F5EDD6;--paja-oscuro:#E8D5A8;--verde:#3D6B3F;--verde-oscuro:#2A4A2C;--barro:#A0784A;--texto:#2A1A0A;--texto-suave:#6B4E2A;--fondo:#FAF6EE;--blanco:#FFFFFF;--sombra:rgba(139,69,19,0.12);--radio:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--fondo);color:var(--texto);min-height:100vh;}
 header{background:#FFFFFF;border-bottom:2px solid #C4763A;padding:0 1.5rem;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:56px;}
-.header-left{display:flex;align-items:center;gap:1rem;min-width:0;}
+.header-right{display:flex;align-items:center;gap:1.25rem;min-width:0;}
 .logo{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;color:#C4763A;letter-spacing:0px; cursor:pointer; line-height:1;flex-shrink:0; }
 .logo span{color:#8B4513;}
 nav{display:flex;align-items:center;gap:20px;}
@@ -87,7 +87,7 @@ select:focus{border-color:var(--tierra);}
   #filtro-provincia{display:none;}
   .vista-btn{padding:0.32rem 0.55rem;font-size:0.72rem;}
   header{padding:0 1rem;}
-  .header-left{gap:0.6rem;}
+  .header-right{gap:0.6rem;}
   .logo{font-size:1.05rem;}
 }
 @media(max-width:360px){
@@ -140,7 +140,7 @@ select:focus{border-color:var(--tierra);}
 .btn-link:hover{background:var(--tierra-oscuro);}
 .popup-overlay{position:fixed;inset:0;background:rgba(42,26,10,0.6);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
 .popup-overlay.activo{opacity:1;pointer-events:all;}
-.popup{background:var(--tierra-oscuro);border-radius:var(--radio);width:90%;max-width:480px;padding:1.5rem;position:relative;transform:scale(0.95);transition:transform 0.2s;}
+.popup{background:var(--verde-oscuro);border-radius:var(--radio);width:90%;max-width:480px;padding:1.5rem;position:relative;transform:scale(0.95);transition:transform 0.2s;}
 .popup-overlay.activo .popup{transform:scale(1);}
 .popup h3{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:300;color:var(--paja);margin-bottom:0.4rem;}
 .popup h3 em{font-style:italic;color:var(--paja-oscuro);}
@@ -211,8 +211,9 @@ footer a{color:var(--tierra);text-decoration:none;}
 <body>
 
 <header>
-  <div class="header-left">
-    <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
+  <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
+  <div class="header-right">
+    <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
     <div class="vista-toggle" style="margin:0;padding:0;max-width:none;">
       <button class="vista-btn eventos on" id="vista-btn-eventos" onclick="mostrarVista('eventos')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -224,9 +225,6 @@ footer a{color:var(--tierra);text-decoration:none;}
       </button>
     </div>
   </div>
-  <nav>
-    <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button>
-  </nav>
 </header>
 
 <div id="vista-eventos">
@@ -324,8 +322,9 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <div id="vista-directorio" style="display:none;">
   <div class="filtros-container" style="position:static;box-shadow:none;">
-    <div class="filtros-inner" style="max-width:1100px;">
+    <div class="filtros-inner" style="max-width:1100px;flex-direction:row;flex-wrap:wrap;">
       <select id="filtro-directorio-provincia" onchange="renderDirectorio()"><option value="">Todas las provincias</option></select>
+      <select id="filtro-directorio-interes" onchange="renderDirectorio()"><option value="">Todos los intereses</option></select>
     </div>
   </div>
   <button class="cta-accion cta-directorio" onclick="abrirFormDirectorio()">+ Sumarme al directorio</button>
@@ -452,7 +451,7 @@ footer a{color:var(--tierra);text-decoration:none;}
         Autorizo a que me manden novedades y avisos de HayMinga por email
       </label>
       <button type="submit" id="btn-publicar-directorio"
-        style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
+        style="width:100%;padding:0.7rem;background:var(--verde);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
         Sumarme
       </button>
       <p id="directorio-form-msg" style="margin-top:0.75rem;padding:0.6rem;border-radius:8px;font-size:0.9rem;font-weight:500;text-align:center;display:none;"></p>
@@ -473,7 +472,7 @@ footer a{color:var(--tierra);text-decoration:none;}
       <textarea id="contacto-mensaje" placeholder="Mensaje (opcional)" rows="3"
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
       <button type="submit" id="btn-enviar-contacto"
-        style="width:100%;padding:0.7rem;background:#C4763A;color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
+        style="width:100%;padding:0.7rem;background:var(--verde);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
         Enviar solicitud
       </button>
       <p id="contacto-form-msg" style="margin-top:0.75rem;padding:0.6rem;border-radius:8px;font-size:0.9rem;font-weight:500;text-align:center;display:none;"></p>
@@ -997,11 +996,17 @@ function poblarProvinciasDirectorio() {
 
 function poblarInteresesDirectorio() {
   var cont = document.getElementById('directorio-intereses');
-  if (!cont) return;
-  cont.innerHTML = INTERESES_CATEGORIAS.map(function(i, idx) {
-    return '<label style="display:flex;align-items:center;gap:0.4rem;">'
-      + '<input type="checkbox" class="directorio-interes-check" value="' + i + '" id="interes-' + idx + '">' + i + '</label>';
-  }).join('');
+  if (cont) {
+    cont.innerHTML = INTERESES_CATEGORIAS.map(function(i, idx) {
+      return '<label style="display:flex;align-items:center;gap:0.4rem;">'
+        + '<input type="checkbox" class="directorio-interes-check" value="' + i + '" id="interes-' + idx + '">' + i + '</label>';
+    }).join('');
+  }
+  var selectFiltro = document.getElementById('filtro-directorio-interes');
+  if (selectFiltro) {
+    selectFiltro.innerHTML = '<option value="">Todos los intereses</option>'
+      + INTERESES_CATEGORIAS.map(function(i) { return '<option>' + i + '</option>'; }).join('');
+  }
 }
 
 function mostrarVista(vista) {
@@ -1044,8 +1049,11 @@ function cargarDirectorio() {
 function renderDirectorio() {
   var g = document.getElementById('grilla-directorio');
   var filtroProv = document.getElementById('filtro-directorio-provincia') ? document.getElementById('filtro-directorio-provincia').value : '';
+  var filtroInteres = document.getElementById('filtro-directorio-interes') ? document.getElementById('filtro-directorio-interes').value : '';
   var personas = personasDirectorio.filter(function(p) {
-    return !filtroProv || p['Provincia'] === filtroProv;
+    if (filtroProv && p['Provincia'] !== filtroProv) return false;
+    if (filtroInteres && (p['Intereses'] || '').indexOf(filtroInteres) === -1) return false;
+    return true;
   });
   var n = personas.length;
   document.getElementById('conteo-directorio').textContent = n === 0 ? 'Sin resultados' : n + ' persona' + (n !== 1 ? 's' : '');
