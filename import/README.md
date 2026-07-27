@@ -14,6 +14,10 @@ Google Images (SerpAPI, site:instagram.com + queries de config.json)
                y por link, y busca el caption real del post vía Google
                Search (no Images) para las que pasan el filtro
         ↓
+  candidates.py — registra cada resultado en la hoja "Candidatos" ANTES
+                  de llamar a la IA; conserva estado, intentos y errores
+                  para poder reanudarlo en otra corrida
+        ↓
   processor.py — Gemini Vision (imagen + caption) extrae nombre, fecha,
                  lugar, tipo, contacto, etc.
                  (si falla o se queda sin cuota, reintenta esa imagen con Claude)
@@ -133,6 +137,32 @@ es de Argentina y todavía no terminó; esto incluye eventos que empiezan hoy
 o que ya comenzaron pero tienen una fecha de finalización futura. El resto
 entra con `Activo=false`, visible en la Sheet pero oculto en el sitio.
 
+## Cola persistente (hoja "Candidatos")
+
+`candidates.py` crea automáticamente una hoja `Candidatos` en el mismo
+Google Sheet. Cada imagen encontrada por Google se registra ahí antes de
+llamar a Gemini, de modo que una caída del runner, de Sheets o de un
+proveedor no haga desaparecer el descubrimiento.
+
+Columnas: `Id, Descubierto, Fuente, Consulta, URL_Publicacion, URL_Imagen,
+Hash, Estado, Intentos, Confianza, Motivo, Ultimo_Error, Nombre_Extraido,
+Fecha_Extraida, Provincia_Extraida, Evento_Id`.
+
+Estados:
+
+- `nuevo`: registrado, todavía sin procesar.
+- `procesando`: la corrida actual inició un intento.
+- `extraido`: Gemini/Claude obtuvo un evento; falta confirmar su escritura.
+- `publicado`: se insertó una fila nueva en `Eventos`.
+- `duplicado`: el evento ya existía por nombre + fecha + provincia.
+- `descartado`: la imagen fue clasificada de forma definitiva como no evento.
+- `reintentar`: hubo una falla transitoria de descarga, cuota o proveedor.
+
+Al comenzar cada corrida se recuperan los estados reintentables. La imagen
+se vuelve a descargar desde la URL guardada y se intenta hasta tres veces.
+Después del tercer fallo el candidato queda visible en la hoja para
+revisión manual, pero no consume llamadas indefinidamente.
+
 ## Fallback y reintentos ante fallas
 
 Por cada imagen, `processor.py` intenta primero con Gemini. Si esa llamada
@@ -144,9 +174,10 @@ reporta cuota/crédito agotado, se deja de intentarlo para el resto del batch
 Solo se marca una imagen como "vista" (`seen_hashes.txt`) cuando algún
 proveedor da un resultado definitivo (evento extraído, o confirmó que no es
 un flyer). Si ambos proveedores fallan para una imagen, no se marca, así una
-corrida futura la reintenta en vez de perderla para siempre. Y si ambos
+corrida futura la recupera desde `Candidatos` en vez de perderla para
+siempre. Y si ambos
 terminan sin cuota/crédito a mitad de un batch, el resto de las imágenes de
-esa corrida ni siquiera se intenta.
+esa corrida conserva estado `nuevo` para el día siguiente.
 
 Cada imagen descargada guarda un sidecar `<archivo>.json` con su `link` de
 Instagram — permite reintentar manualmente imágenes que quedaron sin

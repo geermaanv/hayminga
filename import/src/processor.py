@@ -365,12 +365,33 @@ def extract_event_data(image_path: Path, metadata: dict):
     return data
 
 
-def process_batch(items: list[tuple[Path, dict]]) -> list[dict]:
+def process_batch(items: list[tuple[Path, dict]], candidate_store=None) -> list[dict]:
     results = []
     for path, metadata in items:
-        outcome = extract_event_data(path, metadata)
+        attempts = int(metadata.get("_candidate_attempts", 0)) + 1
+        if candidate_store:
+            candidate_store.update(metadata, status="procesando", attempts=attempts)
+        try:
+            outcome = extract_event_data(path, metadata)
+        except Exception as error:
+            if candidate_store:
+                candidate_store.update(
+                    metadata,
+                    status="reintentar",
+                    attempts=attempts,
+                    reason="error_inesperado",
+                    last_error=str(error)[:500],
+                )
+            raise
 
         if outcome is RETRY:
+            if candidate_store:
+                candidate_store.update(
+                    metadata,
+                    status="reintentar",
+                    attempts=attempts,
+                    reason="proveedores_no_disponibles",
+                )
             if _batch_state["gemini_exhausted"] and _batch_state["claude_exhausted"]:
                 print("[processor] Ambos proveedores sin cuota — se corta el batch acá")
                 break
@@ -379,8 +400,27 @@ def process_batch(items: list[tuple[Path, dict]]) -> list[dict]:
         h = metadata.get("hash") or image_hash(path.read_bytes())
         save_hash(h)
         save_link(metadata.get("link", ""))
-        if outcome is not None:
-            results.append(outcome)
+        if outcome is None:
+            if candidate_store:
+                candidate_store.update(
+                    metadata,
+                    status="descartado",
+                    attempts=attempts,
+                    reason="no_es_evento",
+                )
+            continue
+
+        outcome["_candidate_id"] = metadata.get("_candidate_id", "")
+        outcome["_candidate_row"] = metadata.get("_candidate_row")
+        outcome["_candidate_attempts"] = attempts
+        if candidate_store:
+            candidate_store.update(
+                metadata,
+                status="extraido",
+                attempts=attempts,
+                event=outcome,
+            )
+        results.append(outcome)
     return results
 
 

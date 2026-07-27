@@ -12,21 +12,29 @@ load_dotenv()
 
 from src.scraper import download_all
 from src.processor import process_batch
-from src.sheets import append_events
+from src.sheets import append_events, event_dedupe_key
+from src.candidates import CandidateStore
 from src.email_intake import process_queue as process_manual_queue
 
 
 def run():
     print("=== hayminga.org — pipeline v2 ===\n")
     inserted_total = 0
+    candidate_store = CandidateStore()
 
     print("[1/4] Buscando imágenes en Google Images (última semana, isz:l)...")
-    all_items = download_all()
-    print(f"      {len(all_items)} imagen(es) nueva(s)\n")
+    retry_items = candidate_store.load_retries()
+    discovered_items = download_all()
+    new_items = candidate_store.register(discovered_items)
+    all_items = retry_items + new_items
+    print(
+        f"      {len(discovered_items)} descubierta(s), "
+        f"{len(retry_items)} reintento(s), {len(all_items)} a procesar\n"
+    )
 
     if all_items:
         print(f"[2/4] Procesando {len(all_items)} imagen(es) con Gemini/Claude...")
-        events = process_batch(all_items)
+        events = process_batch(all_items, candidate_store=candidate_store)
         print(f"      {len(events)} evento(s) detectado(s)\n")
 
         if events:
@@ -35,9 +43,33 @@ def run():
             print(f"      {len(activos)} activo(s), {len(inactivos)} inactivo(s) (pasados o fuera de AR)\n")
 
             print("[3/4] Escribiendo en Google Sheets...")
-            inserted = append_events(events)  # escribe todos, activo=false los inactivos
-            print(f"      {inserted} fila(s) nueva(s) en el Sheet\n")
-            inserted_total += inserted
+            inserted_keys = append_events(events, return_inserted_keys=True)
+            finalized_keys = set()
+            for event in events:
+                key = event_dedupe_key(event)
+                metadata = {
+                    "_candidate_row": event.get("_candidate_row"),
+                    "_candidate_attempts": event.get("_candidate_attempts", 0),
+                }
+                if key in inserted_keys and key not in finalized_keys:
+                    candidate_store.update(
+                        metadata,
+                        status="publicado",
+                        attempts=event.get("_candidate_attempts", 0),
+                        event=event,
+                        event_id=event.get("id", ""),
+                    )
+                    finalized_keys.add(key)
+                else:
+                    candidate_store.update(
+                        metadata,
+                        status="duplicado",
+                        attempts=event.get("_candidate_attempts", 0),
+                        event=event,
+                        reason="evento_ya_existente",
+                    )
+            print(f"      {len(inserted_keys)} fila(s) nueva(s) en el Sheet\n")
+            inserted_total += len(inserted_keys)
     else:
         print("Sin imágenes nuevas del scraping.\n")
 

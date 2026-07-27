@@ -192,6 +192,7 @@ def download_images_for_query(
                 seen_links.add(link)
             item["hash"] = h
             item["source"] = "google_images"
+            item["query"] = query
             item["discovered_at"] = datetime.now(timezone.utc).isoformat()
             downloaded.append((filename, item))
             print(f"[scraper] ✓ {filename.name} — {link[:50]}")

@@ -167,6 +167,7 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
             print(f"[sheets] Duplicado, saltando: '{nombre}'")
             continue
 
+        event.setdefault("id", generate_id())
         rows.append(event_to_row(event))
         processed.add(key)
         inserted_keys.add(key)
