@@ -30,6 +30,9 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -s tests -v
+
       - name: Restaurar hashes y links vistos
         uses: actions/cache@v4
         with:

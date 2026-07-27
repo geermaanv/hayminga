@@ -30,8 +30,8 @@ En paralelo, carga manual por mail:
   email_intake.py (paso 4/4 de main.py) lo procesa con el MISMO extractor
   de arriba — el cuerpo del mail hace el papel del caption
         ↓
-  sheets.py — Activo=true, Estado=confirmado directo (sin el filtro de
-  país/fecha del scraping automático)
+  sheets.py — valida fecha/país igual que el scraping; solo los eventos
+               vigentes de Argentina quedan Activo=true
 ```
 
 Vive dentro del repo `hayminga` (junto al frontend) y corre todos los días a las
@@ -113,23 +113,25 @@ gh run watch -R geermaanv/hayminga
 
 Columnas exactas en `src/sheets.py`: `Activo, Nombre, Dirección, Periodo, Fecha_Inicio,
 Fecha_Fin, Es_Virtual, Provincia, Descripción, Organizador, Link_Promocion, Tipo_Evento,
-img, procesado, Id, Contacto, Estado`. Las últimas tres se agregaron al final a propósito
-para no correr de letra las columnas existentes (`load_processed_names` usa el rango
-fijo `N:N` para `procesado`).
+img, procesado, Id, Contacto, Estado, Pais, Confianza, Fuente, Fecha_Descubrimiento`.
+Las columnas nuevas se agregan al final a propósito para no correr de letra
+las columnas existentes; la deduplicación reconstruye su clave leyendo
+nombre, fecha y provincia de las filas ya guardadas.
 
 - `Id`: identificador corto único por evento, generado al insertarse.
 - `Contacto`: email o WhatsApp del organizador, si el extractor lo encontró
   en la imagen o el caption/cuerpo del mail.
-- `Estado`: `confirmado` (scraping con `activo=true`, o cualquier carga
-  manual) / `pendiente` (scraping con `activo=false` — pasado, fuera de
-  Argentina, o sin fecha determinable).
+- `Estado`: `confirmado` para eventos activos y `pendiente` para eventos
+  pasados, fuera de Argentina, con fecha inválida o sin fecha determinable.
+- `Confianza`: `alta`, `media` o `baja`, según la extracción.
+- `Fuente`: origen del evento (`google_images`, `email` o `formulario_web`).
+- `Fecha_Descubrimiento`: momento en que el pipeline recibió el candidato.
 
-Gemini marca `activo=true` solo si el evento es en Argentina y la fecha de
-inicio es futura; el resto entra con `Activo=false` (visible en la Sheet pero
-oculto en el sitio, ya que el frontend filtra por `Activo='true'`). El campo
-`confianza` (alta/media/baja) viaja en el JSON de salida de Gemini pero **no**
-se guarda en la Sheet ni se usa para moderar — si querés revisar antes de
-publicar eventos de confianza baja, hay que agregarlo como columna.
+Gemini extrae país, provincia y fechas, pero `processor.py` normaliza esos
+campos y calcula `activo` de manera determinista. Un evento queda activo si
+es de Argentina y todavía no terminó; esto incluye eventos que empiezan hoy
+o que ya comenzaron pero tienen una fecha de finalización futura. El resto
+entra con `Activo=false`, visible en la Sheet pero oculto en el sitio.
 
 ## Fallback y reintentos ante fallas
 
@@ -208,10 +210,10 @@ hacer por API). Dos caminos, mismo Apps Script:
   del scraping — el cuerpo del mail juega el rol del caption. Pensado para
   texto libre en vez de completar campos.
 
-En ambos casos la carga se publica directo (`Activo=true`,
-`Estado=confirmado`) sin el filtro de país/fecha que aplica al scraping
-automático, porque hay una persona real detrás con intención de publicar
-su propio evento.
+El formulario web escribe campos estructurados directo porque la persona
+organizadora completa la fecha y el país está fijado en Argentina. Los
+eventos recibidos por email sí pasan por la misma normalización de fecha,
+país y provincia que el scraping antes de decidir si quedan activos.
 
 ## Por qué no usamos la imagen "original" ni Bing Images
 

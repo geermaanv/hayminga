@@ -15,7 +15,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from src.processor import extract_event_data, RETRY
-from src.sheets import append_events, SPREADSHEET_ID, SCOPES
+from src.sheets import append_events, event_dedupe_key, SPREADSHEET_ID, SCOPES
 
 QUEUE_SHEET = "Cola_Manual"
 QUEUE_RANGE = f"{QUEUE_SHEET}!A2:G"
@@ -62,6 +62,7 @@ def load_pending_rows(service) -> list[dict]:
             "codigo":     codigo,
             "cuerpo":     cuerpo,
             "imagen_url": imagen_url,
+            "timestamp":  timestamp,
         })
     return pending
 
@@ -104,7 +105,13 @@ def process_queue() -> int:
             mark_row(service, item["sheet_row"], "error: no se pudo descargar la imagen")
             continue
 
-        metadata = {"caption": item["cuerpo"], "link": "", "thumbnail": item["imagen_url"]}
+        metadata = {
+            "caption": item["cuerpo"],
+            "link": "",
+            "thumbnail": item["imagen_url"],
+            "source": "email",
+            "discovered_at": item["timestamp"],
+        }
         outcome = extract_event_data(dest, metadata)
 
         if outcome is RETRY or outcome is None:
@@ -113,23 +120,29 @@ def process_queue() -> int:
             # en vez de descartarlo en silencio
             mark_row(service, item["sheet_row"], "error: no se pudo extraer el evento")
             continue
+        if not (outcome.get("nombre") or "").strip():
+            mark_row(service, item["sheet_row"], "error: evento sin nombre")
+            continue
 
-        # carga manual: se publica directo, sin el filtro de país/fecha
-        # que aplica el bot a los candidatos encontrados por scraping
-        outcome["activo"] = True
-        outcome["estado"] = "confirmado"
         if not outcome.get("contacto") and item["remitente"]:
             outcome["contacto"] = item["remitente"]
 
-        events.append(outcome)
-        mark_row(service, item["sheet_row"], "true")
+        events.append((outcome, item["sheet_row"]))
 
     if not events:
         return 0
 
-    inserted = append_events(events)
-    print(f"[email_intake] {inserted} evento(s) manual(es) cargado(s)")
-    return inserted
+    inserted_keys = append_events([event for event, _ in events], return_inserted_keys=True)
+    confirmed_keys = set()
+    for event, sheet_row in events:
+        key = event_dedupe_key(event)
+        if key in inserted_keys and key not in confirmed_keys:
+            mark_row(service, sheet_row, "true")
+            confirmed_keys.add(key)
+        else:
+            mark_row(service, sheet_row, "duplicado")
+    print(f"[email_intake] {len(inserted_keys)} evento(s) manual(es) cargado(s)")
+    return len(inserted_keys)
 
 
 if __name__ == "__main__":

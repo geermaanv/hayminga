@@ -306,6 +306,9 @@ function crearEventoManual_(data) {
     data.contacto || '',
     'confirmado',
     'Argentina', // el form web es para eventos locales; no se pregunta país
+    'alta',
+    'formulario_web',
+    new Date().toISOString(),
   ];
 
   appendRowComoTexto_(sheet, valores);
@@ -401,5 +404,4 @@ function getOrCreateFolder_(name) {
 function getOrCreateLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
 }
-
 

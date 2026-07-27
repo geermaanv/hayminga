@@ -11,7 +11,7 @@ import hashlib
 import requests
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from PIL import Image
 
 from src.state import image_hash, load_seen_hashes, load_seen_links
@@ -191,6 +191,8 @@ def download_images_for_query(
             if link:
                 seen_links.add(link)
             item["hash"] = h
+            item["source"] = "google_images"
+            item["discovered_at"] = datetime.now(timezone.utc).isoformat()
             downloaded.append((filename, item))
             print(f"[scraper] ✓ {filename.name} — {link[:50]}")
             time.sleep(0.3)

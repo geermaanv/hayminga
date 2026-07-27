@@ -3,12 +3,15 @@ sheets.py
 Escribe los eventos en Google Sheets con el schema exacto de hayminga.org.
 Columnas: Activo, Nombre, Dirección, Periodo, Fecha_Inicio, Fecha_Fin,
           Es_Virtual, Provincia, Descripción, Organizador, Link_Promocion,
-          Tipo_Evento, img, procesado, Id, Contacto, Estado, Pais
+          Tipo_Evento, img, procesado, Id, Contacto, Estado, Pais,
+          Confianza, Fuente, Fecha_Descubrimiento
 """
 
 import os
 import json
 import uuid
+import re
+import unicodedata
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
@@ -17,13 +20,14 @@ SPREADSHEET_ID  = os.environ["GOOGLE_SPREADSHEET_ID"]
 SHEET_NAME      = "Eventos"
 
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
-# columnas existentes no cambian de letra y no rompen los rangos fijos
-# (ej. load_processed_names usa N:N para 'procesado').
+# columnas existentes no cambian de letra ni rompen consumidores que todavía
+# esperan esas posiciones.
 COLUMNS = [
     "Activo", "Nombre", "Dirección", "Periodo", "Fecha_Inicio", "Fecha_Fin",
     "Es_Virtual", "Provincia", "Descripción", "Organizador",
     "Link_Promocion", "Tipo_Evento", "img", "procesado",
     "Id", "Contacto", "Estado", "Pais",
+    "Confianza", "Fuente", "Fecha_Descubrimiento",
 ]
 
 
@@ -81,16 +85,37 @@ def _col_letter(n: int) -> str:
     return letters
 
 
-def load_processed_names(service) -> set:
-    """Lee la columna 'procesado' (N) para deduplicación."""
+def _normalize_key_part(value) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
+def event_dedupe_key(event: dict) -> str:
+    nombre = _normalize_key_part(event.get("nombre"))
+    fecha = _normalize_key_part(event.get("fecha_inicio_iso") or event.get("fecha_inicio"))
+    provincia = _normalize_key_part(event.get("provincia"))
+    return "|".join((nombre, fecha, provincia))
+
+
+def load_processed_keys(service) -> set:
+    """Construye claves nombre+fecha+provincia desde las filas existentes."""
     try:
         result = (
             service.spreadsheets().values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!N:N")
+            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A2:U")
             .execute()
         )
         values = result.get("values", [])
-        return {row[0].strip().lower() for row in values[1:] if row}
+        keys = set()
+        for row in values:
+            row = (row + [""] * len(COLUMNS))[:len(COLUMNS)]
+            keys.add(event_dedupe_key({
+                "nombre": row[1],
+                "fecha_inicio_iso": row[4],
+                "provincia": row[7],
+            }))
+        return keys
     except Exception:
         return set()
 
@@ -116,33 +141,39 @@ def event_to_row(event: dict) -> list:
         event.get("contacto") or "",
         event.get("estado") or ("confirmado" if event.get("activo") else "pendiente"),
         event.get("pais") or "",
+        event.get("confianza") or "",
+        event.get("fuente") or "",
+        event.get("fecha_descubrimiento") or "",
     ]
 
 
-def append_events(events: list[dict]) -> int:
+def append_events(events: list[dict], return_inserted_keys: bool = False):
     if not events:
-        return 0
+        return set() if return_inserted_keys else 0
 
     service = get_service()
     ensure_header(service)
-    processed = load_processed_names(service)
+    processed = load_processed_keys(service)
     print(f"[sheets] {len(processed)} evento(s) ya registrados")
 
     rows = []
+    inserted_keys = set()
     for event in events:
         nombre = (event.get("nombre") or "").strip()
         if not nombre:
             continue
-        if nombre.lower() in processed:
+        key = event_dedupe_key(event)
+        if key in processed:
             print(f"[sheets] Duplicado, saltando: '{nombre}'")
             continue
 
         rows.append(event_to_row(event))
-        processed.add(nombre.lower())
+        processed.add(key)
+        inserted_keys.add(key)
 
     if not rows:
         print("[sheets] Sin filas nuevas para insertar")
-        return 0
+        return set() if return_inserted_keys else 0
 
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
@@ -153,7 +184,7 @@ def append_events(events: list[dict]) -> int:
     ).execute()
 
     print(f"[sheets] ✓ {len(rows)} fila(s) insertada(s)")
-    return len(rows)
+    return inserted_keys if return_inserted_keys else len(rows)
 
 
 if __name__ == "__main__":

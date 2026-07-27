@@ -8,6 +8,7 @@ se queda sin cuota, reintenta esa misma imagen con Claude como fallback.
 import os
 import json
 import base64
+import unicodedata
 from pathlib import Path
 from datetime import datetime, date
 from google import genai
@@ -18,11 +19,8 @@ import anthropic
 from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
 
-client_gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 GEMINI_MODEL = "gemini-flash-latest"
 
-_claude_key   = os.environ.get("ANTHROPIC_API_KEY")
-client_claude = anthropic.Anthropic(api_key=_claude_key) if _claude_key else None
 CLAUDE_MODEL  = "claude-haiku-4-5-20251001"
 
 # Sentinel: ninguno de los proveedores disponibles pudo procesar la imagen
@@ -35,6 +33,58 @@ RETRY = object()
 _batch_state = {"gemini_exhausted": False, "claude_exhausted": False}
 
 HOY = date.today().isoformat()
+
+PROVINCIAS_ARGENTINA = {
+    "buenos aires": "Buenos Aires",
+    "caba": "CABA",
+    "ciudad autonoma de buenos aires": "CABA",
+    "catamarca": "Catamarca",
+    "chaco": "Chaco",
+    "chubut": "Chubut",
+    "cordoba": "Córdoba",
+    "corrientes": "Corrientes",
+    "entre rios": "Entre Ríos",
+    "formosa": "Formosa",
+    "jujuy": "Jujuy",
+    "la pampa": "La Pampa",
+    "la rioja": "La Rioja",
+    "mendoza": "Mendoza",
+    "misiones": "Misiones",
+    "neuquen": "Neuquén",
+    "rio negro": "Río Negro",
+    "salta": "Salta",
+    "san juan": "San Juan",
+    "san luis": "San Luis",
+    "santa cruz": "Santa Cruz",
+    "santa fe": "Santa Fe",
+    "santiago del estero": "Santiago del Estero",
+    "tierra del fuego": "Tierra del Fuego",
+    "tucuman": "Tucumán",
+}
+
+EVENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "es_evento": {"type": "boolean"},
+        "nombre": {"type": ["string", "null"]},
+        "tipo_evento": {
+            "type": ["string", "null"],
+            "enum": ["Curso", "Taller", "Minga", "Charla", "Evento", "Residencia", "Festival", None],
+        },
+        "fecha_inicio": {"type": ["string", "null"]},
+        "fecha_fin": {"type": ["string", "null"]},
+        "es_virtual": {"type": "boolean"},
+        "provincia": {"type": ["string", "null"]},
+        "pais": {"type": ["string", "null"]},
+        "descripcion": {"type": ["string", "null"]},
+        "organizador": {"type": ["string", "null"]},
+        "direccion": {"type": ["string", "null"]},
+        "contacto": {"type": ["string", "null"]},
+        "confianza": {"type": "string", "enum": ["alta", "media", "baja"]},
+    },
+    "required": ["es_evento"],
+    "additionalProperties": False,
+}
 
 SYSTEM_PROMPT = f"""Sos un extractor de datos de eventos de bioconstrucción para hayminga.org.
 Analizás imágenes de flyers y extraés la información del evento.
@@ -90,7 +140,7 @@ def parse_fecha(fecha_str: str | None) -> tuple[str, str]:
             return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m")
         except ValueError:
             continue
-    return fecha_str, ""
+    return "", ""
 
 
 def _build_prompt_text(caption: str) -> str:
@@ -103,6 +153,10 @@ def _build_prompt_text(caption: str) -> str:
 
 
 def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY no configurada")
+    client_gemini = genai.Client(api_key=api_key)
     response = client_gemini.models.generate_content(
         model=GEMINI_MODEL,
         contents=[
@@ -112,6 +166,7 @@ def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             response_mime_type="application/json",
+            response_schema=EVENT_SCHEMA,
             max_output_tokens=1024,
         ),
     )
@@ -119,8 +174,10 @@ def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
 
 
 def _call_claude(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
-    if client_claude is None:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY no configurada — sin fallback disponible")
+    client_claude = anthropic.Anthropic(api_key=api_key)
     response = client_claude.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=1024,
@@ -197,6 +254,68 @@ def _parse_json_evento(raw: str, image_path: Path):
         return None
 
 
+def _normalizar_texto(value: str | None) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    return "".join(char for char in text if not unicodedata.combining(char))
+
+
+def _normalizar_provincia(value: str | None) -> str:
+    return PROVINCIAS_ARGENTINA.get(_normalizar_texto(value), "")
+
+
+def _es_argentina(value: str | None) -> bool:
+    return _normalizar_texto(value) in {"argentina", "ar"}
+
+
+def validate_event_data(data: dict, today: date | None = None) -> dict:
+    """Normaliza campos extraídos y calcula `activo` sin delegarlo al modelo."""
+    result = dict(data)
+    today = today or date.today()
+
+    fecha_inicio_iso, periodo = parse_fecha(result.get("fecha_inicio"))
+    fecha_fin_iso, _ = parse_fecha(result.get("fecha_fin"))
+    result["fecha_inicio_iso"] = fecha_inicio_iso
+    result["fecha_fin_iso"] = fecha_fin_iso
+    result["periodo"] = periodo
+
+    provincia = _normalizar_provincia(result.get("provincia"))
+    if provincia:
+        result["provincia"] = provincia
+        if not result.get("pais"):
+            result["pais"] = "Argentina"
+    else:
+        result["provincia"] = ""
+
+    if _es_argentina(result.get("pais")):
+        result["pais"] = "Argentina"
+
+    fecha_inicio = date.fromisoformat(fecha_inicio_iso) if periodo else None
+    fecha_fin = None
+    if fecha_fin_iso:
+        try:
+            fecha_fin = date.fromisoformat(fecha_fin_iso)
+        except ValueError:
+            fecha_fin_iso = ""
+            result["fecha_fin_iso"] = ""
+
+    rango_valido = not (fecha_inicio and fecha_fin and fecha_fin < fecha_inicio)
+    fecha_relevante = fecha_fin or fecha_inicio
+    ubicacion_valida = result.get("pais") == "Argentina"
+    result["activo"] = bool(
+        result.get("nombre")
+        and fecha_inicio
+        and rango_valido
+        and fecha_relevante >= today
+        and ubicacion_valida
+    )
+    if not rango_valido:
+        result["fecha_fin_iso"] = ""
+
+    confianza = str(result.get("confianza") or "baja").lower()
+    result["confianza"] = confianza if confianza in {"alta", "media", "baja"} else "baja"
+    return result
+
+
 def extract_event_data(image_path: Path, metadata: dict):
     """Retorna dict (evento extraído), None (confirmado que no es un flyer
     de evento) o RETRY (ambos proveedores fallaron, reintentar más tarde).
@@ -207,7 +326,9 @@ def extract_event_data(image_path: Path, metadata: dict):
     llamada de SerpAPI en cada imagen que termina siendo basura."""
     image_bytes, media_type = read_image(image_path)
 
-    raw = _get_raw_json(image_path, image_bytes, media_type, PROMPT_TEXT)
+    supplied_caption = str(metadata.get("caption") or "").strip()
+    initial_prompt = _build_prompt_text(supplied_caption)
+    raw = _get_raw_json(image_path, image_bytes, media_type, initial_prompt)
     if raw is None:
         return RETRY
     data = _parse_json_evento(raw, image_path)
@@ -219,7 +340,7 @@ def extract_event_data(image_path: Path, metadata: dict):
         return None
 
     link = metadata.get("link", "")
-    if link and _necesita_caption(data):
+    if link and not supplied_caption and _necesita_caption(data):
         caption = fetch_caption(link)
         if caption:
             prompt_text = _build_prompt_text(caption)
@@ -231,13 +352,9 @@ def extract_event_data(image_path: Path, metadata: dict):
     # Enriquecer con metadata de URLs
     data["imagen_url"]       = metadata.get("thumbnail", "")
     data["link_promocional"] = metadata.get("link", "")
-
-    # Parsear fechas
-    fecha_inicio_iso, periodo = parse_fecha(data.get("fecha_inicio"))
-    fecha_fin_iso, _          = parse_fecha(data.get("fecha_fin"))
-    data["fecha_inicio_iso"] = fecha_inicio_iso
-    data["fecha_fin_iso"]    = fecha_fin_iso
-    data["periodo"]          = periodo
+    data["fuente"]            = metadata.get("source", "google_images")
+    data["fecha_descubrimiento"] = metadata.get("discovered_at", date.today().isoformat())
+    data = validate_event_data(data)
 
     activo = data.get("activo", False)
     print(
