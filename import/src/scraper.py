@@ -184,6 +184,11 @@ def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
         _provider_error("Serper", "SERPER_API_KEY no configurada")
         return []
 
+    # El plan gratuito de Serper rechaza pedidos de 20 o más resultados con
+    # "Query pattern not allowed for free accounts". Diez funciona y alcanza
+    # para que el filtro local seleccione candidatos sin consumir otra búsqueda.
+    request_limit = min(max_results, 10)
+
     try:
         resp = requests.post(
             "https://google.serper.dev/images",
@@ -193,7 +198,7 @@ def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
                 "hl": "es",
                 "gl": "ar",
                 "tbs": "isz:l,qdr:w",
-                "num": max_results,
+                "num": request_limit,
             },
             timeout=20,
         )
@@ -212,7 +217,7 @@ def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
         return []
 
     results = []
-    for image in data.get("images", [])[:max_results]:
+    for image in data.get("images", [])[:request_limit]:
         thumbnail = image.get("thumbnailUrl") or image.get("imageUrl")
         if thumbnail:
             results.append({

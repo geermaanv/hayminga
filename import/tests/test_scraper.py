@@ -73,6 +73,16 @@ class ImageProviderTests(unittest.TestCase):
         self.assertEqual(request.args[0], "https://google.serper.dev/images")
         self.assertEqual(request.kwargs["headers"]["X-API-KEY"], "backup")
         self.assertEqual(request.kwargs["json"]["q"], "bioconstruccion")
+        self.assertEqual(request.kwargs["json"]["num"], 2)
+
+    @patch.dict(os.environ, {"SERPER_API_KEY": "backup"}, clear=True)
+    @patch("src.scraper.requests.post")
+    def test_serper_caps_free_plan_request_at_ten_results(self, post):
+        post.return_value = response(payload={"images": []})
+
+        scraper.fetch_image_data("consulta", max_results=45)
+
+        self.assertEqual(post.call_args.kwargs["json"]["num"], 10)
 
     @patch.dict(os.environ, {"SERPAPI_KEY": "serp", "SERPER_API_KEY": "backup"})
     @patch("src.scraper.requests.post")
