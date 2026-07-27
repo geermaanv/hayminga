@@ -1,7 +1,8 @@
 """
 scraper.py
-Busca imágenes en Google Images via SerpAPI con filtro de última semana
-y tamaño grande (isz:l, qdr:w). Descarga thumbnails evitando duplicados.
+Busca imágenes en Google Images vía SerpAPI y usa Serper como respaldo.
+Filtra por última semana y tamaño grande, y descarga thumbnails evitando
+duplicados.
 """
 
 import os
@@ -38,6 +39,10 @@ VALID_MAGIC = {
     b'\x89PNG':      'png',
     b'RIFF':         'webp',
 }
+
+
+def _provider_error(provider: str, message: str) -> None:
+    print(f"[{provider}] {message}")
 
 
 def load_config() -> dict:
@@ -79,33 +84,57 @@ def fetch_caption(link: str) -> str:
     (no Images) — es la copia cacheada por Google, no un pedido a Instagram.
     Cuesta una llamada de SerpAPI, así que processor.py la pide bajo demanda
     (solo para eventos reales con datos incompletos), no acá al descargar."""
-    api_key = os.getenv("SERPAPI_KEY")
-    if not api_key or not link:
+    if not link:
+        return ""
+
+    serpapi_key = os.getenv("SERPAPI_KEY")
+    if serpapi_key:
+        try:
+            resp = requests.get("https://serpapi.com/search", params={
+                "engine": "google",
+                "q":      link,
+                "api_key": serpapi_key,
+                "hl": "es", "gl": "ar",
+            }, timeout=15)
+            data = resp.json() if resp.status_code == 200 else {}
+            if resp.status_code == 200 and not data.get("error"):
+                for result in data.get("organic_results", []):
+                    if result.get("link", "").rstrip("/") == link.rstrip("/"):
+                        return result.get("snippet", "")
+            else:
+                detail = data.get("error") or f"HTTP {resp.status_code}"
+                _provider_error("SerpAPI", f"caption no disponible: {detail}")
+        except Exception as exc:
+            _provider_error("SerpAPI", f"error buscando caption: {exc}")
+
+    serper_key = os.getenv("SERPER_API_KEY")
+    if not serper_key:
         return ""
 
     try:
-        resp = requests.get("https://serpapi.com/search", params={
-            "engine": "google",
-            "q":      link,
-            "api_key": api_key,
-            "hl": "es", "gl": "ar",
-        }, timeout=15)
+        resp = requests.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": serper_key, "Content-Type": "application/json"},
+            json={"q": link, "hl": "es", "gl": "ar"},
+            timeout=15,
+        )
         if resp.status_code != 200:
+            _provider_error("Serper", f"caption no disponible: HTTP {resp.status_code}")
             return ""
-        for r in resp.json().get("organic_results", []):
-            if r.get("link", "").rstrip("/") == link.rstrip("/"):
-                return r.get("snippet", "")
-    except Exception as e:
-        print(f"[scraper] Error buscando caption: {e}")
+        for result in resp.json().get("organic", []):
+            if result.get("link", "").rstrip("/") == link.rstrip("/"):
+                return result.get("snippet", "")
+    except Exception as exc:
+        _provider_error("Serper", f"error buscando caption: {exc}")
     return ""
 
 
-def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
-    """Busca en Google Images via SerpAPI con filtros de tamaño y fecha."""
+def _fetch_images_serpapi(query: str, max_results: int) -> list[dict] | None:
+    """Devuelve None si SerpAPI no está disponible; [] es una búsqueda válida."""
     api_key = os.getenv("SERPAPI_KEY")
     if not api_key:
-        print("[scraper] SERPAPI_KEY no configurada")
-        return []
+        _provider_error("SerpAPI", "SERPAPI_KEY no configurada")
+        return None
 
     params = {
         "engine":  "google_images",
@@ -119,15 +148,23 @@ def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
 
     try:
         resp = requests.get("https://serpapi.com/search", params=params, timeout=20)
-    except Exception as e:
-        print(f"[scraper] Error de red: {e}")
-        return []
+    except Exception as exc:
+        _provider_error("SerpAPI", f"error de red: {exc}")
+        return None
 
     if resp.status_code != 200:
-        print(f"[SerpAPI] Error {resp.status_code}: {resp.text[:200]}")
-        return []
+        _provider_error("SerpAPI", f"error HTTP {resp.status_code}: {resp.text[:200]}")
+        return None
 
-    data     = resp.json()
+    try:
+        data = resp.json()
+    except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+        _provider_error("SerpAPI", f"respuesta JSON inválida: {exc}")
+        return None
+    if data.get("error"):
+        _provider_error("SerpAPI", f"error de API: {data['error']}")
+        return None
+
     images   = data.get("images_results", [])
     results  = []
 
@@ -138,8 +175,63 @@ def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
                 "thumbnail": thumb,
                 "link":      img.get("link", ""),
             })
+    return results
 
-    print(f"[scraper] '{query[:55]}' → {len(results)} imagen(es)")
+
+def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
+    api_key = os.getenv("SERPER_API_KEY")
+    if not api_key:
+        _provider_error("Serper", "SERPER_API_KEY no configurada")
+        return []
+
+    try:
+        resp = requests.post(
+            "https://google.serper.dev/images",
+            headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+            json={
+                "q": query,
+                "hl": "es",
+                "gl": "ar",
+                "tbs": "isz:l,qdr:w",
+                "num": max_results,
+            },
+            timeout=20,
+        )
+    except Exception as exc:
+        _provider_error("Serper", f"error de red: {exc}")
+        return []
+
+    if resp.status_code != 200:
+        _provider_error("Serper", f"error HTTP {resp.status_code}: {resp.text[:200]}")
+        return []
+
+    try:
+        data = resp.json()
+    except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+        _provider_error("Serper", f"respuesta JSON inválida: {exc}")
+        return []
+
+    results = []
+    for image in data.get("images", [])[:max_results]:
+        thumbnail = image.get("thumbnailUrl") or image.get("imageUrl")
+        if thumbnail:
+            results.append({
+                "thumbnail": thumbnail,
+                "link": image.get("link", ""),
+            })
+    return results
+
+
+def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
+    """Busca imágenes con SerpAPI y activa Serper si el proveedor falla."""
+    results = _fetch_images_serpapi(query, max_results)
+    provider = "SerpAPI"
+    if results is None:
+        print("[scraper] Activando fallback de Serper")
+        results = _fetch_images_serper(query, max_results)
+        provider = "Serper"
+
+    print(f"[scraper] '{query[:55]}' → {len(results)} imagen(es) vía {provider}")
     return results
 
 

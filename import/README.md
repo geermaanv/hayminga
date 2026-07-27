@@ -63,6 +63,10 @@ en la raíz del repo.
 ### 3. SerpAPI
 
 1. Creá una cuenta en [serpapi.com](https://serpapi.com) y copiá tu API key del dashboard.
+2. Como respaldo, creá una cuenta en [serper.dev](https://serper.dev/) y copiá
+   su API key. El importador usa Serper automáticamente si SerpAPI no está
+   configurado, devuelve un error o se queda sin búsquedas. Una respuesta válida
+   sin resultados no consume el respaldo.
 
 ### 4. Gemini API (gratis, proveedor principal)
 
@@ -86,6 +90,7 @@ En el repo `hayminga` → Settings → Secrets and variables → Actions → New
 | `GEMINI_API_KEY` | Tu API key de Gemini (gratis, aistudio.google.com/apikey) |
 | `ANTHROPIC_API_KEY` | Tu API key de Claude (fallback) |
 | `SERPAPI_KEY` | Tu API key de SerpAPI |
+| `SERPER_API_KEY` | Tu API key de Serper (fallback de búsqueda) |
 | `GOOGLE_SPREADSHEET_ID` | ID del Google Sheet |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Contenido completo del JSON de la service account |
 
