@@ -66,20 +66,21 @@ EVENT_SCHEMA = {
     "type": "object",
     "properties": {
         "es_evento": {"type": "boolean"},
-        "nombre": {"type": ["string", "null"]},
+        "nombre": {"type": "string", "nullable": True},
         "tipo_evento": {
-            "type": ["string", "null"],
-            "enum": ["Curso", "Taller", "Minga", "Charla", "Evento", "Residencia", "Festival", None],
+            "type": "string",
+            "nullable": True,
+            "enum": ["Curso", "Taller", "Minga", "Charla", "Evento", "Residencia", "Festival"],
         },
-        "fecha_inicio": {"type": ["string", "null"]},
-        "fecha_fin": {"type": ["string", "null"]},
+        "fecha_inicio": {"type": "string", "nullable": True},
+        "fecha_fin": {"type": "string", "nullable": True},
         "es_virtual": {"type": "boolean"},
-        "provincia": {"type": ["string", "null"]},
-        "pais": {"type": ["string", "null"]},
-        "descripcion": {"type": ["string", "null"]},
-        "organizador": {"type": ["string", "null"]},
-        "direccion": {"type": ["string", "null"]},
-        "contacto": {"type": ["string", "null"]},
+        "provincia": {"type": "string", "nullable": True},
+        "pais": {"type": "string", "nullable": True},
+        "descripcion": {"type": "string", "nullable": True},
+        "organizador": {"type": "string", "nullable": True},
+        "direccion": {"type": "string", "nullable": True},
+        "contacto": {"type": "string", "nullable": True},
         "confianza": {"type": "string", "enum": ["alta", "media", "baja"]},
     },
     "required": ["es_evento"],
@@ -121,13 +122,25 @@ PROMPT_TEXT = "Extraé los datos de este flyer de evento."
 
 
 def read_image(path: Path) -> tuple[bytes, str]:
+    data = path.read_bytes()
+    magic_types = (
+        (b"\xff\xd8\xff", "image/jpeg"),
+        (b"\x89PNG\r\n\x1a\n", "image/png"),
+        (b"GIF87a", "image/gif"),
+        (b"GIF89a", "image/gif"),
+        (b"RIFF", "image/webp"),
+    )
+    for magic, media_type in magic_types:
+        if data.startswith(magic):
+            return data, media_type
+
     suffix = path.suffix.lower().lstrip(".")
     media_map = {
         "jpg": "image/jpeg", "jpeg": "image/jpeg",
-        "png": "image/png",  "webp": "image/webp",
+        "png": "image/png", "gif": "image/gif", "webp": "image/webp",
     }
     media_type = media_map.get(suffix, "image/jpeg")
-    return path.read_bytes(), media_type
+    return data, media_type
 
 
 def parse_fecha(fecha_str: str | None) -> tuple[str, str]:

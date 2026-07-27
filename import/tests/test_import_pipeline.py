@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
+from google.genai import types
 
 os.environ.setdefault("GOOGLE_SPREADSHEET_ID", "test-sheet")
 
@@ -11,6 +12,16 @@ from src import email_intake, processor, sheets
 
 
 class ProcessorTests(unittest.TestCase):
+    def test_event_schema_is_accepted_by_installed_google_sdk(self):
+        schema = types.Schema.model_validate(processor.EVENT_SCHEMA)
+        self.assertEqual(schema.type, types.Type.OBJECT)
+
+    def test_read_image_detects_real_mime_instead_of_file_extension(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"\x89PNG\r\n\x1a\nfake")
+            _, media_type = processor.read_image(Path(image.name))
+        self.assertEqual(media_type, "image/png")
+
     def test_validate_event_calculates_active_and_normalizes_province(self):
         event = processor.validate_event_data(
             {
@@ -170,6 +181,34 @@ class EmailIntakeTests(unittest.TestCase):
             email_intake.process_queue()
 
         mark_row.assert_not_called()
+
+    @patch("src.email_intake.mark_row")
+    @patch("src.email_intake.extract_event_data", return_value=email_intake.RETRY)
+    @patch("src.email_intake.download_drive_image", return_value=True)
+    @patch("src.email_intake.load_pending_rows")
+    @patch("src.email_intake.get_service", return_value=Mock())
+    def test_provider_failure_marks_retry_and_fails_workflow(
+        self,
+        get_service,
+        load_pending_rows,
+        download_drive_image,
+        extract_event_data,
+        mark_row,
+    ):
+        load_pending_rows.return_value = [{
+            "sheet_row": 2,
+            "remitente": "organizador@example.com",
+            "asunto": "Evento",
+            "codigo": "",
+            "cuerpo": "Datos del evento",
+            "imagen_url": "https://example.com/image.png",
+            "timestamp": "2026-07-27",
+        }]
+
+        with self.assertRaisesRegex(RuntimeError, "quedaron para reintentar"):
+            email_intake.process_queue()
+
+        mark_row.assert_called_once_with(get_service.return_value, 2, "reintentar")
 
 
 if __name__ == "__main__":

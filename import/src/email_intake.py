@@ -53,7 +53,12 @@ def load_pending_rows(service) -> list[dict]:
     for i, row in enumerate(rows):
         row = (row + [""] * 7)[:7]
         timestamp, remitente, asunto, codigo, cuerpo, imagen_url, procesado = row
-        if procesado.strip().lower() == "true" or not imagen_url:
+        status = procesado.strip().lower()
+        terminal = (
+            status in {"true", "duplicado"}
+            or (status.startswith("error:") and status != "error: no se pudo extraer el evento")
+        )
+        if terminal or not imagen_url:
             continue
         pending.append({
             "sheet_row": i + 2,  # +2: la hoja empieza en A2 (fila 1 = header)
@@ -98,6 +103,7 @@ def process_queue() -> int:
     print(f"[email_intake] {len(pending)} envío(s) manual(es) pendiente(s)")
     IMAGES_DIR.mkdir(exist_ok=True)
     events = []
+    retry_failures = 0
 
     for item in pending:
         dest = IMAGES_DIR / f"manual_{item['sheet_row']}.jpg"
@@ -114,11 +120,15 @@ def process_queue() -> int:
         }
         outcome = extract_event_data(dest, metadata)
 
-        if outcome is RETRY or outcome is None:
+        if outcome is RETRY:
+            mark_row(service, item["sheet_row"], "reintentar")
+            retry_failures += 1
+            continue
+        if outcome is None:
             # alguien mandó un mail a propósito — si el extractor no lo
             # reconoce como evento, vale la pena que un humano lo revise
             # en vez de descartarlo en silencio
-            mark_row(service, item["sheet_row"], "error: no se pudo extraer el evento")
+            mark_row(service, item["sheet_row"], "error: no es un evento")
             continue
         if not (outcome.get("nombre") or "").strip():
             mark_row(service, item["sheet_row"], "error: evento sin nombre")
@@ -129,19 +139,23 @@ def process_queue() -> int:
 
         events.append((outcome, item["sheet_row"]))
 
-    if not events:
-        return 0
+    inserted_keys = set()
+    if events:
+        inserted_keys = append_events([event for event, _ in events], return_inserted_keys=True)
+        confirmed_keys = set()
+        for event, sheet_row in events:
+            key = event_dedupe_key(event)
+            if key in inserted_keys and key not in confirmed_keys:
+                mark_row(service, sheet_row, "true")
+                confirmed_keys.add(key)
+            else:
+                mark_row(service, sheet_row, "duplicado")
+        print(f"[email_intake] {len(inserted_keys)} evento(s) manual(es) cargado(s)")
 
-    inserted_keys = append_events([event for event, _ in events], return_inserted_keys=True)
-    confirmed_keys = set()
-    for event, sheet_row in events:
-        key = event_dedupe_key(event)
-        if key in inserted_keys and key not in confirmed_keys:
-            mark_row(service, sheet_row, "true")
-            confirmed_keys.add(key)
-        else:
-            mark_row(service, sheet_row, "duplicado")
-    print(f"[email_intake] {len(inserted_keys)} evento(s) manual(es) cargado(s)")
+    if retry_failures:
+        raise RuntimeError(
+            f"{retry_failures} envío(s) manual(es) quedaron para reintentar"
+        )
     return len(inserted_keys)
 
 
