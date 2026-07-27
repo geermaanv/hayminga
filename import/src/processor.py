@@ -84,7 +84,6 @@ EVENT_SCHEMA = {
         "confianza": {"type": "string", "enum": ["alta", "media", "baja"]},
     },
     "required": ["es_evento"],
-    "additionalProperties": False,
 }
 
 SYSTEM_PROMPT = f"""Sos un extractor de datos de eventos de bioconstrucción para hayminga.org.

@@ -15,6 +15,9 @@ class ProcessorTests(unittest.TestCase):
     def test_event_schema_is_accepted_by_installed_google_sdk(self):
         schema = types.Schema.model_validate(processor.EVENT_SCHEMA)
         self.assertEqual(schema.type, types.Type.OBJECT)
+        serialized = schema.model_dump(by_alias=True, exclude_none=True)
+        self.assertNotIn("additionalProperties", serialized)
+        self.assertNotIn("additional_properties", serialized)
 
     def test_read_image_detects_real_mime_instead_of_file_extension(self):
         with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
