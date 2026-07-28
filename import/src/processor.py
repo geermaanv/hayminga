@@ -19,7 +19,7 @@ import anthropic
 from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 CLAUDE_MODEL  = "claude-haiku-4-5-20251001"
 
@@ -164,8 +164,7 @@ def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
             system_instruction=SYSTEM_PROMPT,
             response_mime_type="application/json",
             response_schema=EVENT_SCHEMA,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-            temperature=0,
+            thinking_config=types.ThinkingConfig(thinking_level="minimal"),
             max_output_tokens=2048,
         ),
     )

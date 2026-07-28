@@ -34,7 +34,7 @@ class ProcessorTests(unittest.TestCase):
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
     @patch("src.processor.genai.Client")
-    def test_gemini_uses_stable_model_without_thinking(self, client_class):
+    def test_gemini_uses_stable_low_cost_model_with_minimal_thinking(self, client_class):
         response = Mock()
         response.text = '{"es_evento":false}'
         response.candidates = []
@@ -44,10 +44,10 @@ class ProcessorTests(unittest.TestCase):
 
         self.assertEqual(raw, '{"es_evento":false}')
         call = client_class.return_value.models.generate_content.call_args
-        self.assertEqual(call.kwargs["model"], "gemini-2.5-flash")
+        self.assertEqual(call.kwargs["model"], "gemini-3.5-flash-lite")
         config = call.kwargs["config"]
-        self.assertEqual(config.thinking_config.thinking_budget, 0)
-        self.assertEqual(config.temperature, 0)
+        self.assertEqual(config.thinking_config.thinking_level.value, "MINIMAL")
+        self.assertIsNone(config.temperature)
         self.assertEqual(config.max_output_tokens, 2048)
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
