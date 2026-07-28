@@ -12,6 +12,32 @@ from src import email_intake, processor, sheets
 
 
 class ProcessorTests(unittest.TestCase):
+    def test_parse_json_recovers_object_surrounded_by_claude_explanation(self):
+        raw = (
+            "# Análisis del flyer\n"
+            "```json\n"
+            '{"es_evento": true, "nombre": "Taller de barro"}'
+            "\n```\nLa fecha fue leída de la imagen."
+        )
+
+        parsed = processor._parse_json_evento(raw, Path("flyer.jpg"))
+
+        self.assertEqual(parsed["nombre"], "Taller de barro")
+
+    def test_parse_json_does_not_accept_truncated_object(self):
+        processor._batch_state["last_failure_reason"] = ""
+
+        parsed = processor._parse_json_evento(
+            '{"es_evento": true, "nombre": "Taller"',
+            Path("flyer.jpg"),
+        )
+
+        self.assertIsNone(parsed)
+        self.assertEqual(
+            processor._batch_state["last_failure_reason"],
+            "json_invalido",
+        )
+
     def setUp(self):
         processor._batch_state.update({
             "gemini_exhausted": False,

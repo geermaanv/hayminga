@@ -270,6 +270,24 @@ def _parse_json_evento(raw: str, image_path: Path):
     try:
         return json.loads(raw)
     except json.JSONDecodeError as e:
+        # Claude a veces envuelve un JSON válido con una explicación o agrega
+        # texto después del objeto. Recuperar el primer objeto completo evita
+        # desperdiciar la extracción sin aceptar JSON truncado.
+        decoder = json.JSONDecoder()
+        for start, char in enumerate(raw):
+            if char != "{":
+                continue
+            try:
+                parsed, _ = decoder.raw_decode(raw[start:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                print(
+                    f"[processor] JSON recuperado de respuesta con texto extra "
+                    f"en {image_path.name}"
+                )
+                return parsed
+
         if not _batch_state["last_failure_reason"]:
             _batch_state["last_failure_reason"] = "json_invalido"
         print(f"[processor] Error JSON en {image_path.name}: {e} | raw: '{raw[:200]}'")
