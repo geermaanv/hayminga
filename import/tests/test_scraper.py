@@ -15,13 +15,13 @@ def response(status=200, payload=None, text=""):
 
 
 class ImageProviderTests(unittest.TestCase):
-    def test_config_can_use_all_twelve_queries_today(self):
+    def test_config_uses_configured_number_of_queries(self):
         config = json.loads(scraper.CONFIG_FILE.read_text())
 
         queries = scraper.get_queries_for_today(config)
 
-        self.assertEqual(len(queries), 12)
-        self.assertEqual(len(set(queries)), 12)
+        self.assertEqual(len(queries), config["consultas_por_dia"])
+        self.assertEqual(len(set(queries)), config["consultas_por_dia"])
 
     @patch.dict(os.environ, {"SERPAPI_KEY": "serp", "SERPER_API_KEY": "backup"})
     @patch("src.scraper.requests.post")

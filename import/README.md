@@ -236,10 +236,11 @@ Sheet.
 
 ## Volumen temporal de descubrimiento
 
-`config.json` controla `consultas_por_dia`. Durante la carga inicial está en
-`12`; para operación normal alcanza con bajarlo a `5` o `3`. La ventana de
-Google Images es de un mes porque Instagram suele indexarse con demora y una
-semana dejaba afuera anuncios publicados con anticipación.
+`config.json` controla `consultas_por_dia`. La carga inicial se ejecutó una vez
+con `12` y luego volvió a `3` para que Gemini pueda vaciar la cola persistente
+sin generar costos. La ventana de Google Images es de un mes porque Instagram
+suele indexarse con demora y una semana dejaba afuera anuncios publicados con
+anticipación.
 
 Cada consulta descarga como máximo cinco candidatos legibles. Si Gemini agota
 su cuota, Claude tiene un límite de seguridad de una llamada por corrida

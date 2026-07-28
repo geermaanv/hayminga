@@ -22,6 +22,6 @@
     ]
   ],
   "dias_atras": 30,
-  "consultas_por_dia": 12,
+  "consultas_por_dia": 3,
   "max_imagenes_por_query": 5
 }
