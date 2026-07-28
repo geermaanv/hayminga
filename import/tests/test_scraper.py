@@ -173,6 +173,24 @@ class CaptionProviderTests(unittest.TestCase):
             "Encuentro de bioconstrucción",
         )
 
+    @patch.dict(os.environ, {"SERPER_API_KEY": "backup"}, clear=True)
+    @patch("src.scraper.requests.post")
+    def test_caption_includes_indexed_publication_date(self, post):
+        link = "https://instagram.com/p/evento"
+        post.return_value = response(payload={"organic": [{
+            "link": link,
+            "snippet": "Taller del 24 al 30 de noviembre",
+            "date": "hace 9 meses",
+        }]})
+
+        self.assertEqual(
+            scraper.fetch_caption(link),
+            (
+                "Fecha de publicación indexada: hace 9 meses\n"
+                "Taller del 24 al 30 de noviembre"
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

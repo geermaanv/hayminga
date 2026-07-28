@@ -140,6 +140,20 @@ class ProcessorTests(unittest.TestCase):
         self.assertEqual(invalid["fecha_inicio_iso"], "")
         self.assertFalse(past["activo"])
 
+    def test_validate_event_rejects_inferred_year(self):
+        event = processor.validate_event_data(
+            {
+                "nombre": "Taller sin año visible",
+                "fecha_inicio": "24/11/2026",
+                "pais": "Argentina",
+                "provincia": "Córdoba",
+                "anio_confirmado": False,
+            },
+            today=date(2026, 7, 28),
+        )
+
+        self.assertFalse(event["activo"])
+
     def test_validate_event_keeps_ongoing_event_active(self):
         event = processor.validate_event_data(
             {
@@ -173,6 +187,50 @@ class ProcessorTests(unittest.TestCase):
 
         prompt = get_raw_json.call_args.args[3]
         self.assertIn("El encuentro comienza a las 9", prompt)
+
+    @patch(
+        "src.processor.fetch_caption",
+        return_value=(
+            "Fecha de publicación indexada: hace 9 meses\n"
+            "Taller del 24 al 30 de noviembre"
+        ),
+    )
+    @patch("src.processor._get_raw_json")
+    def test_missing_year_uses_indexed_publication_context(
+        self,
+        get_raw_json,
+        fetch_caption,
+    ):
+        get_raw_json.side_effect = [
+            (
+                '{"es_evento":true,"nombre":"Taller","fecha_inicio":null,'
+                '"fecha_fin":null,"anio_confirmado":false,'
+                '"es_virtual":false,"provincia":"Córdoba",'
+                '"pais":"Argentina","confianza":"media"}'
+            ),
+            (
+                '{"es_evento":true,"nombre":"Taller","fecha_inicio":"24/11/2025",'
+                '"fecha_fin":"30/11/2025","anio_confirmado":true,'
+                '"es_virtual":false,"provincia":"Córdoba",'
+                '"pais":"Argentina","confianza":"alta"}'
+            ),
+        ]
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"fake-image")
+            event = processor.extract_event_data(
+                Path(image.name),
+                {
+                    "caption": "Fecha: 24 al 30 de noviembre",
+                    "link": "https://instagram.com/p/evento",
+                },
+            )
+
+        fetch_caption.assert_called_once()
+        second_prompt = get_raw_json.call_args_list[1].args[3]
+        self.assertIn("Fecha: 24 al 30 de noviembre", second_prompt)
+        self.assertIn("hace 9 meses", second_prompt)
+        self.assertEqual(event["fecha_inicio_iso"], "2025-11-24")
+        self.assertFalse(event["activo"])
 
 
 class SheetsTests(unittest.TestCase):

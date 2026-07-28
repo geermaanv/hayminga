@@ -109,7 +109,14 @@ def fetch_caption(link: str) -> str:
             if resp.status_code == 200 and not data.get("error"):
                 for result in data.get("organic_results", []):
                     if result.get("link", "").rstrip("/") == link.rstrip("/"):
-                        return result.get("snippet", "")
+                        snippet = result.get("snippet", "")
+                        published = result.get("date", "")
+                        if published:
+                            return (
+                                f"Fecha de publicación indexada: {published}\n"
+                                f"{snippet}"
+                            ).strip()
+                        return snippet
             else:
                 detail = data.get("error") or f"HTTP {resp.status_code}"
                 _provider_error("SerpAPI", f"caption no disponible: {detail}")
@@ -132,7 +139,14 @@ def fetch_caption(link: str) -> str:
             return ""
         for result in resp.json().get("organic", []):
             if result.get("link", "").rstrip("/") == link.rstrip("/"):
-                return result.get("snippet", "")
+                snippet = result.get("snippet", "")
+                published = result.get("date", "")
+                if published:
+                    return (
+                        f"Fecha de publicación indexada: {published}\n"
+                        f"{snippet}"
+                    ).strip()
+                return snippet
     except Exception as exc:
         _provider_error("Serper", f"error buscando caption: {exc}")
     return ""

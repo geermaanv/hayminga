@@ -79,6 +79,7 @@ EVENT_SCHEMA = {
         },
         "fecha_inicio": {"type": "string", "nullable": True},
         "fecha_fin": {"type": "string", "nullable": True},
+        "anio_confirmado": {"type": "boolean"},
         "es_virtual": {"type": "boolean"},
         "provincia": {"type": "string", "nullable": True},
         "pais": {"type": "string", "nullable": True},
@@ -88,7 +89,7 @@ EVENT_SCHEMA = {
         "contacto": {"type": "string", "nullable": True},
         "confianza": {"type": "string", "enum": ["alta", "media", "baja"]},
     },
-    "required": ["es_evento"],
+    "required": ["es_evento", "anio_confirmado"],
 }
 
 SYSTEM_PROMPT = f"""Sos un extractor de datos de eventos de bioconstrucción para hayminga.org.
@@ -99,6 +100,11 @@ Fecha de hoy: {HOY}
 
 Extraé únicamente información visible en la imagen o presente en el caption.
 Usá DD/MM/YYYY para las fechas. Si no conocés un dato opcional, devolvé null.
+Marcá anio_confirmado=true si el año aparece escrito en la imagen/caption o
+si se proporcionó una fecha de publicación indexada. Si el evento muestra día
+y mes sin año, usá el año de esa publicación. Nunca uses automáticamente el
+año actual. Sin año visible ni fecha de publicación, devolvé fechas null y
+anio_confirmado=false.
 Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
 No determines si está activo: el sistema lo calcula después usando fecha y país.
 """
@@ -320,6 +326,7 @@ def validate_event_data(data: dict, today: date | None = None) -> dict:
     result["activo"] = bool(
         result.get("nombre")
         and fecha_inicio
+        and result.get("anio_confirmado") is not False
         and rango_valido
         and fecha_relevante >= today
         and ubicacion_valida
@@ -357,10 +364,16 @@ def extract_event_data(image_path: Path, metadata: dict):
         return None
 
     link = metadata.get("link", "")
-    if link and not supplied_caption and _necesita_caption(data):
-        caption = fetch_caption(link)
-        if caption:
-            prompt_text = _build_prompt_text(caption)
+    necesita_fecha_publicacion = data.get("anio_confirmado") is False
+    if link and (necesita_fecha_publicacion or (
+        not supplied_caption and _necesita_caption(data)
+    )):
+        indexed_context = fetch_caption(link)
+        if indexed_context:
+            combined_context = "\n".join(
+                part for part in (supplied_caption, indexed_context) if part
+            )
+            prompt_text = _build_prompt_text(combined_context)
             raw2 = _get_raw_json(image_path, image_bytes, media_type, prompt_text)
             data2 = _parse_json_evento(raw2, image_path) if raw2 else None
             if data2 and data2.get("es_evento", True):
