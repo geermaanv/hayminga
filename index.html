@@ -724,6 +724,24 @@ function actualizarBtnMob() {
   btn.textContent = n > 0 ? 'Filtros (' + n + ')' : 'Filtros';
 }
 
+function parseFechaEvento(valor) {
+  if (!valor) return null;
+  var texto = String(valor).trim();
+  var partes;
+
+  // Google Sheets/GViz puede entregar YYYY-MM-DD o DD/MM/YYYY según el
+  // formato de la celda. Aceptar ambos evita publicar eventos vencidos.
+  partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+  if (partes) {
+    return new Date(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]));
+  }
+  partes = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(texto);
+  if (partes) {
+    return new Date(Number(partes[3]), Number(partes[2]) - 1, Number(partes[1]));
+  }
+  return null;
+}
+
 function aplicarFiltros() {
   var busq = document.getElementById('busqueda').value.toLowerCase().trim();
   var tipo = document.getElementById('filtro-tipo').value;
@@ -741,12 +759,11 @@ function aplicarFiltros() {
       if (modal === 'true' && !esV) return false;
       if (modal === 'false' && esV) return false;
     }
-    if (!mostrarPasados && ev['Fecha_Inicio']) {
-      var partes = String(ev['Fecha_Inicio']).split('/');
-      if (partes.length === 3) {
-        var fechaEv = new Date(Number(partes[2]), Number(partes[1])-1, Number(partes[0]));
-        if (fechaEv < new Date()) return false;
-      }
+    if (!mostrarPasados) {
+      var fechaEv = parseFechaEvento(ev['Fecha_Fin']) || parseFechaEvento(ev['Fecha_Inicio']);
+      var hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      if (fechaEv && fechaEv < hoy) return false;
     }
     if (busq) {
       var txt = [ev['Nombre'],ev['Descripción'],ev['Organizador'],ev['Dirección'],ev['Provincia'],ev['Tipo_Evento']].join(' ').toLowerCase();
@@ -782,8 +799,7 @@ function limpiarFiltros() {
     inner.innerHTML = MODAL_ICONOS[0] + '<span id="' + labelId + '">' + MODAL_LABELS[0] + '</span>';
   });
   actualizarBtnMob();
-  eventosFiltrados = todosLosEventos.slice();
-  renderGrilla();
+  aplicarFiltros();
 }
 
 document.getElementById('busqueda').addEventListener('input', aplicarFiltros);
@@ -792,11 +808,8 @@ document.getElementById('filtro-provincia').addEventListener('change', aplicarFi
 
 function formatFecha(f) {
   if (!f) return null;
-  var p = String(f).split('/');
-  if (p.length === 3) {
-    var d = new Date(Number(p[2]), Number(p[1])-1, Number(p[0]));
-    if (!isNaN(d.getTime())) return d.toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'});
-  }
+  var d = parseFechaEvento(f);
+  if (d && !isNaN(d.getTime())) return d.toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'});
   return f;
 }
 
