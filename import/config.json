@@ -1,26 +1,27 @@
 {
   "grupos": [
     [
-      "site:instagram.com argentina taller bioconstruccion barro adobe inscripción",
-      "site:instagram.com argentina curso bioconstruccion tierra natural cupos",
-      "site:instagram.com argentina minga bioconstruccion convocatoria"
+      "site:instagram.com/p/ \"bioconstrucción\" \"Argentina\" taller 2026",
+      "site:instagram.com/reel/ \"bioconstrucción\" \"Argentina\" 2026",
+      "site:instagram.com \"construcción natural\" \"Buenos Aires\" taller 2026"
     ],
     [
-      "site:instagram.com argentina taller quincha tapia superadobe inscripción",
-      "site:instagram.com argentina taller construccion natural tierra cupos",
-      "site:instagram.com argentina curso autoconstruccion bioconstruccion convocatoria"
+      "site:instagram.com \"construcción natural\" \"Córdoba\" taller 2026",
+      "site:instagram.com bioconstrucción \"Mendoza\" taller OR minga 2026",
+      "site:instagram.com bioconstrucción \"Misiones\" taller OR minga 2026"
     ],
     [
-      "site:instagram.com argentina taller revoque natural barro cal inscripción",
-      "site:instagram.com argentina residencia bioconstruccion cob tierra cupos",
-      "site:instagram.com argentina festival bioconstruccion permacultura convocatoria"
+      "site:instagram.com bioconstrucción \"Río Negro\" taller 2026",
+      "site:instagram.com bioconstrucción \"Neuquén\" taller 2026",
+      "site:instagram.com bioconstrucción \"Chubut\" taller 2026"
     ],
     [
-      "site:instagram.com argentina taller adobe tierra pisada inscripción",
-      "site:instagram.com argentina bioarquitectura taller curso cupos",
-      "site:instagram.com argentina minga adobe barro construccion convocatoria"
+      "site:instagram.com quincha adobe barro \"Argentina\" taller 2026",
+      "site:instagram.com superadobe cob tapia \"Argentina\" taller 2026",
+      "site:instagram.com bioarquitectura \"Argentina\" curso OR diplomatura 2026"
     ]
   ],
-  "dias_atras": 7,
-  "max_imagenes_por_query": 15
+  "dias_atras": 30,
+  "consultas_por_dia": 12,
+  "max_imagenes_por_query": 5
 }

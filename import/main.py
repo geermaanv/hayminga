@@ -22,7 +22,7 @@ def run():
     inserted_total = 0
     candidate_store = CandidateStore()
 
-    print("[1/4] Buscando imágenes en Google Images (última semana, isz:l)...")
+    print("[1/4] Buscando imágenes en Google Images (último mes, isz:l)...")
     retry_items = candidate_store.load_retries()
     discovered_items = download_all()
     new_items = candidate_store.register(discovered_items)

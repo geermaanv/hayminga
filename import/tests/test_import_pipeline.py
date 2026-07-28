@@ -16,6 +16,7 @@ class ProcessorTests(unittest.TestCase):
         processor._batch_state.update({
             "gemini_exhausted": False,
             "claude_exhausted": False,
+            "claude_calls": 0,
             "last_failure_reason": "",
         })
 
@@ -86,6 +87,26 @@ class ProcessorTests(unittest.TestCase):
         retry_call = store.update.call_args_list[-1]
         self.assertEqual(retry_call.kwargs["status"], "reintentar")
         self.assertEqual(retry_call.kwargs["reason"], "json_invalido")
+
+    @patch.dict(os.environ, {"MAX_CLAUDE_CALLS_PER_RUN": "1"})
+    @patch("src.processor._call_claude")
+    def test_claude_call_limit_prevents_unbounded_fallback_cost(self, call_claude):
+        processor._batch_state.update({
+            "gemini_exhausted": True,
+            "claude_exhausted": False,
+            "claude_calls": 1,
+        })
+
+        raw = processor._get_raw_json(
+            Path("image.jpg"),
+            b"image",
+            "image/jpeg",
+            "extraer",
+        )
+
+        self.assertIsNone(raw)
+        self.assertTrue(processor._batch_state["claude_exhausted"])
+        call_claude.assert_not_called()
 
     def test_validate_event_calculates_active_and_normalizes_province(self):
         event = processor.validate_event_data(

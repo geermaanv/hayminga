@@ -1,4 +1,5 @@
 import os
+import json
 import unittest
 from unittest.mock import Mock, patch
 
@@ -14,6 +15,14 @@ def response(status=200, payload=None, text=""):
 
 
 class ImageProviderTests(unittest.TestCase):
+    def test_config_can_use_all_twelve_queries_today(self):
+        config = json.loads(scraper.CONFIG_FILE.read_text())
+
+        queries = scraper.get_queries_for_today(config)
+
+        self.assertEqual(len(queries), 12)
+        self.assertEqual(len(set(queries)), 12)
+
     @patch.dict(os.environ, {"SERPAPI_KEY": "serp", "SERPER_API_KEY": "backup"})
     @patch("src.scraper.requests.post")
     @patch("src.scraper.requests.get")
@@ -21,6 +30,7 @@ class ImageProviderTests(unittest.TestCase):
         get.return_value = response(payload={"images_results": [{
             "thumbnail": "https://thumb.example/1",
             "link": "https://instagram.com/p/1",
+            "title": "Taller de adobe en Córdoba",
         }]})
 
         actual = scraper.fetch_image_data("bioconstruccion", max_results=5)
@@ -28,6 +38,7 @@ class ImageProviderTests(unittest.TestCase):
         self.assertEqual(actual, [{
             "thumbnail": "https://thumb.example/1",
             "link": "https://instagram.com/p/1",
+            "caption": "Taller de adobe en Córdoba",
         }])
         post.assert_not_called()
 
@@ -50,10 +61,12 @@ class ImageProviderTests(unittest.TestCase):
                 "thumbnailUrl": "https://thumb.example/1",
                 "imageUrl": "https://image.example/1",
                 "link": "https://instagram.com/p/1",
+                "title": "Taller uno",
             },
             {
                 "imageUrl": "https://image.example/2",
                 "link": "https://instagram.com/p/2",
+                "title": "Taller dos",
             },
         ]})
 
@@ -63,10 +76,12 @@ class ImageProviderTests(unittest.TestCase):
             {
                 "thumbnail": "https://thumb.example/1",
                 "link": "https://instagram.com/p/1",
+                "caption": "Taller uno",
             },
             {
                 "thumbnail": "https://image.example/2",
                 "link": "https://instagram.com/p/2",
+                "caption": "Taller dos",
             },
         ])
         request = post.call_args

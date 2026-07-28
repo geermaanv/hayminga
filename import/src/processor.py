@@ -33,6 +33,7 @@ RETRY = object()
 _batch_state = {
     "gemini_exhausted": False,
     "claude_exhausted": False,
+    "claude_calls": 0,
     "last_failure_reason": "",
 }
 
@@ -228,7 +229,16 @@ def _get_raw_json(image_path: Path, image_bytes: bytes, media_type: str, prompt_
 
     if _batch_state["claude_exhausted"]:
         return None
+    max_claude_calls = max(0, int(os.getenv("MAX_CLAUDE_CALLS_PER_RUN", "1")))
+    if _batch_state["claude_calls"] >= max_claude_calls:
+        _batch_state["claude_exhausted"] = True
+        print(
+            f"[processor] Límite de Claude alcanzado "
+            f"({max_claude_calls} llamada(s) por corrida)"
+        )
+        return None
     try:
+        _batch_state["claude_calls"] += 1
         return _call_claude(image_bytes, media_type, prompt_text)
     except Exception as e:
         if _is_quota_error(e):

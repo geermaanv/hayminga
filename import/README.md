@@ -7,12 +7,11 @@ misma Google Sheet que lee [hayminga.org](../index.html) directamente (sin Glide
 ## Arquitectura
 
 ```
-Google Images (SerpAPI, site:instagram.com + queries de config.json)
+Google Images (SerpAPI/Serper, site:instagram.com + queries de config.json)
         ↓
   scraper.py — descarga imágenes nuevas, filtra avatares/íconos por
                peso+dimensión antes de gastar cuota de IA, dedup por hash
-               y por link, y busca el caption real del post vía Google
-               Search (no Images) para las que pasan el filtro
+               y por link; conserva el texto indexado junto a la imagen
         ↓
   candidates.py — registra cada resultado en la hoja "Candidatos" ANTES
                   de llamar a la IA; conserva estado, intentos y errores
@@ -151,7 +150,7 @@ proveedor no haga desaparecer el descubrimiento.
 
 Columnas: `Id, Descubierto, Fuente, Consulta, URL_Publicacion, URL_Imagen,
 Hash, Estado, Intentos, Confianza, Motivo, Ultimo_Error, Nombre_Extraido,
-Fecha_Extraida, Provincia_Extraida, Evento_Id`.
+Fecha_Extraida, Provincia_Extraida, Evento_Id, Caption`.
 
 Estados:
 
@@ -184,7 +183,8 @@ siempre. Y si ambos
 terminan sin cuota/crédito a mitad de un batch, el resto de las imágenes de
 esa corrida conserva estado `nuevo` para el día siguiente.
 
-Cada imagen descargada guarda un sidecar `<archivo>.json` con su `link` de
+Cada imagen descargada guarda un sidecar `<archivo>.json` con su `link` y
+caption indexado de
 Instagram — permite reintentar manualmente imágenes que quedaron sin
 procesar (ej. `images/*.jpg` sin marcar en `seen_hashes.txt`) sin perder el
 link promocional.
@@ -206,14 +206,19 @@ avatares de Google bajan ~9-10KB, thumbnails de flyers reales ~36-45KB) o
 menos de `MIN_IMAGE_DIM` (200px) en el lado más largo. Es gratis (no llama a
 ninguna IA) y en una prueba real bajó 24 resultados crudos a 6 candidatos.
 
-El **caption real del post** (vía una búsqueda de Google Search normal,
+El título que Google Images/Serper devuelve junto al resultado suele contener
+gran parte del caption indexado de Instagram. `scraper.py` lo conserva en
+`Candidatos` y Gemini lo recibe en la primera pasada sin gastar otra búsqueda.
+
+Si ese texto no está disponible, el **caption real del post** (vía una búsqueda de Google Search normal,
 `engine: google` no `google_images`, usando el link exacto del post como
 query — misma categoría "segura" que el thumbnail, copia cacheada por
 Google, no un pedido en vivo a Instagram) **cuesta una llamada extra de
 SerpAPI**, así que `processor.py` lo pide bajo demanda en vez de buscarlo
 para toda imagen que sobrevive el filtro de peso/dimensión:
 
-1. Primera pasada: Gemini/Claude ve solo la imagen (gratis, sin SerpAPI).
+1. Primera pasada: Gemini/Claude ve la imagen y el caption indexado cuando
+   existe (gratis, sin una búsqueda adicional).
 2. Si el resultado es `"no es evento"`, listo — nunca se gasta una
    llamada de caption en algo que iba a descartarse igual (~90-95% de los
    casos medidos).
@@ -228,6 +233,17 @@ la mayoría gastadas en imágenes que terminaban siendo "no es evento"). El
 campo `contacto` del JSON de salida (email o WhatsApp) sigue saliendo del
 caption cuando está disponible, y se guarda en la columna `Contacto` del
 Sheet.
+
+## Volumen temporal de descubrimiento
+
+`config.json` controla `consultas_por_dia`. Durante la carga inicial está en
+`12`; para operación normal alcanza con bajarlo a `5` o `3`. La ventana de
+Google Images es de un mes porque Instagram suele indexarse con demora y una
+semana dejaba afuera anuncios publicados con anticipación.
+
+Cada consulta descarga como máximo cinco candidatos legibles. Si Gemini agota
+su cuota, Claude tiene un límite de seguridad de una llamada por corrida
+(`MAX_CLAUDE_CALLS_PER_RUN=1`); el resto queda en `Candidatos` para otro día.
 
 ## Carga manual: formulario y mail
 

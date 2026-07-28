@@ -1,7 +1,7 @@
 """
 scraper.py
 Busca imágenes en Google Images vía SerpAPI y usa Serper como respaldo.
-Filtra por última semana y tamaño grande, y descarga thumbnails evitando
+Filtra por último mes y tamaño grande, y descarga thumbnails evitando
 duplicados.
 """
 
@@ -53,9 +53,18 @@ def get_queries_for_today(config: dict) -> list[str]:
     grupos = config.get("grupos", [])
     if not grupos:
         return []
-    idx = datetime.now().timetuple().tm_yday % len(grupos)
-    queries = grupos[idx]
-    print(f"[scraper] Grupo {idx + 1}/{len(grupos)} — {len(queries)} queries")
+    all_queries = [query for group in grupos for query in group]
+    requested = max(1, int(config.get("consultas_por_dia", 3)))
+    count = min(requested, len(all_queries))
+    start = (datetime.now().timetuple().tm_yday * count) % len(all_queries)
+    queries = [
+        all_queries[(start + offset) % len(all_queries)]
+        for offset in range(count)
+    ]
+    print(
+        f"[scraper] {len(queries)}/{len(all_queries)} queries del ciclo "
+        f"(config: consultas_por_dia={requested})"
+    )
     return queries
 
 
@@ -141,7 +150,7 @@ def _fetch_images_serpapi(query: str, max_results: int) -> list[dict] | None:
         "q":       query,
         "api_key": api_key,
         "ijn":     0,
-        "tbs":     "isz:l,qdr:w",  # large + última semana
+        "tbs":     "isz:l,qdr:m",  # large + último mes
         "hl":      "es",
         "gl":      "ar",
     }
@@ -174,6 +183,7 @@ def _fetch_images_serpapi(query: str, max_results: int) -> list[dict] | None:
             results.append({
                 "thumbnail": thumb,
                 "link":      img.get("link", ""),
+                "caption":   img.get("title", ""),
             })
     return results
 
@@ -197,7 +207,7 @@ def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
                 "q": query,
                 "hl": "es",
                 "gl": "ar",
-                "tbs": "isz:l,qdr:w",
+                "tbs": "isz:l,qdr:m",
                 "num": request_limit,
             },
             timeout=20,
@@ -223,6 +233,7 @@ def _fetch_images_serper(query: str, max_results: int) -> list[dict]:
             results.append({
                 "thumbnail": thumbnail,
                 "link": image.get("link", ""),
+                "caption": image.get("title", ""),
             })
     return results
 
@@ -280,7 +291,11 @@ def download_images_for_query(
             filename.write_bytes(data)
             # sidecar de metadata: permite reintentar más tarde sin perder el link original
             filename.with_suffix(filename.suffix + ".json").write_text(
-                json.dumps({"link": link, "thumbnail": item.get("thumbnail", "")})
+                json.dumps({
+                    "link": link,
+                    "thumbnail": item.get("thumbnail", ""),
+                    "caption": item.get("caption", ""),
+                }, ensure_ascii=False)
             )
 
             # dedup dentro de esta corrida; se persiste recién si processor.py confirma un resultado

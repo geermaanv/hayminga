@@ -38,7 +38,7 @@ class CandidateStoreTests(unittest.TestCase):
         store = self.make_store()
         store.load_all = Mock(return_value=[])
         store.service.spreadsheets().values().append().execute.return_value = {
-            "updates": {"updatedRange": "Candidatos!A2:P2"}
+            "updates": {"updatedRange": "Candidatos!A2:Q2"}
         }
         metadata = {
             "link": "https://instagram.com/p/abc",
@@ -47,6 +47,7 @@ class CandidateStoreTests(unittest.TestCase):
             "source": "google_images",
             "query": "bioconstruccion argentina",
             "discovered_at": "2026-07-27T12:00:00+00:00",
+            "caption": "Taller de adobe en Córdoba",
         }
 
         ready = store.register([(Path("image.jpg"), metadata)])
@@ -58,6 +59,7 @@ class CandidateStoreTests(unittest.TestCase):
             store.service.spreadsheets().values().append.call_args.kwargs["body"]
         )
         self.assertEqual(body["values"][0][7], "nuevo")
+        self.assertEqual(body["values"][0][16], "Taller de adobe en Córdoba")
 
     def test_does_not_register_existing_terminal_candidate(self):
         store = self.make_store()

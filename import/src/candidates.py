@@ -36,6 +36,7 @@ COLUMNS = [
     "Fecha_Extraida",
     "Provincia_Extraida",
     "Evento_Id",
+    "Caption",
 ]
 TERMINAL_STATES = {"publicado", "descartado", "duplicado"}
 RETRY_STATES = {"nuevo", "procesando", "extraido", "reintentar"}
@@ -67,6 +68,7 @@ def _candidate_from_row(row: list, sheet_row: int) -> dict:
         "start_date": row[13],
         "province": row[14],
         "event_id": row[15],
+        "caption": row[16],
         "_candidate_row": sheet_row,
     }
 
@@ -79,6 +81,7 @@ def _candidate_metadata(candidate: dict) -> dict:
         "source": candidate["source"] or "google_images",
         "query": candidate["query"],
         "discovered_at": candidate["discovered_at"],
+        "caption": candidate.get("caption", ""),
         "_candidate_id": candidate["id"],
         "_candidate_row": candidate["_candidate_row"],
         "_candidate_attempts": candidate["attempts"],
@@ -126,7 +129,7 @@ class CandidateStore:
     def load_all(self) -> list[dict]:
         result = self.service.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{SHEET_NAME}!A2:P",
+            range=f"{SHEET_NAME}!A2:Q",
         ).execute()
         return [
             _candidate_from_row(row, index + 2)
@@ -168,6 +171,7 @@ class CandidateStore:
                 "",
                 "",
                 "",
+                metadata.get("caption") or "",
             ]
             new_rows.append(row)
             new_items.append((path, metadata, candidate_id, discovered_at))
