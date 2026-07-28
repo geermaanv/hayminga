@@ -19,7 +19,7 @@ import anthropic
 from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
 
-GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 CLAUDE_MODEL  = "claude-haiku-4-5-20251001"
 
@@ -30,7 +30,11 @@ RETRY = object()
 
 # Estado del batch actual: una vez que un proveedor reporta cuota agotada,
 # se deja de intentarlo para el resto de las imágenes de esta corrida.
-_batch_state = {"gemini_exhausted": False, "claude_exhausted": False}
+_batch_state = {
+    "gemini_exhausted": False,
+    "claude_exhausted": False,
+    "last_failure_reason": "",
+}
 
 HOY = date.today().isoformat()
 
@@ -88,33 +92,14 @@ EVENT_SCHEMA = {
 
 SYSTEM_PROMPT = f"""Sos un extractor de datos de eventos de bioconstrucción para hayminga.org.
 Analizás imágenes de flyers y extraés la información del evento.
-Respondés ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown.
+La estructura de salida está definida por el schema de la API.
 
 Fecha de hoy: {HOY}
 
-Formato exacto de respuesta:
-{{
-  "nombre": "nombre del evento",
-  "tipo_evento": "Curso | Taller | Minga | Charla | Evento | Residencia | Festival",
-  "fecha_inicio": "DD/MM/YYYY o null",
-  "fecha_fin": "DD/MM/YYYY o null",
-  "es_virtual": true o false,
-  "provincia": "provincia argentina o null — si es otro país poner null",
-  "pais": "Argentina | Chile | Uruguay | México | otro",
-  "descripcion": "una línea descriptiva del evento o null",
-  "organizador": "nombre del organizador o null",
-  "direccion": "dirección o ciudad o null",
-  "contacto": "email o número de WhatsApp del organizador si aparece escrito en la imagen o el caption, o null",
-  "confianza": "alta | media | baja",
-  "activo": true o false
-}}
-
-Reglas para el campo 'activo':
-- true SOLO si: el evento es en Argentina Y la fecha_inicio es posterior a hoy ({HOY})
-- false si: es en otro país, o la fecha ya pasó, o no se puede determinar la fecha
-
-Si la imagen NO es un flyer de evento de bioconstrucción, respondé exactamente:
-{{"es_evento": false}}
+Extraé únicamente información visible en la imagen o presente en el caption.
+Usá DD/MM/YYYY para las fechas. Si no conocés un dato opcional, devolvé null.
+Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
+No determines si está activo: el sistema lo calcula después usando fecha y país.
 """
 
 PROMPT_TEXT = "Extraé los datos de este flyer de evento."
@@ -179,9 +164,17 @@ def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
             system_instruction=SYSTEM_PROMPT,
             response_mime_type="application/json",
             response_schema=EVENT_SCHEMA,
-            max_output_tokens=1024,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            temperature=0,
+            max_output_tokens=2048,
         ),
     )
+    candidates = response.candidates or []
+    finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    finish_reason = getattr(finish_reason, "value", finish_reason)
+    if str(finish_reason).upper().endswith("MAX_TOKENS"):
+        _batch_state["last_failure_reason"] = "json_truncado"
+        print("[processor] Gemini alcanzó MAX_TOKENS; el candidato se reintentará")
     return (response.text or "").strip()
 
 
@@ -262,6 +255,8 @@ def _parse_json_evento(raw: str, image_path: Path):
     try:
         return json.loads(raw)
     except json.JSONDecodeError as e:
+        if not _batch_state["last_failure_reason"]:
+            _batch_state["last_failure_reason"] = "json_invalido"
         print(f"[processor] Error JSON en {image_path.name}: {e} | raw: '{raw[:200]}'")
         return None
 
@@ -336,6 +331,7 @@ def extract_event_data(image_path: Path, metadata: dict):
     SerpAPI); la segunda con el caption real del post, pero SOLO si la
     primera dio un evento real con datos flojos — así no se gasta una
     llamada de SerpAPI en cada imagen que termina siendo basura."""
+    _batch_state["last_failure_reason"] = ""
     image_bytes, media_type = read_image(image_path)
 
     supplied_caption = str(metadata.get("caption") or "").strip()
@@ -402,7 +398,7 @@ def process_batch(items: list[tuple[Path, dict]], candidate_store=None) -> list[
                     metadata,
                     status="reintentar",
                     attempts=attempts,
-                    reason="proveedores_no_disponibles",
+                    reason=_batch_state["last_failure_reason"] or "proveedores_no_disponibles",
                 )
             if _batch_state["gemini_exhausted"] and _batch_state["claude_exhausted"]:
                 print("[processor] Ambos proveedores sin cuota — se corta el batch acá")

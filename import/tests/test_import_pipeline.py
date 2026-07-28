@@ -12,6 +12,13 @@ from src import email_intake, processor, sheets
 
 
 class ProcessorTests(unittest.TestCase):
+    def setUp(self):
+        processor._batch_state.update({
+            "gemini_exhausted": False,
+            "claude_exhausted": False,
+            "last_failure_reason": "",
+        })
+
     def test_event_schema_is_accepted_by_installed_google_sdk(self):
         schema = types.Schema.model_validate(processor.EVENT_SCHEMA)
         self.assertEqual(schema.type, types.Type.OBJECT)
@@ -24,6 +31,61 @@ class ProcessorTests(unittest.TestCase):
             Path(image.name).write_bytes(b"\x89PNG\r\n\x1a\nfake")
             _, media_type = processor.read_image(Path(image.name))
         self.assertEqual(media_type, "image/png")
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("src.processor.genai.Client")
+    def test_gemini_uses_stable_model_without_thinking(self, client_class):
+        response = Mock()
+        response.text = '{"es_evento":false}'
+        response.candidates = []
+        client_class.return_value.models.generate_content.return_value = response
+
+        raw = processor._call_gemini(b"image", "image/jpeg", "extraer")
+
+        self.assertEqual(raw, '{"es_evento":false}')
+        call = client_class.return_value.models.generate_content.call_args
+        self.assertEqual(call.kwargs["model"], "gemini-2.5-flash")
+        config = call.kwargs["config"]
+        self.assertEqual(config.thinking_config.thinking_budget, 0)
+        self.assertEqual(config.temperature, 0)
+        self.assertEqual(config.max_output_tokens, 2048)
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("src.processor.genai.Client")
+    def test_gemini_records_max_tokens_truncation(self, client_class):
+        response = Mock()
+        response.text = '{"es_evento":true'
+        candidate = Mock()
+        candidate.finish_reason.value = "MAX_TOKENS"
+        response.candidates = [candidate]
+        client_class.return_value.models.generate_content.return_value = response
+
+        processor._call_gemini(b"image", "image/jpeg", "extraer")
+
+        self.assertEqual(
+            processor._batch_state["last_failure_reason"],
+            "json_truncado",
+        )
+
+    @patch("src.processor._get_raw_json", return_value='{"es_evento":true')
+    def test_invalid_json_is_queued_with_specific_reason(self, get_raw_json):
+        store = Mock()
+        metadata = {
+            "_candidate_row": 2,
+            "_candidate_attempts": 0,
+            "hash": "hash",
+        }
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"fake-image")
+            events = processor.process_batch(
+                [(Path(image.name), metadata)],
+                candidate_store=store,
+            )
+
+        self.assertEqual(events, [])
+        retry_call = store.update.call_args_list[-1]
+        self.assertEqual(retry_call.kwargs["status"], "reintentar")
+        self.assertEqual(retry_call.kwargs["reason"], "json_invalido")
 
     def test_validate_event_calculates_active_and_normalizes_province(self):
         event = processor.validate_event_data(
