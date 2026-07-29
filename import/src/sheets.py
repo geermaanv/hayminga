@@ -28,6 +28,7 @@ COLUMNS = [
     "Link_Promocion", "Tipo_Evento", "img", "procesado",
     "Id", "Contacto", "Estado", "Pais",
     "Confianza", "Fuente", "Fecha_Descubrimiento",
+    "Latitud", "Longitud",
 ]
 
 
@@ -144,6 +145,8 @@ def event_to_row(event: dict) -> list:
         event.get("confianza") or "",
         event.get("fuente") or "",
         event.get("fecha_descubrimiento") or "",
+        event.get("latitud") or "",
+        event.get("longitud") or "",
     ]
 
 

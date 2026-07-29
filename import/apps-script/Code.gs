@@ -309,6 +309,8 @@ function crearEventoManual_(data) {
     'alta',
     'formulario_web',
     new Date().toISOString(),
+    data.latitud || '',
+    data.longitud || '',
   ];
 
   appendRowComoTexto_(sheet, valores);
@@ -404,4 +406,3 @@ function getOrCreateFolder_(name) {
 function getOrCreateLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
 }
-

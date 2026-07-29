@@ -19,6 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=DM+Sans:wght@400;500&family=Syne:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
 :root{--tierra:#8B4513;--tierra-claro:#C4763A;--tierra-oscuro:#5C2D0A;--paja:#F5EDD6;--paja-oscuro:#E8D5A8;--verde:#3D6B3F;--verde-oscuro:#2A4A2C;--barro:#A0784A;--texto:#2A1A0A;--texto-suave:#6B4E2A;--fondo:#FAF6EE;--blanco:#FFFFFF;--sombra:rgba(139,69,19,0.12);--radio:12px;}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -103,6 +104,25 @@ select:focus{border-color:var(--tierra);}
 }
 .conteo{max-width:1100px;margin:1.25rem auto 0.4rem;padding:0 1.5rem;font-size:0.83rem;color:var(--texto-suave);}
 .grilla{max-width:1100px;margin:0 auto;padding:0.75rem 1.5rem 3rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.1rem;}
+.resultados-cabecera{max-width:1100px;margin:1.25rem auto 0.4rem;padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.resultados-cabecera .conteo{margin:0;padding:0;}
+.modo-vista{display:flex;gap:0.35rem;}
+.modo-vista button{padding:0.38rem 0.75rem;border:1.5px solid var(--paja-oscuro);border-radius:18px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;}
+.modo-vista button.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
+.mapa-eventos{display:none;max-width:1070px;height:570px;margin:0.75rem auto 3rem;border:1px solid var(--paja-oscuro);border-radius:var(--radio);overflow:hidden;box-shadow:0 2px 8px var(--sombra);background:var(--paja);}
+.mapa-eventos.visible{display:block;}
+.marker-mes{background:transparent;border:none;}
+.marker-mes-inner{width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--tierra-claro);border:3px solid white;box-shadow:0 2px 7px rgba(42,26,10,.35);display:flex;align-items:center;justify-content:center;}
+.marker-mes-inner span{transform:rotate(45deg);font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;color:white;}
+.map-popup-nombre{font-family:'Fraunces',serif;font-size:1rem;font-weight:500;color:var(--texto);margin-bottom:0.25rem;}
+.map-popup-meta{font-size:0.78rem;color:var(--texto-suave);line-height:1.45;}
+.map-popup-aprox{font-size:0.68rem;color:var(--barro);margin-top:0.2rem;}
+.map-popup-btn{display:inline-block;margin-top:0.5rem;color:var(--tierra-claro);font-size:0.78rem;font-weight:500;text-decoration:none;cursor:pointer;}
+@media(max-width:1100px){.mapa-eventos{margin-left:1.5rem;margin-right:1.5rem;}}
+@media(max-width:640px){
+  .resultados-cabecera{margin-top:1rem;padding:0 1rem;}
+  .mapa-eventos{height:62vh;min-height:420px;margin:0.65rem 1rem 2rem;}
+}
 .card{background:var(--blanco);border-radius:var(--radio);overflow:hidden;box-shadow:0 2px 8px var(--sombra);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;border:1px solid rgba(139,69,19,0.08);display:flex;flex-direction:column;}
 .card:hover{transform:translateY(-3px);box-shadow:0 8px 24px var(--sombra);}
 .card-img{width:100%;height:160px;object-fit:cover;background:var(--paja-oscuro);display:block;}
@@ -326,10 +346,17 @@ footer a{color:var(--tierra);text-decoration:none;}
   </div>
 </div>
 
-<div class="conteo" id="conteo"></div>
+<div class="resultados-cabecera">
+  <div class="conteo" id="conteo"></div>
+  <div class="modo-vista" aria-label="Modo de visualización">
+    <button type="button" id="modo-lista" class="on" onclick="cambiarModoEventos('lista')">Lista</button>
+    <button type="button" id="modo-mapa" onclick="cambiarModoEventos('mapa')">Mapa</button>
+  </div>
+</div>
 <div class="grilla" id="grilla">
   <div class="loading"><div class="spinner"></div><p>Cargando eventos...</p></div>
 </div>
+<div id="mapa-eventos" class="mapa-eventos" aria-label="Mapa de eventos de bioconstrucción"></div>
 
 </div>
 <!-- /vista-eventos -->
@@ -530,6 +557,7 @@ footer a{color:var(--tierra);text-decoration:none;}
   <p>🌿 <strong>hayminga</strong> — Comunidad de bioconstrucción &nbsp;·&nbsp; 2025</p>
 </footer>
 
+<script src="vendor/leaflet/leaflet.js"></script>
 <script>
 var SHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
 // headers=1 le pide a GViz que trate SIEMPRE la fila 1 como encabezado.
@@ -543,6 +571,27 @@ var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?t
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVjevBJdUwh0xrusFIrRSI647HkUna9zZBR_dHTbKotBfgk_8byPmdDzeP9dBnzDCy/exec';
 var todosLosEventos = [];
 var eventosFiltrados = [];
+var modoEventos = 'lista';
+var mapaEventos = null;
+var capaMarcadores = null;
+
+// Centro aproximado de cada jurisdicción. Se usa únicamente cuando el
+// evento todavía no tiene Latitud/Longitud y se informa así en el popup.
+var COORDENADAS_PROVINCIAS = {
+  'Buenos Aires':[-36.68,-60.09], 'CABA':[-34.61,-58.44],
+  'Ciudad de Buenos Aires':[-34.61,-58.44],
+  'Catamarca':[-28.47,-65.78], 'Chaco':[-27.45,-59.00],
+  'Chubut':[-43.30,-65.10], 'Córdoba':[-31.42,-64.19],
+  'Corrientes':[-27.47,-58.83], 'Entre Ríos':[-31.74,-60.51],
+  'Formosa':[-26.18,-58.18], 'Jujuy':[-24.19,-65.30],
+  'La Pampa':[-36.62,-64.29], 'La Rioja':[-29.41,-66.86],
+  'Mendoza':[-32.89,-68.84], 'Misiones':[-27.36,-55.90],
+  'Neuquén':[-38.95,-68.06], 'Río Negro':[-40.81,-63.00],
+  'Salta':[-24.79,-65.41], 'San Juan':[-31.54,-68.53],
+  'San Luis':[-33.30,-66.34], 'Santa Cruz':[-48.82,-69.82],
+  'Santa Fe':[-31.63,-60.70], 'Santiago del Estero':[-27.79,-64.26],
+  'Tierra del Fuego':[-54.81,-68.31], 'Tucumán':[-26.83,-65.20]
+};
 
 function cargarDatos() {
   fetch(API_URL)
@@ -771,7 +820,7 @@ function aplicarFiltros() {
     }
     return true;
   });
-  renderGrilla();
+  renderResultados();
 }
 
 function limpiarFiltros() {
@@ -819,6 +868,114 @@ function svgIco(paths) {
 
 function igIcon() {
   return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/></svg>';
+}
+
+function cambiarModoEventos(modo) {
+  modoEventos = modo === 'mapa' ? 'mapa' : 'lista';
+  document.getElementById('modo-lista').classList.toggle('on', modoEventos === 'lista');
+  document.getElementById('modo-mapa').classList.toggle('on', modoEventos === 'mapa');
+  renderResultados();
+  if (typeof gtag === 'function') gtag('event', 'cambiar_vista_eventos', { vista: modoEventos });
+}
+
+function renderResultados() {
+  var enMapa = modoEventos === 'mapa';
+  document.getElementById('grilla').style.display = enMapa ? 'none' : 'grid';
+  document.getElementById('mapa-eventos').classList.toggle('visible', enMapa);
+  if (enMapa) {
+    renderMapa();
+  } else {
+    renderGrilla();
+  }
+}
+
+function numeroValido(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  var numero = Number(String(valor).replace(',', '.'));
+  return isFinite(numero) ? numero : null;
+}
+
+function coordenadasEvento(ev, indice) {
+  var lat = numeroValido(ev['Latitud']);
+  var lng = numeroValido(ev['Longitud']);
+  if (lat !== null && lng !== null) return { lat:lat, lng:lng, aproximada:false };
+  var base = COORDENADAS_PROVINCIAS[ev['Provincia']];
+  if (!base) return null;
+
+  // Separación visual estable para que varios eventos de una provincia
+  // no queden exactamente uno encima de otro.
+  var semilla = 0;
+  var clave = String(ev['Id'] || ev['Nombre'] || indice);
+  for (var i = 0; i < clave.length; i++) semilla = (semilla * 31 + clave.charCodeAt(i)) % 997;
+  var angulo = (semilla % 360) * Math.PI / 180;
+  var radio = 0.10 + ((semilla % 7) * 0.018);
+  return {
+    lat: base[0] + Math.sin(angulo) * radio,
+    lng: base[1] + Math.cos(angulo) * radio,
+    aproximada: true
+  };
+}
+
+function colorDelMes(mes) {
+  var colores = ['#8B4513','#A05A2C','#C4763A','#D18B47','#3D6B3F','#567B42',
+    '#70864A','#94733F','#9B5432','#7D4A34','#5C4A3A','#5C2D0A'];
+  return colores[Math.max(1, Math.min(12, mes)) - 1];
+}
+
+function iconoMes(mes) {
+  var color = colorDelMes(mes);
+  return L.divIcon({
+    className: 'marker-mes',
+    html: '<div class="marker-mes-inner" style="background:' + color + '"><span>' + mes + '</span></div>',
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
+    popupAnchor: [0, -32]
+  });
+}
+
+function renderMapa() {
+  var contenedor = document.getElementById('mapa-eventos');
+  if (!mapaEventos) {
+    mapaEventos = L.map(contenedor, { scrollWheelZoom:false }).setView([-38.4, -63.6], 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(mapaEventos);
+    capaMarcadores = L.layerGroup().addTo(mapaEventos);
+  }
+
+  capaMarcadores.clearLayers();
+  var limites = [];
+  var ubicados = 0;
+  eventosFiltrados.forEach(function(ev, indice) {
+    var coord = coordenadasEvento(ev, indice);
+    var fecha = parseFechaEvento(ev['Fecha_Inicio']);
+    if (!coord || !fecha) return;
+    var mes = fecha.getMonth() + 1;
+    var lugar = [ev['Dirección'], ev['Provincia']].filter(function(v) {
+      return v && v !== 'null';
+    }).join(', ');
+    var popup = '<div class="map-popup-nombre">' + (ev['Nombre'] || 'Evento') + '</div>'
+      + '<div class="map-popup-meta">' + formatFecha(ev['Fecha_Inicio'])
+      + (lugar ? '<br>' + lugar : '') + '</div>'
+      + (coord.aproximada ? '<div class="map-popup-aprox">Ubicación aproximada por provincia</div>' : '')
+      + '<a class="map-popup-btn" onclick="abrirModal(' + indice + ')">Ver evento →</a>';
+    L.marker([coord.lat, coord.lng], { icon:iconoMes(mes) })
+      .bindPopup(popup)
+      .addTo(capaMarcadores);
+    limites.push([coord.lat, coord.lng]);
+    ubicados++;
+  });
+
+  document.getElementById('conteo').textContent = eventosFiltrados.length === 0
+    ? 'Sin resultados'
+    : ubicados + ' evento' + (ubicados !== 1 ? 's' : '') + ' en el mapa';
+  window.setTimeout(function() {
+    mapaEventos.invalidateSize();
+    if (limites.length === 1) mapaEventos.setView(limites[0], 7);
+    else if (limites.length > 1) mapaEventos.fitBounds(limites, { padding:[35,35], maxZoom:7 });
+    else mapaEventos.setView([-38.4, -63.6], 4);
+  }, 0);
 }
 
 function renderGrilla() {
