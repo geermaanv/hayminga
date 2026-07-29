@@ -94,10 +94,16 @@ select:focus{border-color:var(--tierra);}
   .filtros-row1{gap:0.5rem;}
   #filtro-tipo{display:none;}
   #filtro-provincia{display:none;}
-  .vista-btn{padding:0.32rem 0.55rem;font-size:0.72rem;}
-  header{padding:0 1rem;}
-  .header-right{gap:0.6rem;}
-  .logo{font-size:1.05rem;}
+  .vista-btn{padding:0.3rem 0.42rem;font-size:0.68rem;}
+  .vista-btn svg{display:none;}
+  header{padding:0 0.5rem;}
+  .header-right{gap:0.2rem;}
+  .header-right .vista-toggle{gap:0.2rem;}
+  .logo{font-size:0.95rem;}
+  .search-wrap{min-width:0;}
+  .modo-vista{gap:0.2rem;}
+  .modo-vista button{padding:0.36rem 0.5rem;font-size:0.7rem;}
+  .btn-mob-filtros{padding:0.4rem 0.55rem;font-size:0.72rem;}
 }
 @media(max-width:360px){
   .vista-btn{padding:0.28rem 0.45rem;font-size:0.66rem;}
@@ -227,6 +233,17 @@ footer a{color:var(--tierra);text-decoration:none;}
    verde = Directorio (matchea el CTA "+ Sumarme al directorio") */
 .vista-btn.eventos.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
 .vista-btn.directorio.on{background:var(--verde);border-color:var(--verde);color:white;}
+.header-action{display:flex;align-items:center;padding:0.4rem 0.7rem;border-radius:18px;border:1.5px solid;font-family:'DM Sans',sans-serif;font-size:0.75rem;font-weight:500;cursor:pointer;white-space:nowrap;background:white;}
+.header-action.evento{border-color:var(--tierra-claro);color:var(--tierra-claro);}
+.header-action.evento:hover{background:var(--tierra-claro);color:white;}
+.header-action.persona{border-color:var(--verde);color:var(--verde);}
+.header-action.persona:hover{background:var(--verde);color:white;}
+@media(max-width:640px){
+  .header-action{padding:0.3rem 0.4rem;font-size:0.68rem;}
+  .header-action.persona{display:none;}
+  body.vista-directorio-activa .header-action.evento{display:none;}
+  body.vista-directorio-activa .header-action.persona{display:flex;}
+}
 
 .cta-accion{display:block;width:calc(100% - 3rem);max-width:1100px;margin:0.8rem auto 0;padding:0.75rem;border:none;border-radius:10px;color:white;font-family:'DM Sans',sans-serif;font-size:0.92rem;font-weight:600;cursor:pointer;}
 .cta-eventos{background:var(--tierra-claro);}
@@ -253,10 +270,12 @@ footer a{color:var(--tierra);text-decoration:none;}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Eventos
       </button>
+      <button class="header-action evento" onclick="abrirFormEvento()">+ Evento</button>
       <button class="vista-btn directorio" id="vista-btn-directorio" onclick="mostrarVista('directorio')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Directorio
       </button>
+      <button class="header-action persona" onclick="abrirFormDirectorio()">+ Persona</button>
     </div>
   </div>
 </header>
@@ -278,6 +297,10 @@ footer a{color:var(--tierra);text-decoration:none;}
         <option>Charla</option><option>Evento</option><option>Residencia</option><option>Festival</option>
       </select>
       <select id="filtro-provincia"><option value="">Todas las provincias</option></select>
+      <div class="modo-vista" aria-label="Modo de visualización">
+        <button type="button" id="modo-lista" class="on" onclick="cambiarModoEventos('lista')">Lista</button>
+        <button type="button" id="modo-mapa" onclick="cambiarModoEventos('mapa')">Mapa</button>
+      </div>
       <button class="btn-mob-filtros" id="btn-mob" onclick="togglePanelMob()">Filtros</button>
     </div>
 
@@ -301,8 +324,6 @@ footer a{color:var(--tierra);text-decoration:none;}
   <input type="hidden" id="filtro-periodo" value="">
   <label class="check-pasados"><input type="checkbox" id="mostrar-pasados"></label>
 </div>
-
-<button class="cta-accion cta-eventos" onclick="abrirFormEvento()">+ Nuevo evento</button>
 
 <!-- Panel mobile como overlay -->
 <div class="panel-mob" id="panel-mob" onclick="cerrarPanelMobOverlay(event)">
@@ -348,10 +369,6 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <div class="resultados-cabecera">
   <div class="conteo" id="conteo"></div>
-  <div class="modo-vista" aria-label="Modo de visualización">
-    <button type="button" id="modo-lista" class="on" onclick="cambiarModoEventos('lista')">Lista</button>
-    <button type="button" id="modo-mapa" onclick="cambiarModoEventos('mapa')">Mapa</button>
-  </div>
 </div>
 <div class="grilla" id="grilla">
   <div class="loading"><div class="spinner"></div><p>Cargando eventos...</p></div>
@@ -368,7 +385,6 @@ footer a{color:var(--tierra);text-decoration:none;}
       <select id="filtro-directorio-interes" onchange="renderDirectorio()"><option value="">Todos los intereses</option></select>
     </div>
   </div>
-  <button class="cta-accion cta-directorio" onclick="abrirFormDirectorio()">+ Sumarme al directorio</button>
   <div class="conteo" id="conteo-directorio"></div>
   <div class="grilla" id="grilla-directorio">
     <div class="loading"><div class="spinner"></div><p>Cargando directorio...</p></div>
@@ -895,23 +911,22 @@ function numeroValido(valor) {
   return isFinite(numero) ? numero : null;
 }
 
-function coordenadasEvento(ev, indice) {
+function coordenadasEvento(ev, indice, posicionAproximada) {
   var lat = numeroValido(ev['Latitud']);
   var lng = numeroValido(ev['Longitud']);
   if (lat !== null && lng !== null) return { lat:lat, lng:lng, aproximada:false };
   var base = COORDENADAS_PROVINCIAS[ev['Provincia']];
   if (!base) return null;
 
-  // Separación visual estable para que varios eventos de una provincia
-  // no queden exactamente uno encima de otro.
-  var semilla = 0;
-  var clave = String(ev['Id'] || ev['Nombre'] || indice);
-  for (var i = 0; i < clave.length; i++) semilla = (semilla * 31 + clave.charCodeAt(i)) % 997;
-  var angulo = (semilla % 360) * Math.PI / 180;
-  var radio = 0.10 + ((semilla % 7) * 0.018);
+  // Repartir de forma regular los eventos sin localidad alrededor del
+  // centro provincial. El desplazamiento es deliberadamente visible y
+  // el popup aclara que no representa una dirección exacta.
+  var posicion = posicionAproximada || { orden:0, total:1 };
+  var angulo = -Math.PI / 2 + (2 * Math.PI * posicion.orden / posicion.total);
+  var radio = posicion.total === 1 ? 0.65 : Math.min(2.25, 1.55 + posicion.total * 0.12);
   return {
     lat: base[0] + Math.sin(angulo) * radio,
-    lng: base[1] + Math.cos(angulo) * radio,
+    lng: base[1] + Math.cos(angulo) * radio / Math.max(0.55, Math.cos(base[0] * Math.PI / 180)),
     aproximada: true
   };
 }
@@ -947,8 +962,25 @@ function renderMapa() {
   capaMarcadores.clearLayers();
   var limites = [];
   var ubicados = 0;
+  var gruposAproximados = {};
+  var posicionesAproximadas = {};
   eventosFiltrados.forEach(function(ev, indice) {
-    var coord = coordenadasEvento(ev, indice);
+    var tieneLat = numeroValido(ev['Latitud']) !== null;
+    var tieneLng = numeroValido(ev['Longitud']) !== null;
+    var provincia = ev['Provincia'];
+    if (tieneLat && tieneLng || !COORDENADAS_PROVINCIAS[provincia]) return;
+    if (!gruposAproximados[provincia]) gruposAproximados[provincia] = [];
+    gruposAproximados[provincia].push(indice);
+  });
+  Object.keys(gruposAproximados).forEach(function(provincia) {
+    var indices = gruposAproximados[provincia];
+    indices.forEach(function(indice, orden) {
+      posicionesAproximadas[indice] = { orden:orden, total:indices.length };
+    });
+  });
+
+  eventosFiltrados.forEach(function(ev, indice) {
+    var coord = coordenadasEvento(ev, indice, posicionesAproximadas[indice]);
     var fecha = parseFechaEvento(ev['Fecha_Inicio']);
     if (!coord || !fecha) return;
     var mes = fecha.getMonth() + 1;
@@ -1200,6 +1232,7 @@ function poblarInteresesDirectorio() {
 
 function mostrarVista(vista) {
   var esEventos = vista === 'eventos';
+  document.body.classList.toggle('vista-directorio-activa', !esEventos);
   document.getElementById('vista-eventos').style.display = esEventos ? '' : 'none';
   document.getElementById('vista-directorio').style.display = esEventos ? 'none' : '';
   document.getElementById('vista-btn-eventos').classList.toggle('on', esEventos);
