@@ -11,9 +11,9 @@
       "site:instagram.com bioconstrucción \"Misiones\" taller OR minga 2026"
     ],
     [
-      "site:instagram.com bioconstrucción \"Río Negro\" taller 2026",
-      "site:instagram.com bioconstrucción \"Neuquén\" taller 2026",
-      "site:instagram.com bioconstrucción \"Chubut\" taller 2026"
+      "site:instagram.com (\"bioconstrucción\" OR \"construcción natural\" OR quincha OR adobe) (taller OR curso OR minga) (\"Río Negro\" OR Neuquén OR Chubut OR Patagonia) (agosto OR septiembre OR octubre OR noviembre OR diciembre) 2026",
+      "site:instagram.com (\"bioconstrucción\" OR \"construcción natural\" OR bioarquitectura) (agosto OR septiembre OR octubre OR noviembre OR diciembre) (taller OR curso OR minga) Argentina 2026",
+      "site:instagram.com (\"bioconstrucción\" OR \"construcción natural\" OR quincha OR adobe) (taller OR curso OR minga) (\"Santa Fe\" OR \"Entre Ríos\" OR Corrientes OR Chaco) 2026"
     ],
     [
       "site:instagram.com quincha adobe barro \"Argentina\" taller 2026",

@@ -298,8 +298,8 @@ footer a{color:var(--tierra);text-decoration:none;}
       </select>
       <select id="filtro-provincia"><option value="">Todas las provincias</option></select>
       <div class="modo-vista" aria-label="Modo de visualización">
-        <button type="button" id="modo-lista" class="on" onclick="cambiarModoEventos('lista')">Lista</button>
-        <button type="button" id="modo-mapa" onclick="cambiarModoEventos('mapa')">Mapa</button>
+        <button type="button" id="modo-lista" onclick="cambiarModoEventos('lista')">Lista</button>
+        <button type="button" id="modo-mapa" class="on" onclick="cambiarModoEventos('mapa')">Mapa</button>
       </div>
       <button class="btn-mob-filtros" id="btn-mob" onclick="togglePanelMob()">Filtros</button>
     </div>
@@ -587,7 +587,7 @@ var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?t
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVjevBJdUwh0xrusFIrRSI647HkUna9zZBR_dHTbKotBfgk_8byPmdDzeP9dBnzDCy/exec';
 var todosLosEventos = [];
 var eventosFiltrados = [];
-var modoEventos = 'lista';
+var modoEventos = 'mapa';
 var mapaEventos = null;
 var capaMarcadores = null;
 
