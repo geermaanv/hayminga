@@ -4,6 +4,18 @@ on:
   schedule:
     - cron: "0 11 * * *"
   workflow_dispatch:
+    inputs:
+      grupo:
+        description: "Grupo de búsquedas (automático mantiene la rotación diaria)"
+        required: true
+        default: "automatico"
+        type: choice
+        options:
+          - automatico
+          - "1"
+          - "2"
+          - "3"
+          - "4"
 
 concurrency:
   group: import-eventos-production
@@ -56,6 +68,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          QUERY_GROUP: ${{ inputs.grupo }}
         run: python main.py
 
       - name: Guardar hashes y links vistos

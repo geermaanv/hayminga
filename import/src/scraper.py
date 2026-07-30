@@ -53,6 +53,17 @@ def get_queries_for_today(config: dict) -> list[str]:
     grupos = config.get("grupos", [])
     if not grupos:
         return []
+    manual_group = os.getenv("QUERY_GROUP", "").strip()
+    if manual_group.isdigit():
+        group_index = int(manual_group) - 1
+        if 0 <= group_index < len(grupos):
+            queries = list(grupos[group_index])
+            print(
+                f"[scraper] Grupo {manual_group} seleccionado manualmente "
+                f"({len(queries)} queries)"
+            )
+            return queries
+
     all_queries = [query for group in grupos for query in group]
     requested = max(1, int(config.get("consultas_por_dia", 3)))
     count = min(requested, len(all_queries))

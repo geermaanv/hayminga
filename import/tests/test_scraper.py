@@ -15,6 +15,7 @@ def response(status=200, payload=None, text=""):
 
 
 class ImageProviderTests(unittest.TestCase):
+    @patch.dict(os.environ, {"QUERY_GROUP": ""})
     def test_config_uses_configured_number_of_queries(self):
         config = json.loads(scraper.CONFIG_FILE.read_text())
 
@@ -22,6 +23,14 @@ class ImageProviderTests(unittest.TestCase):
 
         self.assertEqual(len(queries), config["consultas_por_dia"])
         self.assertEqual(len(set(queries)), config["consultas_por_dia"])
+
+    @patch.dict(os.environ, {"QUERY_GROUP": "3"})
+    def test_manual_group_overrides_daily_rotation(self):
+        config = json.loads(scraper.CONFIG_FILE.read_text())
+
+        queries = scraper.get_queries_for_today(config)
+
+        self.assertEqual(queries, config["grupos"][2])
 
     @patch.dict(os.environ, {"SERPAPI_KEY": "serp", "SERPER_API_KEY": "backup"})
     @patch("src.scraper.requests.post")
