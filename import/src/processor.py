@@ -8,6 +8,7 @@ se queda sin cuota, reintenta esa misma imagen con Claude como fallback.
 import os
 import json
 import base64
+import re
 import unicodedata
 from pathlib import Path
 from datetime import datetime, date
@@ -307,6 +308,82 @@ def _es_argentina(value: str | None) -> bool:
     return _normalizar_texto(value) in {"argentina", "ar"}
 
 
+SOURCE_STOPWORDS = {
+    "taller", "curso", "evento", "encuentro", "jornada", "minga",
+    "bioconstruccion", "construccion", "natural", "naturales",
+    "arquitectura", "bioarquitectura", "argentina", "presencial",
+    "virtual", "para", "sobre", "desde", "hasta", "como", "esta",
+    "este", "estos", "estas", "con", "del", "los", "las", "una",
+    "por", "que",
+}
+MONTH_NAMES = {
+    1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo",
+    6: "junio", 7: "julio", 8: "agosto", 9: "septiembre",
+    10: "octubre", 11: "noviembre", 12: "diciembre",
+}
+
+
+def _source_tokens(value: str | None) -> set[str]:
+    text = _normalizar_texto(value)
+    return {
+        token for token in re.findall(r"[a-z0-9]+", text)
+        if len(token) >= 4 and token not in SOURCE_STOPWORDS
+    }
+
+
+def _source_contains_date(context: str, iso_date: str | None) -> bool:
+    if not iso_date:
+        return False
+    try:
+        parsed = date.fromisoformat(str(iso_date)[:10])
+    except ValueError:
+        return False
+    normalized = _normalizar_texto(context)
+    day = str(parsed.day)
+    month = MONTH_NAMES[parsed.month]
+    numeric_patterns = {
+        f"{parsed.day}/{parsed.month}", f"{parsed.day:02d}/{parsed.month:02d}",
+        f"{parsed.day}-{parsed.month}", f"{parsed.day:02d}-{parsed.month:02d}",
+    }
+    return bool(
+        re.search(rf"\b{re.escape(day)}\s+(?:de\s+)?{month}\b", normalized)
+        or any(pattern in normalized for pattern in numeric_patterns)
+    )
+
+
+def source_matches_event(event: dict, indexed_context: str) -> bool:
+    """Verificación conservadora entre lo leído del flyer y el post.
+
+    Los términos genéricos no cuentan como evidencia. Para publicar se exige
+    un nombre suficientemente coincidente y una segunda señal (fecha, lugar
+    u organizador), o un nombre casi idéntico con tres términos específicos.
+    """
+    if not indexed_context:
+        return False
+    context_tokens = _source_tokens(indexed_context)
+    name_tokens = _source_tokens(event.get("nombre"))
+    shared_name = name_tokens & context_tokens
+    name_ratio = len(shared_name) / len(name_tokens) if name_tokens else 0
+
+    place_tokens = _source_tokens(
+        " ".join(filter(None, (event.get("direccion"), event.get("provincia"))))
+    )
+    organizer_tokens = _source_tokens(event.get("organizador"))
+    date_match = _source_contains_date(
+        indexed_context,
+        event.get("fecha_inicio_iso") or event.get("fecha_inicio"),
+    )
+    corroboration = bool(
+        date_match
+        or place_tokens & context_tokens
+        or organizer_tokens & context_tokens
+    )
+    return bool(
+        (len(shared_name) >= 2 and name_ratio >= 0.5 and corroboration)
+        or (len(shared_name) >= 3 and name_ratio >= 0.75)
+    )
+
+
 def validate_event_data(data: dict, today: date | None = None) -> dict:
     """Normaliza campos extraídos y calcula `activo` sin delegarlo al modelo."""
     result = dict(data)
@@ -382,6 +459,7 @@ def extract_event_data(image_path: Path, metadata: dict):
         return None
 
     link = metadata.get("link", "")
+    indexed_context = ""
     necesita_fecha_publicacion = data.get("anio_confirmado") is False
     if link and (necesita_fecha_publicacion or (
         not supplied_caption and _necesita_caption(data)
@@ -403,6 +481,24 @@ def extract_event_data(image_path: Path, metadata: dict):
     data["fuente"]            = metadata.get("source", "google_images")
     data["fecha_descubrimiento"] = metadata.get("discovered_at", date.today().isoformat())
     data = validate_event_data(data)
+
+    # Un evento automático futuro sólo se publica si la ficha indexada del
+    # post coincide con la información visual. Ante cualquier duda se conserva
+    # para revisión, sin exponer un link posiblemente ajeno.
+    if data.get("activo") and data.get("fuente") == "google_images":
+        if link and not indexed_context:
+            indexed_context = fetch_caption(link)
+        verified = bool(link and source_matches_event(data, indexed_context))
+        data["fuente_verificada"] = verified
+        if not verified:
+            data["activo"] = False
+            data["estado"] = "revision_fuente"
+            data["link_promocional"] = ""
+            data["motivo_revision"] = "imagen_y_link_sin_coincidencia_suficiente"
+            print(
+                f"[processor] {image_path.name}: fuente no verificada; "
+                "queda en revisión"
+            )
 
     activo = data.get("activo", False)
     print(

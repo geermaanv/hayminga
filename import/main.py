@@ -52,12 +52,17 @@ def run():
                     "_candidate_attempts": event.get("_candidate_attempts", 0),
                 }
                 if key in inserted_keys and key not in finalized_keys:
+                    candidate_status = (
+                        "revision" if event.get("estado") == "revision_fuente"
+                        else "publicado"
+                    )
                     candidate_store.update(
                         metadata,
-                        status="publicado",
+                        status=candidate_status,
                         attempts=event.get("_candidate_attempts", 0),
                         event=event,
                         event_id=event.get("id", ""),
+                        reason=event.get("motivo_revision", ""),
                     )
                     finalized_keys.add(key)
                 else:

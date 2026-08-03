@@ -12,6 +12,26 @@ from src import email_intake, processor, sheets
 
 
 class ProcessorTests(unittest.TestCase):
+    def test_source_match_requires_specific_name_and_corroboration(self):
+        event = {
+            "nombre": "Taller de Permacultura y Sustentación en Crotto",
+            "fecha_inicio_iso": "2026-07-25",
+            "direccion": "Museo Comunitario Municipal Crotto",
+            "provincia": "Buenos Aires",
+            "organizador": "Proyecto Sierra Morena",
+        }
+
+        self.assertTrue(processor.source_matches_event(
+            event,
+            "Taller de Permacultura y Sustentación en Crotto. "
+            "25 de julio, Museo Comunitario Municipal Crotto.",
+        ))
+        self.assertFalse(processor.source_matches_event(
+            event,
+            "Instalación y manejo de sistema de agromonte en La Pituca, "
+            "22 de julio.",
+        ))
+
     def test_parse_json_recovers_object_surrounded_by_claude_explanation(self):
         raw = (
             "# Análisis del flyer\n"

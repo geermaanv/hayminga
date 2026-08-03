@@ -15,6 +15,23 @@ def response(status=200, payload=None, text=""):
 
 
 class ImageProviderTests(unittest.TestCase):
+    @patch.dict(os.environ, {"SERPAPI_KEY": "serp", "SERPER_API_KEY": "backup"})
+    @patch("src.scraper.requests.post")
+    @patch("src.scraper.requests.get")
+    def test_discards_instagram_link_mapped_to_multiple_images(self, get, post):
+        link = "https://instagram.com/p/ambiguo/"
+        get.return_value = response(payload={"images_results": [
+            {"thumbnail": "https://thumb.example/a", "link": link, "title": "Evento A"},
+            {"thumbnail": "https://thumb.example/b", "link": link, "title": "Evento B"},
+            {"thumbnail": "https://thumb.example/c", "link": "https://instagram.com/p/ok/", "title": "Evento C"},
+        ]})
+
+        actual = scraper.fetch_image_data("bioconstruccion", max_results=5)
+
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(actual[0]["link"], "https://instagram.com/p/ok/")
+        post.assert_not_called()
+
     @patch.dict(os.environ, {"QUERY_GROUP": ""})
     def test_config_uses_configured_number_of_queries(self):
         config = json.loads(scraper.CONFIG_FILE.read_text())

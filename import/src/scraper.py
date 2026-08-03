@@ -272,6 +272,29 @@ def fetch_image_data(query: str, max_results: int = 20) -> list[dict]:
         results = _fetch_images_serper(query, max_results)
         provider = "Serper"
 
+    # Google puede atribuir el mismo link canónico de Instagram a varias
+    # imágenes distintas. No elegir la primera arbitrariamente: un carrusel
+    # legítimo y una asociación errónea son indistinguibles desde esta fuente.
+    instagram_images = {}
+    for item in results:
+        link = str(item.get("link") or "").split("?")[0].rstrip("/")
+        if "instagram.com/p/" in link or "instagram.com/reel/" in link:
+            instagram_images.setdefault(link, set()).add(item.get("thumbnail") or "")
+    ambiguous_links = {
+        link for link, thumbnails in instagram_images.items()
+        if len({thumbnail for thumbnail in thumbnails if thumbnail}) > 1
+    }
+    if ambiguous_links:
+        results = [
+            item for item in results
+            if str(item.get("link") or "").split("?")[0].rstrip("/")
+            not in ambiguous_links
+        ]
+        print(
+            f"[scraper] {len(ambiguous_links)} link(s) ambiguo(s) de Instagram "
+            "descartado(s) por tener múltiples imágenes"
+        )
+
     print(f"[scraper] '{query[:55]}' → {len(results)} imagen(es) vía {provider}")
     return results
 
