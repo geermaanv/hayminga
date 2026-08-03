@@ -257,7 +257,7 @@ hacer por API). Dos caminos, mismo Apps Script:
   imagen a Drive y escribe la fila **directo en "Eventos"**, sin IA ni
   espera — se publica al instante.
 - **Mail** (alternativa, dentro del mismo modal): un organizador manda un
-  mail con `HAYMINGAEVENTO` en el asunto y el flyer adjunto; el Apps
+  mail con `HME` en el asunto y el flyer adjunto; el Apps
   Script lo guarda en Drive y anota una fila en `Cola_Manual`; `main.py`
   la procesa en la corrida diaria reusando el mismo `extract_event_data`
   del scraping — el cuerpo del mail juega el rol del caption. Pensado para

@@ -56,7 +56,7 @@ var SPREADSHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
 // lado del asunto, incluido años de mail viejo sin relación (así se coló
 // mail de 2007-2018 la primera vez que se probó esto). Por eso el tag es
 // una sola palabra rara, sin espacios ni símbolos.
-var SUBJECT_TAG     = 'HAYMINGAEVENTO';     // el organizador debe poner esto en el asunto
+var SUBJECT_TAG     = 'HME';     // el organizador debe poner esto en el asunto
 var QUEUE_SHEET_NAME = 'Cola_Manual';
 var DRIVE_FOLDER_NAME = 'hayminga - flyers manuales';
 var GMAIL_LABEL_PROCESADO = 'hayminga-procesado';

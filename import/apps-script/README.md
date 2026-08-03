@@ -4,7 +4,7 @@ Dos formas de cargar un evento a mano, mismo script:
 
 1. **Por mail** (`revisarBandeja`): lee la casilla de Gmail de la cuenta
    que despliega el script (hoy `germanv@gmail.com`), busca mails con
-   `HAYMINGAEVENTO` en el asunto y un flyer adjunto, y anota una fila en
+   `HME` en el asunto y un flyer adjunto, y anota una fila en
    `Cola_Manual`. `main.py` (paso 4/4) la procesa en la corrida diaria,
    extrayendo los datos con IA (Gemini/Claude) — pensado para texto libre.
 
@@ -25,7 +25,7 @@ falsas en la Sheet de producción (ya se corrigieron a mano).
 
 **Si ya tenés el script viejo corriendo: reemplazá `Code.gs` por la versión
 actual y volvé a autorizarlo.** El tag nuevo es una sola palabra sin
-símbolos (`HAYMINGAEVENTO`) y la búsqueda ahora tiene un límite de
+símbolos (`HME`) y la búsqueda ahora tiene un límite de
 `newer_than:3d` como red de seguridad extra, aunque el tag vuelva a fallar
 por algún motivo.
 
@@ -109,7 +109,7 @@ puede complicar después si hace falta.
 los campos y sube el flyer — se publica al toque, sin esperar nada.
 
 **Por mail (alternativa):** mandar un mail a `germanv@gmail.com` con:
-- Asunto: que contenga `HAYMINGAEVENTO` (ej. `HAYMINGAEVENTO Taller de adobe`)
+- Asunto: que contenga `HME` (ej. `HME Taller de adobe`)
 - El flyer adjunto (como imagen, en la resolución que tenga)
 - En el cuerpo: fecha, lugar, y cualquier dato de contacto — se lo pasamos
   tal cual a la IA como contexto extra, igual que el caption de Instagram
