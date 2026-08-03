@@ -120,7 +120,7 @@ select:focus{border-color:var(--tierra);}
 .modo-vista{display:flex;gap:0.35rem;}
 .modo-vista button{padding:0.38rem 0.75rem;border:1.5px solid var(--paja-oscuro);border-radius:18px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;}
 .modo-vista button.on{background:var(--tierra-claro);border-color:var(--tierra-claro);color:white;}
-.mapa-eventos{display:none;max-width:1070px;height:570px;margin:0.75rem auto 3rem;border:1px solid var(--paja-oscuro);border-radius:var(--radio);overflow:hidden;box-shadow:0 2px 8px var(--sombra);background:var(--paja);}
+.mapa-eventos{display:none;position:relative;z-index:1;max-width:1070px;height:570px;margin:0.75rem auto 3rem;border:1px solid var(--paja-oscuro);border-radius:var(--radio);overflow:hidden;box-shadow:0 2px 8px var(--sombra);background:var(--paja);}
 .mapa-eventos.visible{display:block;}
 .marker-mes{background:transparent;border:none;}
 .marker-mes-inner{width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--tierra-claro);border:3px solid white;box-shadow:0 2px 7px rgba(42,26,10,.35);display:flex;align-items:center;justify-content:center;}
@@ -200,6 +200,9 @@ select:focus{border-color:var(--tierra);}
 .vision-firma{padding:0.5rem 1rem;background:var(--paja);border-radius:20px;font-size:0.85rem;color:var(--tierra-oscuro);font-weight:500;}
 footer{text-align:center;padding:2rem 1.5rem;color:var(--texto-suave);font-size:0.8rem;border-top:1px solid var(--paja-oscuro);}
 footer a{color:var(--tierra);text-decoration:none;}
+.footer-wa{display:inline-flex;align-items:center;gap:0.35rem;color:#176b36;font-weight:600;}
+.footer-wa:hover{text-decoration:underline;}
+.footer-wa svg{flex-shrink:0;}
 .evento-form-inner{background:var(--blanco);border-radius:var(--radio);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:1.5rem;position:relative;}
 .evento-form-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.3rem;}
 .evento-form-header h3{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:500;color:var(--texto);}
@@ -275,7 +278,7 @@ footer a{color:var(--tierra);text-decoration:none;}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Eventos
       </button>
-      <button class="header-action evento" onclick="enviarEventoPorWhatsApp()">+ Evento</button>
+      <button class="header-action evento" onclick="abrirFormEvento()">+ Evento</button>
       <button class="vista-btn directorio" id="vista-btn-directorio" onclick="mostrarVista('directorio')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Directorio
@@ -374,7 +377,10 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <div class="resultados-cabecera">
   <div class="conteo" id="conteo"></div>
-  <button type="button" class="btn-whatsapp agenda" id="compartir-agenda" onclick="compartirAgendaWhatsApp()">Compartir agenda</button>
+  <a class="footer-wa" href="https://wa.me/5491126728949?text=%C2%A1Hola%20Hayminga%21%20Quiero%20recibir%20las%20novedades%20de%20eventos%20de%20bioconstrucci%C3%B3n.%20%28Guardo%20este%20n%C3%BAmero%20en%20mis%20contactos%20para%20que%20me%20lleguen%20%F0%9F%99%82%29" target="_blank" rel="noopener">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.32A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.1c-.22.62-1.28 1.18-1.77 1.24-.45.06-1.02.08-1.65-.1-.38-.11-.87-.28-1.5-.55-2.64-1.14-4.36-3.8-4.5-3.98-.13-.18-1.08-1.43-1.08-2.73s.68-1.93.92-2.2c.24-.26.53-.33.7-.33h.5c.16 0 .38-.06.6.46.22.53.75 1.83.82 1.97.07.13.11.29.02.47-.09.18-.14.29-.27.44-.13.16-.28.35-.4.47-.13.13-.27.27-.11.53.16.26.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.16 1.34.26.13.42.11.57-.07.16-.18.66-.77.84-1.03.18-.26.35-.22.6-.13.24.09 1.55.73 1.82.87.26.13.44.2.5.31.07.11.07.65-.14 1.27z"/></svg>
+    Recibí las novedades de hayminga por WA
+  </a>
 </div>
 <div class="grilla" id="grilla">
   <div class="loading"><div class="spinner"></div><p>Cargando eventos...</p></div>
@@ -512,7 +518,7 @@ footer a{color:var(--tierra);text-decoration:none;}
         style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
       <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--paja-oscuro);margin-bottom:0.75rem;opacity:0.85;">
         <input type="checkbox" checked disabled>
-        Autorizo a que me manden novedades y avisos de HayMinga por email
+        Autorizo a que me manden novedades y avisos de hayminga por email
       </label>
       <button type="submit" id="btn-publicar-directorio"
         style="width:100%;padding:0.7rem;background:var(--verde);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
@@ -548,7 +554,7 @@ footer a{color:var(--tierra);text-decoration:none;}
 <section class="vision" id="vision">
   <div class="vision-inner">
     <h2 class="vision-titulo">¿Qué es <em>hayminga</em>?</h2>
-    <p class="vision-texto">HayMinga es un proyecto que se propone ser un nexo en las actividades relacionadas con la construcción con materiales naturales.</p>
+    <p class="vision-texto">hayminga busca ser el nexo entre las personas, los saberes y las oportunidades de la bioconstrucción.</p>
     <p class="vision-texto">Somos Maxi y Germán, venimos de la Tecnología y las Ciencias Sociales. Nos unimos al darnos cuenta de que, tras cada taller o minga, la gente siempre se hacía las mismas preguntas:</p>
     <ul class="vision-lista">
       <li>¿Dónde puedo seguir aprendiendo?</li>
@@ -556,17 +562,17 @@ footer a{color:var(--tierra);text-decoration:none;}
       <li>¿Cómo se organiza una minga de verdad?</li>
       <li>Quiero colaborar, ¿cómo sigo el camino?</li>
     </ul>
-    <p class="vision-texto">HayMinga es una herramienta viva, diseñada para que el conocimiento de la bioconstrucción fluya libremente por toda Latinoamérica. <strong>No vendemos nada, solo conectamos.</strong></p>
+    <p class="vision-texto">hayminga es una herramienta viva, diseñada para que el conocimiento de la bioconstrucción fluya libremente por toda Latinoamérica. <strong>No vendemos nada, solo conectamos.</strong></p>
     <p class="vision-texto">Nuestra misión:</p>
     <ul class="vision-lista">
-      <li><strong>Mapear saberes:</strong> el lugar donde encontrás talleres, cursos, comunidades y profesionales de la bioconstrucción, desde el sur hasta el norte.</li>
-      <li><strong>Tejer la red:</strong> crear una red densa y accesible para que, estés donde estés, siempre encuentres una comunidad que te apoye.</li>
+      <li><strong>Mapear saberes:</strong> El lugar donde encontrás talleres, cursos, comunidades y profesionales de la bioconstrucción, desde el sur hasta el norte.</li>
+      <li><strong>Tejer la red:</strong> Crear una red densa y accesible para que, estés donde estés, siempre encuentres una comunidad que te apoye.</li>
     </ul>
-    <p class="vision-destacado">Creemos que la bioconstrucción no se aprende leyendo, sino ensuciándose las manos. HayMinga es solo el mapa. Lo realmente importante sucede fuera de la pantalla, cuando pisás el barro por primera vez.</p>
+    <p class="vision-destacado">Creemos que la bioconstrucción no se aprende leyendo, sino ensuciándose las manos. hayminga es solo el mapa. Lo realmente importante sucede fuera de la pantalla, cuando pisás el barro por primera vez.</p>
     <p class="vision-texto">Si estás empezando, aquí tenés un punto de partida para tu primer taller o tu comunidad más cercana. Si ya sos constructor/a, este es un espacio para compartir experiencia y encontrar los colaboradores que necesitás.</p>
     <p class="vision-texto" style="font-family:'Fraunces',serif;font-size:1rem;color:var(--tierra-oscuro);">Construyamos de otra manera. Construyamos juntos. Construyamos desde la tierra.</p>
     <div class="vision-beta">
-      <strong>Esta es la primera versión de HayMinga.</strong> Estamos construyendo esto juntos — si tenés sugerencias o querés colaborar, escribinos a <a href="mailto:germanv@gmail.com" style="color:var(--tierra);">germanv@gmail.com</a>
+      <strong>Esta es la primera versión de hayminga.</strong> Estamos construyendo esto juntos — si tenés sugerencias o querés colaborar, escribinos por <a href="https://wa.me/5491126728949?text=%C2%A1Hola%20hayminga!%20Quiero%20sugerir%20algo%20%2F%20colaborar." target="_blank" rel="noopener" style="color:var(--tierra);">WhatsApp</a>.
     </div>
     <div class="vision-firmas">
       <span class="vision-firma">🌿 Maxi</span>
@@ -577,6 +583,13 @@ footer a{color:var(--tierra);text-decoration:none;}
 
 <footer>
   <p>🌿 <strong>hayminga</strong> — Comunidad de bioconstrucción &nbsp;·&nbsp; 2025</p>
+  <p>¿Viste un evento en Instagram? Mandanos el flyer por <a href="https://wa.me/5491126728949?text=%C2%A1Hola%20hayminga!%20Les%20comparto%20un%20evento%3A" target="_blank" rel="noopener">WhatsApp</a>.</p>
+  <p>
+    <a class="footer-wa" href="https://wa.me/5491126728949?text=%C2%A1Hola%20Hayminga%21%20Quiero%20recibir%20las%20novedades%20de%20eventos%20de%20bioconstrucci%C3%B3n.%20%28Guardo%20este%20n%C3%BAmero%20en%20mis%20contactos%20para%20que%20me%20lleguen%20%F0%9F%99%82%29" target="_blank" rel="noopener">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.32A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.1c-.22.62-1.28 1.18-1.77 1.24-.45.06-1.02.08-1.65-.1-.38-.11-.87-.28-1.5-.55-2.64-1.14-4.36-3.8-4.5-3.98-.13-.18-1.08-1.43-1.08-2.73s.68-1.93.92-2.2c.24-.26.53-.33.7-.33h.5c.16 0 .38-.06.6.46.22.53.75 1.83.82 1.97.07.13.11.29.02.47-.09.18-.14.29-.27.44-.13.16-.28.35-.4.47-.13.13-.27.27-.11.53.16.26.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.16 1.34.26.13.42.11.57-.07.16-.18.66-.77.84-1.03.18-.26.35-.22.6-.13.24.09 1.55.73 1.82.87.26.13.44.2.5.31.07.11.07.65-.14 1.27z"/></svg>
+      Recibí las novedades de hayminga por WA
+    </a>
+  </p>
 </footer>
 
 <script src="vendor/leaflet/leaflet.js"></script>
@@ -724,7 +737,7 @@ function nombrePeriodo(periodo) {
 
 function actualizarBotonAgenda() {
   var btn = document.getElementById('compartir-agenda');
-  if (btn) btn.textContent = 'Compartir ' + nombrePeriodo(periodoAgendaActual());
+  if (btn) btn.textContent = nombrePeriodo(periodoAgendaActual()) + ' a tu celu';
 }
 
 function abrirWhatsApp(url, eventoAnalytics) {
@@ -733,7 +746,7 @@ function abrirWhatsApp(url, eventoAnalytics) {
 }
 
 function enviarEventoPorWhatsApp() {
-  var mensaje = 'Hola HayMinga! Quiero compartir un evento de bioconstrucción. Te envío el flyer o captura y, si lo tengo, el enlace de Instagram.';
+  var mensaje = 'Hola hayminga! Quiero compartir un evento de bioconstrucción. Te envío el flyer o captura y, si lo tengo, el enlace de Instagram.';
   abrirWhatsApp('https://wa.me/' + WHATSAPP_HAYMINGA + '?text=' + encodeURIComponent(mensaje), 'enviar_evento_whatsapp');
 }
 
@@ -747,7 +760,7 @@ function compartirAgendaWhatsApp() {
   eventos.sort(function(a, b) {
     return (parseFechaEvento(a['Fecha_Inicio']) || 0) - (parseFechaEvento(b['Fecha_Inicio']) || 0);
   });
-  var lineas = ['🌱 Agenda HayMinga — ' + nombrePeriodo(periodo), ''];
+  var lineas = ['🌱 Agenda hayminga — ' + nombrePeriodo(periodo), ''];
   eventos.forEach(function(ev) {
     var fecha = parseFechaEvento(ev['Fecha_Inicio']);
     var dia = fecha ? fecha.getDate() : '';
