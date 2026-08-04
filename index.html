@@ -224,7 +224,8 @@ footer a{color:var(--tierra);text-decoration:none;}
 .evento-check{display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--texto);padding-top:0.4rem;}
 .evento-imagen-wrap{border:1.5px dashed var(--paja-oscuro);border-radius:8px;padding:1rem;text-align:center;background:var(--fondo);}
 .evento-imagen-wrap.tiene-imagen{border-style:solid;border-color:var(--tierra-claro);}
-.evento-imagen-preview{max-height:140px;border-radius:6px;margin-bottom:0.5rem;display:none;}
+.evento-imagen-preview{max-height:340px;max-width:100%;border-radius:6px;margin-bottom:0.3rem;display:none;cursor:zoom-in;}
+.evento-imagen-hint{font-size:0.72rem;color:var(--texto-suave);display:block;margin-bottom:0.5rem;}
 .honeypot-field{position:absolute;left:-9999px;top:-9999px;opacity:0;pointer-events:none;}
 .btn-publicar{width:100%;padding:0.8rem;background:var(--tierra-claro);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;margin-top:1.25rem;}
 .btn-publicar:hover{background:var(--tierra-oscuro);}
@@ -448,7 +449,10 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         <div class="full">
           <label class="campo-label">Flyer del evento <span class="req">*</span></label>
           <div class="evento-imagen-wrap" id="evento-imagen-wrap">
-            <img class="evento-imagen-preview" id="evento-imagen-preview">
+            <a id="evento-imagen-link" href="#" target="_blank" rel="noopener" style="display:none;">
+              <img class="evento-imagen-preview" id="evento-imagen-preview">
+              <span class="evento-imagen-hint">Click para ver la imagen completa en otra pestaña ↗</span>
+            </a>
             <input type="file" id="evento-imagen" accept="image/*" required
               onchange="previsualizarImagen(this)">
           </div>
@@ -522,6 +526,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
       <div id="evento-revision-info" class="evento-form-sub" style="display:none;color:var(--tierra);"></div>
 
       <button type="submit" class="btn-publicar" id="btn-publicar-evento">Publicar evento</button>
+      <button type="button" class="btn-cancelar" id="btn-saltar-evento" onclick="saltarRevision()" style="display:none;">Saltar (ver el próximo sin aprobar)</button>
       <button type="button" class="btn-cancelar" onclick="cerrarFormEvento()">Cancelar</button>
       <p id="evento-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
       <p class="evento-form-alt">¿Preferís mandarlo por mail? Escribinos a
@@ -1316,8 +1321,10 @@ function abrirFormEventoNuevo() {
   document.getElementById('form-evento').reset();
   document.getElementById('evento-imagen').required = true;
   document.getElementById('evento-imagen-preview').style.display = 'none';
+  document.getElementById('evento-imagen-link').style.display = 'none';
   document.getElementById('evento-imagen-wrap').classList.remove('tiene-imagen');
   document.getElementById('evento-revision-info').style.display = 'none';
+  document.getElementById('btn-saltar-evento').style.display = 'none';
   document.getElementById('btn-publicar-evento').textContent = 'Publicar evento';
   abrirFormEvento();
 }
@@ -1371,19 +1378,28 @@ function cargarSiguienteRevision() {
 
   var preview = document.getElementById('evento-imagen-preview');
   var wrap = document.getElementById('evento-imagen-wrap');
+  var link = document.getElementById('evento-imagen-link');
   if (evento['img']) {
     preview.src = evento['img'];
     preview.style.display = 'block';
+    link.href = evento['img'];
+    link.style.display = 'block';
     wrap.classList.add('tiene-imagen');
   }
 
   info.style.display = 'block';
   info.textContent = 'Revisando: quedan ' + (colaRevision.length + 1) + ' evento(s) pendiente(s).';
+  document.getElementById('btn-saltar-evento').style.display = 'block';
 
   var btn = document.getElementById('btn-publicar-evento');
   btn.textContent = 'Aprobar y ver el próximo';
 
   abrirFormEvento();
+}
+
+function saltarRevision() {
+  if (typeof gtag === 'function') gtag('event', 'evento_saltado_revision');
+  cargarSiguienteRevision();
 }
 
 function fechaISOdesdeDDMMYYYY(f) {
@@ -1401,6 +1417,9 @@ function previsualizarImagen(input) {
   reader.onload = function() {
     preview.src = reader.result;
     preview.style.display = 'block';
+    var link = document.getElementById('evento-imagen-link');
+    link.href = reader.result;
+    link.style.display = 'block';
     wrap.classList.add('tiene-imagen');
   };
   reader.readAsDataURL(file);
