@@ -1501,6 +1501,12 @@ function enviarEvento(e) {
   }
 
   if (enRevision) {
+    if (!eventoEnRevision['Id']) {
+      mostrarMsg('Este evento no tiene Id en la planilla, no se puede confirmar así — saltalo y avisale a Germán.', false);
+      btn.disabled = false;
+      btn.textContent = 'Aprobar y ver el próximo';
+      return;
+    }
     var payload = camposComunes();
     payload.accion = 'confirmar_evento';
     payload.id = eventoEnRevision['Id'];
