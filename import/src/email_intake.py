@@ -126,24 +126,26 @@ CRAWLER_HEADERS = {
 }
 
 
-def download_instagram_image(link: str, dest: Path) -> bool:
+def download_instagram_image(link: str, dest: Path) -> str:
     """Cuando alguien comparte solo el link del post (sin adjuntar el
     flyer), bajamos la imagen directo del post público vía su etiqueta
-    og:image — la misma que usa WhatsApp para armar la vista previa."""
+    og:image — la misma que usa WhatsApp para armar la vista previa.
+    Devuelve la URL de esa imagen (para guardarla como thumbnail) o ''
+    si no se pudo."""
     try:
         page = requests.get(link, headers=CRAWLER_HEADERS, timeout=20)
         match = OG_IMAGE_RE.search(page.text)
         if not match:
-            return False
+            return ""
         img_url = html.unescape(match.group(1))
         resp = requests.get(img_url, headers=HEADERS, timeout=20)
         if resp.status_code != 200 or len(resp.content) < 1000:
-            return False
+            return ""
         dest.write_bytes(resp.content)
-        return True
+        return img_url
     except Exception as e:
         print(f"[email_intake] Error bajando imagen de Instagram: {e}")
-        return False
+        return ""
 
 
 def process_queue() -> int:
@@ -162,10 +164,12 @@ def process_queue() -> int:
         dest = IMAGES_DIR / f"manual_{item['sheet_row']}.jpg"
         link = extract_link(item["cuerpo"])
 
-        if item["imagen_url"]:
-            ok = download_drive_image(item["imagen_url"], dest)
+        thumbnail = item["imagen_url"]
+        if thumbnail:
+            ok = download_drive_image(thumbnail, dest)
         elif link:
-            ok = download_instagram_image(link, dest)
+            thumbnail = download_instagram_image(link, dest)
+            ok = bool(thumbnail)
         else:
             ok = False
 
@@ -176,7 +180,7 @@ def process_queue() -> int:
         metadata = {
             "caption": item["cuerpo"],
             "link": link,
-            "thumbnail": item["imagen_url"] or link,
+            "thumbnail": thumbnail,
             "source": "email",
             "discovered_at": item["timestamp"],
         }
