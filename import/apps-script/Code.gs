@@ -274,7 +274,7 @@ function crearEventoManual_(data) {
   var blob = Utilities.newBlob(bytes, data.imagen_mime || 'image/jpeg', data.imagen_nombre || 'flyer.jpg');
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var driveUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  var driveUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000';
 
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME) || ss.getSheets()[0];
@@ -330,7 +330,7 @@ function normalizarFecha_(fechaStr) {
 
 function revisarBandeja() {
   var label = getOrCreateLabel_(GMAIL_LABEL_PROCESADO);
-  var query = 'subject:' + SUBJECT_TAG + ' has:attachment newer_than:' + DIAS_ATRAS_MAX + 'd -label:' + GMAIL_LABEL_PROCESADO;
+  var query = 'subject:' + SUBJECT_TAG + ' newer_than:' + DIAS_ATRAS_MAX + 'd -label:' + GMAIL_LABEL_PROCESADO;
   var threads = GmailApp.search(query, 0, 20);
 
   if (threads.length === 0) {
@@ -363,19 +363,26 @@ function procesarMensaje_(msg, folder, sheet) {
     return a.getContentType().indexOf('image/') === 0;
   })[0];
 
-  if (!imagen) {
-    Logger.log('Mail "' + msg.getSubject() + '" sin imagen adjunta, se ignora.');
-    return;
-  }
-
-  var file = folder.createFile(imagen);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var driveUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
-
   var remitente = msg.getFrom().replace(/.*<(.+)>.*/, '$1'); // "Nombre <mail>" -> "mail"
   var asunto    = msg.getSubject();
   var cuerpo    = msg.getPlainBody().substring(0, 2000);
-  var codigo    = extraerCodigo_(asunto + ' ' + cuerpo);
+
+  // Si no viene el flyer adjunto, alcanza con que el cuerpo tenga un link
+  // (ej. alguien reenvía el post de Instagram): el pipeline de Python baja
+  // la imagen del post automáticamente a partir de ese link.
+  if (!imagen && !/https?:\/\/\S+/.test(cuerpo)) {
+    Logger.log('Mail "' + asunto + '" sin imagen adjunta ni link, se ignora.');
+    return;
+  }
+
+  var driveUrl = '';
+  if (imagen) {
+    var file = folder.createFile(imagen);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    driveUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000';
+  }
+
+  var codigo = extraerCodigo_(asunto + ' ' + cuerpo);
 
   appendRowComoTexto_(sheet, [
     new Date(),

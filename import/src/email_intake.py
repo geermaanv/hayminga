@@ -8,7 +8,9 @@ adjunta (subida a Drive por el Apps Script) el papel del flyer scrapeado.
 """
 
 import os
+import re
 import json
+import html
 import requests
 from pathlib import Path
 from google.oauth2.service_account import Credentials
@@ -36,6 +38,19 @@ def get_service():
     return build("sheets", "v4", credentials=creds)
 
 
+URL_RE = re.compile(r"https?://\S+")
+
+
+def extract_link(texto: str) -> str:
+    """Saca el primer link del cuerpo del mail; prioriza uno de Instagram
+    si hay varios, porque suele ser el que corresponde al evento."""
+    urls = [u.rstrip(".,;)>\"'") for u in URL_RE.findall(texto or "")]
+    for url in urls:
+        if "instagram.com" in url:
+            return url
+    return urls[0] if urls else ""
+
+
 def load_pending_rows(service) -> list[dict]:
     """Lee 'Cola_Manual': Timestamp, Remitente, Asunto, CodigoReferencia,
     CuerpoTexto, ImagenDriveUrl, Procesado. Si la hoja no existe todavía
@@ -58,7 +73,10 @@ def load_pending_rows(service) -> list[dict]:
             status in {"true", "duplicado"}
             or (status.startswith("error:") and status != "error: no se pudo extraer el evento")
         )
-        if terminal or not imagen_url:
+        if terminal:
+            continue
+        if not imagen_url and not extract_link(cuerpo):
+            # sin imagen adjunta y sin link, no hay de dónde sacar el flyer
             continue
         pending.append({
             "sheet_row": i + 2,  # +2: la hoja empieza en A2 (fila 1 = header)
@@ -93,6 +111,41 @@ def download_drive_image(drive_url: str, dest: Path) -> bool:
         return False
 
 
+OG_IMAGE_RE = re.compile(r'property="og:image"\s+content="([^"]+)"')
+
+# Instagram le sirve al navegador una app de React sin meta tags en el HTML
+# inicial (las arma con JS), pero a los bots conocidos de vista previa
+# (Facebook, WhatsApp, etc.) les sirve una versión server-rendered con
+# og:image — usamos ese mismo user-agent para poder leerla.
+CRAWLER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; facebookexternalhit/1.1; "
+        "+http://www.facebook.com/externalhit_uatext.php)"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+}
+
+
+def download_instagram_image(link: str, dest: Path) -> bool:
+    """Cuando alguien comparte solo el link del post (sin adjuntar el
+    flyer), bajamos la imagen directo del post público vía su etiqueta
+    og:image — la misma que usa WhatsApp para armar la vista previa."""
+    try:
+        page = requests.get(link, headers=CRAWLER_HEADERS, timeout=20)
+        match = OG_IMAGE_RE.search(page.text)
+        if not match:
+            return False
+        img_url = html.unescape(match.group(1))
+        resp = requests.get(img_url, headers=HEADERS, timeout=20)
+        if resp.status_code != 200 or len(resp.content) < 1000:
+            return False
+        dest.write_bytes(resp.content)
+        return True
+    except Exception as e:
+        print(f"[email_intake] Error bajando imagen de Instagram: {e}")
+        return False
+
+
 def process_queue() -> int:
     service = get_service()
     pending = load_pending_rows(service)
@@ -107,14 +160,23 @@ def process_queue() -> int:
 
     for item in pending:
         dest = IMAGES_DIR / f"manual_{item['sheet_row']}.jpg"
-        if not download_drive_image(item["imagen_url"], dest):
+        link = extract_link(item["cuerpo"])
+
+        if item["imagen_url"]:
+            ok = download_drive_image(item["imagen_url"], dest)
+        elif link:
+            ok = download_instagram_image(link, dest)
+        else:
+            ok = False
+
+        if not ok:
             mark_row(service, item["sheet_row"], "error: no se pudo descargar la imagen")
             continue
 
         metadata = {
             "caption": item["cuerpo"],
-            "link": "",
-            "thumbnail": item["imagen_url"],
+            "link": link,
+            "thumbnail": item["imagen_url"] or link,
             "source": "email",
             "discovered_at": item["timestamp"],
         }

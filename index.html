@@ -677,11 +677,18 @@ function poblarProvincias() {
 }
 
 function poblarPeriodos() {
-  // Contar eventos por mes (formato YYYY-MM)
+  // Contar eventos por mes (formato YYYY-MM), con el mismo criterio que
+  // aplicarFiltros() usa por defecto: sin eventos ya vencidos, para que el
+  // número del chip coincida con lo que se ve al hacer clic.
   var conteo = {};
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
   todosLosEventos.forEach(function(ev) {
     var p = ev['Periodo'];
-    if (p && p !== 'null' && p !== '') conteo[p] = (conteo[p] || 0) + 1;
+    if (!p || p === 'null') return;
+    var fechaEv = parseFechaEvento(ev['Fecha_Fin']) || parseFechaEvento(ev['Fecha_Inicio']);
+    if (fechaEv && fechaEv < hoy) return;
+    conteo[p] = (conteo[p] || 0) + 1;
   });
   var nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var hoy = new Date();
@@ -738,6 +745,15 @@ function nombrePeriodo(periodo) {
 function actualizarBotonAgenda() {
   var btn = document.getElementById('compartir-agenda');
   if (btn) btn.textContent = nombrePeriodo(periodoAgendaActual()) + ' a tu celu';
+}
+
+function contactoWhatsAppUrl(contacto) {
+  if (!contacto || contacto === 'null') return '';
+  if (contacto.indexOf('@') !== -1) return ''; // es un email, no un teléfono
+  var digitos = contacto.replace(/\D/g, '');
+  if (digitos.length < 8) return '';
+  if (digitos.length <= 10) digitos = '549' + digitos.replace(/^0|^15/, ''); // asume Argentina sin código de país
+  return 'https://wa.me/' + digitos;
 }
 
 function abrirWhatsApp(url, eventoAnalytics) {
@@ -1170,9 +1186,10 @@ function abrirModal(idx) {
     h += '<div><div class="detalle-label">Organizador</div><div class="detalle-valor">' + ev['Organizador'] + '</div></div></div>';
   }
   h += '</div>';
+  var waContacto = contactoWhatsAppUrl(ev['Contacto']);
   h += '<div class="modal-acciones">';
-  h += '<button type="button" class="btn-whatsapp" onclick="compartirEventoWhatsApp(' + idx + ')">Compartir por WhatsApp</button>';
-  if (link) h += '<a class="btn-link" href="' + link + '" target="_blank" rel="noopener">Ver publicación original ↗</a>';
+  if (link) h += '<a class="btn-link" href="' + link + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'click_instagram\')">Ver publicación original ↗</a>';
+  if (waContacto) h += '<a class="btn-whatsapp" href="' + waContacto + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'contactar_organizador_whatsapp\')">Contactar por WhatsApp</a>';
   h += '</div>';
   h += '</div>';
   document.getElementById('modal-contenido').innerHTML = h;
