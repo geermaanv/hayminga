@@ -307,7 +307,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         <span class="vista-btn-label">Directorio</span>
       </button>
     </div>
-    <button class="header-action evento" onclick="abrirFormEvento()">+ Evento</button>
+    <button class="header-action evento" onclick="abrirFormEventoNuevo()">+ Evento</button>
     <button class="header-action persona" onclick="abrirFormDirectorio()">Sumate</button>
   </div>
 </header>
@@ -434,7 +434,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
       <h3>Publicá tu <em style="font-style:italic;color:var(--tierra-claro);">evento</em></h3>
       <button class="btn-cerrar" onclick="cerrarFormEvento()">✕</button>
     </div>
-    <p class="evento-form-sub">Completá los datos y se publica al instante — gratis, sin intermediarios.</p>
+    <p class="evento-form-sub">Completá los datos — lo revisamos y lo publicamos a la brevedad, gratis, sin intermediarios.</p>
 
     <form id="form-evento" onsubmit="enviarEvento(event)">
       <input type="text" name="web" class="honeypot-field" tabindex="-1" autocomplete="off">
@@ -508,13 +508,24 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
           <label class="campo-label">Link de Instagram u otra publicación (opcional)</label>
           <input type="text" id="evento-link" placeholder="https://instagram.com/p/...">
         </div>
+
+        <div>
+          <label class="campo-label">Latitud (opcional)</label>
+          <input type="text" id="evento-latitud" placeholder="ej. -34.60">
+        </div>
+        <div>
+          <label class="campo-label">Longitud (opcional)</label>
+          <input type="text" id="evento-longitud" placeholder="ej. -58.38">
+        </div>
       </div>
+
+      <div id="evento-revision-info" class="evento-form-sub" style="display:none;color:var(--tierra);"></div>
 
       <button type="submit" class="btn-publicar" id="btn-publicar-evento">Publicar evento</button>
       <button type="button" class="btn-cancelar" onclick="cerrarFormEvento()">Cancelar</button>
       <p id="evento-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
       <p class="evento-form-alt">¿Preferís mandarlo por mail? Escribinos a
-        <a href="mailto:germanv@gmail.com?subject=HME%20Nuevo%20evento%20para%20hayminga&body=Hola!%20Les%20comparto%20un%20evento%20de%20bioconstrucci%C3%B3n%20para%20hayminga.%0A%0A%E2%9A%A0%EF%B8%8F%20Importante%3A%20adjunt%C3%A1%20el%20flyer%20del%20evento%20como%20imagen%20a%20este%20mail.%0A%0ANombre%20del%20evento%3A%20%0AFecha%3A%20%0ALugar%3A%20%0AContacto%3A%20%0A%0AGracias!">germanv@gmail.com</a>
+        <a id="link-mail-evento" href="#">...</a>
         con el asunto <code>HME</code> y el flyer adjunto.</p>
     </form>
   </div>
@@ -649,8 +660,22 @@ var API_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?t
 // después de desplegarlo: Implementar > Nueva implementación > Aplicación web
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVjevBJdUwh0xrusFIrRSI647HkUna9zZBR_dHTbKotBfgk_8byPmdDzeP9dBnzDCy/exec';
 var WHATSAPP_HAYMINGA = '5491126728949';
+var EMAIL_HAYMINGA = 'germanv@gmail.com';
+
+(function() {
+  var link = document.getElementById('link-mail-evento');
+  if (!link) return;
+  var asunto = 'HME Nuevo evento para hayminga';
+  var cuerpo = 'Hola! Les comparto un evento de bioconstrucción para hayminga.\n\n'
+    + '⚠️ Importante: adjuntá el flyer del evento como imagen a este mail.\n\n'
+    + 'Nombre del evento: \nFecha: \nLugar: \nContacto: \n\nGracias!';
+  link.href = 'mailto:' + EMAIL_HAYMINGA + '?subject=' + encodeURIComponent(asunto) + '&body=' + encodeURIComponent(cuerpo);
+  link.textContent = EMAIL_HAYMINGA;
+})();
 var SITIO_URL = 'https://hayminga.org/';
 var todosLosEventos = [];
+var todosLosEventosSinFiltrar = [];
+var colaRevision = [];
 var eventosFiltrados = [];
 var modoEventos = 'lista';
 var mapaEventos = null;
@@ -690,7 +715,9 @@ function cargarDatos() {
             obj[col] = celda ? (celda.f || celda.v) : '';
           });
           return obj;
-        })
+        });
+      todosLosEventosSinFiltrar = todosLosEventos;
+      todosLosEventos = todosLosEventosSinFiltrar
         .filter(function(ev) { return ev['Activo'] === 'true' || ev['Activo'] === true; });
       poblarProvincias();
       poblarProvinciasMob();
@@ -700,6 +727,7 @@ function cargarDatos() {
       var hoyInicio = new Date();
       var mesActualKey = hoyInicio.getFullYear() + '-' + String(hoyInicio.getMonth() + 1).padStart(2, '0');
       seleccionarMes(mesActualKey);
+      iniciarRevisionSiCorresponde();
     })
     .catch(function(err) {
       console.error('Error:', err);
@@ -1282,10 +1310,86 @@ function abrirFormEvento() {
   if (typeof gtag === 'function') gtag('event', 'abrir_form_evento');
 }
 
+function abrirFormEventoNuevo() {
+  eventoEnRevision = null;
+  document.getElementById('form-evento').style.display = '';
+  document.getElementById('form-evento').reset();
+  document.getElementById('evento-imagen').required = true;
+  document.getElementById('evento-imagen-preview').style.display = 'none';
+  document.getElementById('evento-imagen-wrap').classList.remove('tiene-imagen');
+  document.getElementById('evento-revision-info').style.display = 'none';
+  document.getElementById('btn-publicar-evento').textContent = 'Publicar evento';
+  abrirFormEvento();
+}
+
 function cerrarFormEvento(ev) {
   if (ev && ev.target !== document.getElementById('form-evento-overlay')) return;
   document.getElementById('form-evento-overlay').classList.remove('activo');
   document.body.style.overflow = '';
+}
+
+// ---- Revisión manual (cambio temporal): ?pendientes ----
+var eventoEnRevision = null;
+
+function iniciarRevisionSiCorresponde() {
+  var params = new URLSearchParams(window.location.search);
+  if (!params.has('pendientes')) return;
+  colaRevision = todosLosEventosSinFiltrar.filter(function(ev) {
+    return ev['Estado'] === 'pendiente_confirmacion';
+  });
+  cargarSiguienteRevision();
+}
+
+function cargarSiguienteRevision() {
+  var evento = colaRevision.shift();
+  var info = document.getElementById('evento-revision-info');
+  if (!evento) {
+    eventoEnRevision = null;
+    info.style.display = 'block';
+    info.textContent = '¡No quedan más eventos pendientes! 🎉';
+    document.getElementById('form-evento').style.display = 'none';
+    abrirFormEvento();
+    return;
+  }
+  eventoEnRevision = evento;
+  document.getElementById('form-evento').style.display = '';
+  document.getElementById('evento-imagen').required = false;
+  document.getElementById('evento-nombre').value = evento['Nombre'] || '';
+  document.getElementById('evento-tipo').value = evento['Tipo_Evento'] || '';
+  document.getElementById('evento-provincia').value = evento['Provincia'] || '';
+  document.getElementById('evento-fecha-inicio').value = fechaISOdesdeDDMMYYYY(evento['Fecha_Inicio']);
+  document.getElementById('evento-fecha-fin').value = fechaISOdesdeDDMMYYYY(evento['Fecha_Fin']);
+  document.getElementById('evento-virtual').checked = evento['Es_Virtual'] === true || evento['Es_Virtual'] === 'true';
+  document.getElementById('evento-direccion').value = evento['Dirección'] || '';
+  document.getElementById('evento-descripcion').value = evento['Descripción'] || '';
+  document.getElementById('evento-organizador').value = evento['Organizador'] || '';
+  document.getElementById('evento-contacto-email').value = '';
+  document.getElementById('evento-contacto-whatsapp').value = evento['Contacto'] || '';
+  document.getElementById('evento-link').value = evento['Link_Promocion'] || '';
+  document.getElementById('evento-latitud').value = evento['Latitud'] || '';
+  document.getElementById('evento-longitud').value = evento['Longitud'] || '';
+
+  var preview = document.getElementById('evento-imagen-preview');
+  var wrap = document.getElementById('evento-imagen-wrap');
+  if (evento['img']) {
+    preview.src = evento['img'];
+    preview.style.display = 'block';
+    wrap.classList.add('tiene-imagen');
+  }
+
+  info.style.display = 'block';
+  info.textContent = 'Revisando: quedan ' + (colaRevision.length + 1) + ' evento(s) pendiente(s).';
+
+  var btn = document.getElementById('btn-publicar-evento');
+  btn.textContent = 'Aprobar y ver el próximo';
+
+  abrirFormEvento();
+}
+
+function fechaISOdesdeDDMMYYYY(f) {
+  if (!f) return '';
+  var m = String(f).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
 }
 
 function previsualizarImagen(input) {
@@ -1314,21 +1418,20 @@ function enviarEvento(e) {
     msg.textContent = texto;
   }
 
-  if (!file) { mostrarMsg('Subí una imagen del flyer.', false); return; }
-  if (file.size > 8 * 1024 * 1024) { mostrarMsg('La imagen pesa más de 8MB, subí una más liviana.', false); return; }
+  var enRevision = !!eventoEnRevision;
+
+  if (!file && !enRevision) { mostrarMsg('Subí una imagen del flyer.', false); return; }
+  if (file && file.size > 8 * 1024 * 1024) { mostrarMsg('La imagen pesa más de 8MB, subí una más liviana.', false); return; }
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PEGAR_AQUI') === 0) {
     mostrarMsg('El formulario todavía no está conectado — mandalo por mail mientras tanto.', false);
     return;
   }
 
   btn.disabled = true;
-  btn.textContent = 'Publicando...';
+  btn.textContent = enRevision ? 'Confirmando...' : 'Publicando...';
 
-  var reader = new FileReader();
-  reader.onload = function() {
-    var base64 = reader.result.split(',')[1];
-    var payload = {
-      web: document.querySelector('.honeypot-field').value, // honeypot
+  function camposComunes() {
+    return {
       nombre: document.getElementById('evento-nombre').value,
       tipo_evento: document.getElementById('evento-tipo').value,
       fecha_inicio: document.getElementById('evento-fecha-inicio').value,
@@ -1343,11 +1446,12 @@ function enviarEvento(e) {
         document.getElementById('evento-contacto-whatsapp').value
       ].filter(function(v) { return v; }).join(' / '),
       link_promocional: document.getElementById('evento-link').value,
-      imagen_base64: base64,
-      imagen_mime: file.type,
-      imagen_nombre: file.name
+      latitud: document.getElementById('evento-latitud').value,
+      longitud: document.getElementById('evento-longitud').value
     };
+  }
 
+  function enviar(payload) {
     // mode:'no-cors' + Content-Type text/plain evita el preflight de CORS
     // que Apps Script Web Apps no maneja bien; no podemos leer la
     // respuesta (opaca), así que asumimos éxito si el fetch no tira error
@@ -1357,19 +1461,49 @@ function enviarEvento(e) {
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     }).then(function() {
-      mostrarMsg('¡Listo! Tu evento ya está publicado en hayminga.org 🌿', true);
-      if (typeof gtag === 'function') gtag('event', 'evento_publicado');
-      document.getElementById('form-evento').reset();
-      document.getElementById('evento-imagen-preview').style.display = 'none';
-      document.getElementById('evento-imagen-wrap').classList.remove('tiene-imagen');
       btn.disabled = false;
-      btn.textContent = 'Publicar evento';
-      setTimeout(function() { location.reload(); }, 2000);
+      if (enRevision) {
+        if (typeof gtag === 'function') gtag('event', 'evento_confirmado_revision');
+        cargarSiguienteRevision();
+      } else {
+        mostrarMsg('¡Listo! Lo recibimos y lo estamos revisando — se publica a la brevedad 🌿', true);
+        if (typeof gtag === 'function') gtag('event', 'evento_publicado');
+        document.getElementById('form-evento').reset();
+        document.getElementById('evento-imagen-preview').style.display = 'none';
+        document.getElementById('evento-imagen-wrap').classList.remove('tiene-imagen');
+        btn.textContent = 'Publicar evento';
+        setTimeout(function() { location.reload(); }, 2000);
+      }
     }).catch(function() {
       mostrarMsg('Algo salió mal, intentá de nuevo o mandalo por mail.', false);
       btn.disabled = false;
-      btn.textContent = 'Publicar evento';
+      btn.textContent = enRevision ? 'Aprobar y ver el próximo' : 'Publicar evento';
     });
+  }
+
+  if (enRevision) {
+    var payload = camposComunes();
+    payload.accion = 'confirmar_evento';
+    payload.id = eventoEnRevision['Id'];
+    payload.img = eventoEnRevision['img'] || '';
+    payload.pais = eventoEnRevision['Pais'] || '';
+    payload.confianza = eventoEnRevision['Confianza'] || '';
+    payload.fuente = eventoEnRevision['Fuente'] || '';
+    payload.fecha_descubrimiento = eventoEnRevision['Fecha_Descubrimiento'] || '';
+    payload.web = document.querySelector('.honeypot-field').value;
+    enviar(payload);
+    return;
+  }
+
+  var reader = new FileReader();
+  reader.onload = function() {
+    var base64 = reader.result.split(',')[1];
+    var payload = camposComunes();
+    payload.web = document.querySelector('.honeypot-field').value;
+    payload.imagen_base64 = base64;
+    payload.imagen_mime = file.type;
+    payload.imagen_nombre = file.name;
+    enviar(payload);
   };
   reader.readAsDataURL(file);
 }

@@ -20,6 +20,12 @@ import anthropic
 from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
 
+# Cambio TEMPORAL para revisar la calidad de datos a mano: mientras esté en
+# True, ningún evento se auto-publica (activo queda en False y el estado en
+# "pendiente_confirmacion") aunque el extractor lo hubiera dado por bueno.
+# Para volver al comportamiento normal, poner en False.
+REVISION_MANUAL = True
+
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 CLAUDE_MODEL  = "claude-haiku-4-5-20251001"
@@ -499,6 +505,10 @@ def extract_event_data(image_path: Path, metadata: dict):
                 f"[processor] {image_path.name}: fuente no verificada; "
                 "queda en revisión"
             )
+
+    if REVISION_MANUAL and data.get("activo"):
+        data["activo"] = False
+        data["estado"] = "pendiente_confirmacion"
 
     activo = data.get("activo", False)
     print(

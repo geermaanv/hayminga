@@ -51,6 +51,11 @@ function autorizarEnvioDeMail() {
 // Code.gs entero en script.google.com, no hace falta acordarse de
 // completar este valor de nuevo.
 var SPREADSHEET_ID = '1-kOXgyySgIu2GFQLHuDZvjeDJVpMFbd8MMTsK3gkeXI';
+// Cambio TEMPORAL: mientras esté en true, el formulario web tampoco publica
+// solo — todo evento nuevo queda 'pendiente_confirmacion' hasta que se
+// confirme desde ?pendientes en el sitio. Ver mismo flag en processor.py.
+var REVISION_MANUAL = true;
+var MAIL_REVISION = 'germanv@gmail.com';
 // OJO: Gmail no busca "[Evento]" como texto literal con corchetes — los
 // corchetes se ignoran y termina buscando la palabra "evento" en CUALQUIER
 // lado del asunto, incluido años de mail viejo sin relación (así se coló
@@ -86,6 +91,8 @@ function doPost(e) {
       respuesta = { success: true, id: crearPersonaDirectorio_(data) };
     } else if (data.accion === 'directorio_contacto') {
       respuesta = { success: true, id: solicitarContacto_(data) };
+    } else if (data.accion === 'confirmar_evento') {
+      respuesta = { success: true, id: confirmarEvento_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -288,7 +295,7 @@ function crearEventoManual_(data) {
   // mismo orden que COLUMNS en import/src/sheets.py — si se agrega una
   // columna ahí, hay que agregarla acá también en la misma posición
   var valores = [
-    'true',
+    REVISION_MANUAL ? 'false' : 'true',
     nombre,
     data.direccion || '',
     periodo,
@@ -304,7 +311,7 @@ function crearEventoManual_(data) {
     nombre.toLowerCase(),
     id,
     data.contacto || '',
-    'confirmado',
+    REVISION_MANUAL ? 'pendiente_confirmacion' : 'confirmado',
     'Argentina', // el form web es para eventos locales; no se pregunta país
     'alta',
     'formulario_web',
@@ -316,6 +323,97 @@ function crearEventoManual_(data) {
   appendRowComoTexto_(sheet, valores);
 
   return id;
+}
+
+
+// ---- Revisión manual (cambio temporal) ----
+
+function confirmarEvento_(data) {
+  if (!data.id) throw new Error('Falta el id del evento a confirmar');
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
+  var ultimaFila = sheet.getLastRow();
+  var ids = sheet.getRange(2, 15, ultimaFila - 1, 1).getValues(); // columna O = Id
+  var filaEncontrada = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(data.id)) { filaEncontrada = i + 2; break; }
+  }
+  if (filaEncontrada === -1) throw new Error('No se encontró el evento ' + data.id);
+
+  var fechaInicioIso = data.fecha_inicio ? normalizarFecha_(data.fecha_inicio) : '';
+  var fechaFinIso    = data.fecha_fin ? normalizarFecha_(data.fecha_fin) : '';
+  var periodo        = fechaInicioIso ? fechaInicioIso.split('/').reverse().slice(0, 2).join('-') : '';
+  var nombre         = String(data.nombre || '').trim();
+
+  var valores = [[
+    'true',
+    nombre,
+    data.direccion || '',
+    periodo,
+    fechaInicioIso,
+    fechaFinIso,
+    data.es_virtual ? 'true' : 'false',
+    data.provincia || '',
+    data.descripcion || '',
+    data.organizador || '',
+    data.link_promocional || '',
+    data.tipo_evento || '',
+    data.img || '',
+    nombre.toLowerCase(),
+    data.id,
+    data.contacto || '',
+    'confirmado',
+    data.pais || 'Argentina',
+    data.confianza || '',
+    data.fuente || '',
+    data.fecha_descubrimiento || '',
+    data.latitud || '',
+    data.longitud || '',
+  ]];
+  var rango = sheet.getRange(filaEncontrada, 1, 1, valores[0].length);
+  rango.setNumberFormat('@'); // texto plano, evita que Sheets convierta a booleano/fecha
+  rango.setValues(valores);
+  return data.id;
+}
+
+
+/**
+ * Corré esta función UNA VEZ desde el editor para instalar el trigger
+ * periódico que manda el mail de "eventos pendientes de revisión". Se
+ * puede volver a correr sin problema (borra el trigger viejo primero).
+ */
+function configurarTriggerNotificaciones() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'notificarPendientes') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('notificarPendientes').timeBased().everyMinutes(30).create();
+}
+
+function notificarPendientes() {
+  if (!REVISION_MANUAL) return;
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
+  var props = PropertiesService.getScriptProperties();
+  var desde = Number(props.getProperty('ultima_fila_notificada_pendientes') || 1) + 1;
+  var ultimaFila = sheet.getLastRow();
+  if (desde > ultimaFila) return;
+
+  var filas = sheet.getRange(desde, 1, ultimaFila - desde + 1, 17).getValues(); // hasta columna Q = Estado
+  var pendientes = [];
+  filas.forEach(function(row) {
+    if (row[16] === 'pendiente_confirmacion') pendientes.push(row[1]); // columna B = Nombre
+  });
+  props.setProperty('ultima_fila_notificada_pendientes', String(ultimaFila));
+  if (pendientes.length === 0) return;
+
+  var lista = pendientes.map(function(n) { return '• ' + (n || '(sin nombre)'); }).join('\n');
+  MailApp.sendEmail({
+    to: MAIL_REVISION,
+    subject: 'hayminga — ' + pendientes.length + ' evento(s) para revisar',
+    body: 'Nuevos eventos pendientes de confirmación:\n\n' + lista +
+      '\n\nRevisalos acá: https://hayminga.org/?pendientes'
+  });
 }
 
 
