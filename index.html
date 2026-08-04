@@ -126,8 +126,8 @@ select:focus{border-color:var(--tierra);}
 .mapa-eventos{display:none;position:relative;z-index:1;max-width:1070px;height:570px;margin:0.75rem auto 3rem;border:1px solid var(--paja-oscuro);border-radius:var(--radio);overflow:hidden;box-shadow:0 2px 8px var(--sombra);background:var(--paja);}
 .mapa-eventos.visible{display:block;}
 .marker-mes{background:transparent;border:none;}
-.marker-mes-inner{width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--tierra-claro);border:3px solid white;box-shadow:0 2px 7px rgba(42,26,10,.35);display:flex;align-items:center;justify-content:center;}
-.marker-mes-inner span{transform:rotate(45deg);font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;color:white;}
+.marker-mes-inner{width:40px;height:40px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--tierra-claro);border:3px solid white;box-shadow:0 2px 7px rgba(42,26,10,.35);display:flex;align-items:center;justify-content:center;}
+.marker-mes-inner span{transform:rotate(45deg);font-family:'DM Sans',sans-serif;font-weight:700;font-size:11px;color:white;letter-spacing:-0.3px;}
 .map-popup-nombre{font-family:'Fraunces',serif;font-size:1rem;font-weight:500;color:var(--texto);margin-bottom:0.25rem;}
 .map-popup-meta{font-size:0.78rem;color:var(--texto-suave);line-height:1.45;}
 .map-popup-aprox{font-size:0.68rem;color:var(--barro);margin-top:0.2rem;}
@@ -473,7 +473,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 
         <div>
           <label class="campo-label">Fecha de inicio <span class="req">*</span></label>
-          <input type="date" id="evento-fecha-inicio" required>
+          <input type="date" id="evento-fecha-inicio" required onchange="ajustarFechaFin()">
         </div>
         <div>
           <label class="campo-label">Fecha de fin (opcional)</label>
@@ -1148,14 +1148,17 @@ function colorDelMes(mes) {
   return colores[Math.max(1, Math.min(12, mes)) - 1];
 }
 
+var MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
 function iconoMes(mes) {
   var color = colorDelMes(mes);
+  var etiqueta = MESES_ABREV[Math.max(1, Math.min(12, mes)) - 1];
   return L.divIcon({
     className: 'marker-mes',
-    html: '<div class="marker-mes-inner" style="background:' + color + '"><span>' + mes + '</span></div>',
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
-    popupAnchor: [0, -32]
+    html: '<div class="marker-mes-inner" style="background:' + color + '"><span>' + etiqueta + '</span></div>',
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -36]
   });
 }
 
@@ -1366,6 +1369,8 @@ function cargarSiguienteRevision() {
   document.getElementById('evento-provincia').value = evento['Provincia'] || '';
   document.getElementById('evento-fecha-inicio').value = fechaISOdesdeDDMMYYYY(evento['Fecha_Inicio']);
   document.getElementById('evento-fecha-fin').value = fechaISOdesdeDDMMYYYY(evento['Fecha_Fin']);
+  ajustarFechaFin();
+  document.getElementById('evento-fecha-fin').value = fechaISOdesdeDDMMYYYY(evento['Fecha_Fin']) || document.getElementById('evento-fecha-inicio').value;
   document.getElementById('evento-virtual').checked = evento['Es_Virtual'] === true || evento['Es_Virtual'] === 'true';
   document.getElementById('evento-direccion').value = evento['Dirección'] || '';
   document.getElementById('evento-descripcion').value = evento['Descripción'] || '';
@@ -1408,6 +1413,13 @@ function fechaISOdesdeDDMMYYYY(f) {
   return m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
 }
 
+function ajustarFechaFin() {
+  var inicio = document.getElementById('evento-fecha-inicio');
+  var fin = document.getElementById('evento-fecha-fin');
+  fin.min = inicio.value;
+  if (!fin.value || fin.value < inicio.value) fin.value = inicio.value;
+}
+
 function previsualizarImagen(input) {
   var preview = document.getElementById('evento-imagen-preview');
   var wrap = document.getElementById('evento-imagen-wrap');
@@ -1438,6 +1450,10 @@ function enviarEvento(e) {
   }
 
   var enRevision = !!eventoEnRevision;
+
+  var fi = document.getElementById('evento-fecha-inicio').value;
+  var ff = document.getElementById('evento-fecha-fin').value;
+  if (ff && fi && ff < fi) { mostrarMsg('La fecha de fin no puede ser anterior a la de inicio.', false); return; }
 
   if (!file && !enRevision) { mostrarMsg('Subí una imagen del flyer.', false); return; }
   if (file && file.size > 8 * 1024 * 1024) { mostrarMsg('La imagen pesa más de 8MB, subí una más liviana.', false); return; }
