@@ -42,8 +42,9 @@ nav{display:flex;align-items:center;gap:20px;}
 .search-wrap input[type="text"]{width:0;padding:0.5rem 0;border:none;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:transparent;color:var(--texto);outline:none;opacity:0;transition:width 0.2s ease,opacity 0.2s ease,padding 0.2s ease,margin 0.2s ease;}
 .search-wrap.abierto input[type="text"]{width:180px;padding:0.5rem 0.75rem;opacity:1;margin-left:0.4rem;border-bottom:1.5px solid var(--paja-oscuro);}
 .search-wrap.abierto svg{border-color:var(--tierra);opacity:1;}
-select{height:34px;padding:0 1.7rem 0 0.85rem;border:1.5px solid var(--paja-oscuro);border-radius:18px;font-family:'DM Sans',sans-serif;font-size:0.78rem;font-weight:600;background-color:#fff;color:var(--texto-suave);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%238B4513' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.6rem center;}
+select{border:1.5px solid var(--paja-oscuro);border-radius:20px;font-family:'DM Sans',sans-serif;font-size:0.88rem;background-color:var(--fondo);color:var(--texto);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%238B4513' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.6rem center;padding:0.5rem 1.8rem 0.5rem 0.85rem;}
 select:focus{border-color:var(--tierra);}
+.filtros-row1 select,.filtros-desktop-panel select{height:34px;padding:0 1.7rem 0 0.85rem;border-radius:18px;font-size:0.78rem;font-weight:600;background-color:#fff;color:var(--texto-suave);}
 .directorio-filtros select{flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;}
 @media(max-width:640px){
   .directorio-filtros{gap:0.4rem;}
@@ -220,6 +221,7 @@ footer a{color:var(--tierra);text-decoration:none;}
 .evento-grid input[type="text"],.evento-grid input[type="date"],.evento-grid input[type="email"],.evento-grid select,.evento-grid textarea{
   width:100%;padding:0.6rem 0.8rem;border:1.5px solid var(--paja-oscuro);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--fondo);color:var(--texto);outline:none;
 }
+.evento-grid select{padding-right:2rem;background-color:var(--fondo);}
 .evento-grid input:focus,.evento-grid select:focus,.evento-grid textarea:focus{border-color:var(--tierra);}
 .evento-grid textarea{resize:vertical;min-height:70px;}
 .evento-check{display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--texto);padding-top:0.4rem;}
@@ -238,6 +240,13 @@ footer a{color:var(--tierra);text-decoration:none;}
 .popup .btn-cancelar:hover{border-color:var(--paja);color:var(--paja);}
 .evento-form-alt{text-align:center;font-size:0.8rem;color:var(--texto-suave);margin-top:0.75rem;}
 .evento-form-alt a{color:var(--tierra-claro);}
+.directorio-form .campo-label .req{color:var(--verde);}
+.directorio-form .evento-grid input:focus,.directorio-form .evento-grid select:focus,.directorio-form .evento-grid textarea:focus{border-color:var(--verde);}
+.directorio-intereses{display:flex;flex-direction:column;gap:0.4rem;font-size:0.88rem;color:var(--texto);}
+.directorio-intereses label{display:flex;align-items:center;gap:0.5rem;}
+.btn-publicar.directorio-btn{background:var(--verde);}
+.btn-publicar.directorio-btn:hover{background:var(--verde-oscuro);}
+.directorio-form .btn-cancelar:hover{border-color:var(--verde);color:var(--verde);}
 .vista-toggle{display:flex;gap:2px;background:var(--paja);border-radius:20px;padding:3px;}
 .vista-btn{padding:0.4rem 0.9rem;border:none;border-radius:17px;background:none;color:rgba(139,69,19,0.55);font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;}
 /* color por sección: naranja = Eventos (matchea el CTA "+ Nuevo evento"),
@@ -433,14 +442,14 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         <div>
           <label class="campo-label">Tipo de evento <span class="req">*</span></label>
           <select id="evento-tipo" required>
-            <option value="">Elegir...</option>
+            <option value="">Elegí...</option>
             <option>Curso</option><option>Taller</option><option>Minga</option>
             <option>Charla</option><option>Evento</option><option>Residencia</option><option>Festival</option>
           </select>
         </div>
         <div>
           <label class="campo-label">Provincia</label>
-          <input type="text" id="evento-provincia" placeholder="ej. Buenos Aires">
+          <select id="evento-provincia"><option value="">Elegí...</option></select>
         </div>
 
         <div>
@@ -467,13 +476,17 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
           <textarea id="evento-descripcion"></textarea>
         </div>
 
-        <div>
+        <div class="full">
           <label class="campo-label">Organizador</label>
           <input type="text" id="evento-organizador">
         </div>
         <div>
-          <label class="campo-label">Contacto (email o WhatsApp)</label>
-          <input type="text" id="evento-contacto">
+          <label class="campo-label">Email de contacto</label>
+          <input type="email" id="evento-contacto-email">
+        </div>
+        <div>
+          <label class="campo-label">WhatsApp de contacto</label>
+          <input type="text" id="evento-contacto-whatsapp">
         </div>
 
         <div class="full">
@@ -492,37 +505,56 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
   </div>
 </div>
 
-<div class="popup-overlay" id="form-directorio-overlay" onclick="cerrarFormDirectorio(event)">
-  <div class="popup">
-    <button class="popup-cerrar" onclick="cerrarFormDirectorio()">✕</button>
-    <h3>Sumate al <em>directorio</em></h3>
-    <p>Profesional, aprendiz, curioso — si te interesa la bioconstrucción, contanos.</p>
+<div class="modal-overlay" id="form-directorio-overlay" onclick="cerrarFormDirectorio(event)">
+  <div class="evento-form-inner directorio-form">
+    <div class="evento-form-header">
+      <h3>Sumate al <em style="font-style:italic;color:var(--verde);">directorio</em></h3>
+      <button class="btn-cerrar" onclick="cerrarFormDirectorio()">✕</button>
+    </div>
+    <p class="evento-form-sub">Profesional, aprendiz, curioso — si te interesa la bioconstrucción, contanos.</p>
+
     <form id="form-directorio" onsubmit="enviarDirectorio(event)">
       <input type="text" name="web" class="honeypot-field" tabindex="-1" autocomplete="off">
-      <input type="text" id="directorio-nombre" placeholder="Tu nombre" required
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <input type="email" id="directorio-email" placeholder="tu@email.com (no se muestra público)" required
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <input type="text" id="directorio-whatsapp" placeholder="Tu WhatsApp (opcional, no se muestra público)"
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-      <select id="directorio-provincia" required
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
-        <option value="">Elegí tu provincia...</option>
-      </select>
-      <p style="font-size:0.8rem;color:var(--paja-oscuro);margin-bottom:0.4rem;">¿Qué te interesa? (elegí una o más)</p>
-      <div id="directorio-intereses" style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:0.75rem;font-size:0.88rem;color:var(--paja);"></div>
-      <textarea id="directorio-descripcion" placeholder="Contanos algo más (opcional)" rows="2"
-        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
-      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--paja-oscuro);margin-bottom:0.75rem;opacity:0.85;">
-        <input type="checkbox" checked disabled>
-        Autorizo a que me manden novedades y avisos de hayminga por email
-      </label>
-      <button type="submit" id="btn-publicar-directorio"
-        style="width:100%;padding:0.7rem;background:var(--verde);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
-        Sumarme
-      </button>
+
+      <div class="evento-grid">
+        <div class="full">
+          <label class="campo-label">Tu nombre <span class="req">*</span></label>
+          <input type="text" id="directorio-nombre" required>
+        </div>
+
+        <div>
+          <label class="campo-label">Email <span class="req">*</span></label>
+          <input type="email" id="directorio-email" required placeholder="no se muestra público">
+        </div>
+        <div>
+          <label class="campo-label">WhatsApp (opcional)</label>
+          <input type="text" id="directorio-whatsapp" placeholder="no se muestra público">
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Provincia <span class="req">*</span></label>
+          <select id="directorio-provincia" required><option value="">Elegí tu provincia...</option></select>
+        </div>
+
+        <div class="full">
+          <label class="campo-label">¿Qué te interesa? (elegí una o más)</label>
+          <div id="directorio-intereses" class="directorio-intereses"></div>
+        </div>
+
+        <div class="full">
+          <label class="campo-label">Contanos algo más (opcional)</label>
+          <textarea id="directorio-descripcion" rows="2"></textarea>
+        </div>
+
+        <div class="full evento-check">
+          <input type="checkbox" id="directorio-autorizo" checked disabled>
+          <label for="directorio-autorizo">Autorizo a que me manden novedades y avisos de hayminga</label>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-publicar directorio-btn" id="btn-publicar-directorio">Sumarme</button>
       <button type="button" class="btn-cancelar" onclick="cerrarFormDirectorio()">Cancelar</button>
-      <p id="directorio-form-msg" style="margin-top:0.75rem;padding:0.6rem;border-radius:8px;font-size:0.9rem;font-weight:500;text-align:center;display:none;"></p>
+      <p id="directorio-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
     </form>
   </div>
 </div>
@@ -648,8 +680,11 @@ function cargarDatos() {
       poblarProvincias();
       poblarProvinciasMob();
       poblarPeriodos();
-      eventosFiltrados = todosLosEventos.slice();
-      aplicarFiltros();
+      // Por defecto, arrancar mostrando solo el mes actual (con su chip
+      // seleccionado) en vez del rango completo de 6 meses.
+      var hoyInicio = new Date();
+      var mesActualKey = hoyInicio.getFullYear() + '-' + String(hoyInicio.getMonth() + 1).padStart(2, '0');
+      seleccionarMes(mesActualKey);
     })
     .catch(function(err) {
       console.error('Error:', err);
@@ -1288,7 +1323,10 @@ function enviarEvento(e) {
       direccion: document.getElementById('evento-direccion').value,
       descripcion: document.getElementById('evento-descripcion').value,
       organizador: document.getElementById('evento-organizador').value,
-      contacto: document.getElementById('evento-contacto').value,
+      contacto: [
+        document.getElementById('evento-contacto-email').value,
+        document.getElementById('evento-contacto-whatsapp').value
+      ].filter(function(v) { return v; }).join(' / '),
       link_promocional: document.getElementById('evento-link').value,
       imagen_base64: base64,
       imagen_mime: file.type,
@@ -1345,6 +1383,8 @@ function poblarProvinciasDirectorio() {
   if (selectForm) selectForm.innerHTML = '<option value="">Elegí tu provincia...</option>' + opciones;
   var selectFiltro = document.getElementById('filtro-directorio-provincia');
   if (selectFiltro) selectFiltro.innerHTML = '<option value="">Todas las provincias</option>' + opciones;
+  var selectEvento = document.getElementById('evento-provincia');
+  if (selectEvento) selectEvento.innerHTML = '<option value="">Elegí...</option>' + opciones;
 }
 
 function poblarInteresesDirectorio() {
@@ -1464,7 +1504,7 @@ function enviarDirectorio(e) {
   btn.disabled = true;
   fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) })
     .then(function() {
-      msg.style.display = 'block'; msg.style.color = '#1a3d1a'; msg.style.background = '#a8e6a0';
+      msg.style.display = 'block'; msg.style.color = 'var(--verde)';
       msg.textContent = '¡Listo! Ya estás en el directorio 🌿';
       if (typeof gtag === 'function') gtag('event', 'persona_publicada');
       document.getElementById('form-directorio').reset();
@@ -1475,7 +1515,7 @@ function enviarDirectorio(e) {
       setTimeout(function() { cerrarFormDirectorio(); }, 1800);
     })
     .catch(function() {
-      msg.style.display = 'block'; msg.style.color = '#5c1010'; msg.style.background = '#f5b7b1';
+      msg.style.display = 'block'; msg.style.color = '#c0392b';
       msg.textContent = 'Algo salió mal, intentá de nuevo.';
       btn.disabled = false;
     });
