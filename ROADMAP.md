@@ -71,6 +71,13 @@ en los commits (`git log`); esto es el resumen narrativo.
   `construccioncontierra` y `naturalbuilding` — temáticamente
   relevantes y no específicos de un evento puntual (a diferencia de
   nombres propios/lugares que también aparecieron, esos se descartaron).
+- **Fix: media_type de imagen detectado por contenido, no por nombre de
+  archivo**: `_download_image` siempre guarda como `.jpg` sin importar
+  el formato real — Instagram sirve varios thumbnails en webp. Cuando
+  Gemini fallaba y caía a Claude, éste rechazaba la llamada porque el
+  media_type declarado (jpeg) no coincidía con los bytes reales
+  (confirmado con un error real de un run). Ahora se detecta el formato
+  mirando los magic bytes de la imagen.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

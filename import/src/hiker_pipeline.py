@@ -99,6 +99,18 @@ def _download_image(url: str, dest: Path) -> bool:
     return True
 
 
+def _detectar_media_type(image_bytes: bytes) -> str:
+    """El nombre de archivo siempre es .jpg (ver _download_image), pero el
+    contenido real puede ser otra cosa — Instagram sirve thumbnails en
+    webp bastante seguido. Claude rechaza la llamada si el media_type no
+    coincide con los bytes reales, así que hay que mirar los magic bytes."""
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return "image/jpeg"
+
+
 def _fecha_publicacion(post: dict) -> str:
     if not post.get("taken_at_ts"):
         return ""
@@ -276,7 +288,7 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 
     if image_path:
         image_bytes = image_path.read_bytes()
-        media_type = "image/jpeg" if image_path.suffix.lower() != ".png" else "image/png"
+        media_type = _detectar_media_type(image_bytes)
         try:
             raw = _call_gemini_image(image_bytes, media_type, _prompt_imagen(post))
         except genai_errors.ClientError:
