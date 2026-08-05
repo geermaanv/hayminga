@@ -66,6 +66,11 @@ en los commits (`git log`); esto es el resumen narrativo.
   traer muchos más hashtags de los que buscamos nosotros. Por ahora solo
   se acumula el dato; falta armar el proceso de revisión periódica para
   ver cuáles conviene sumar a `config.json`.
+- Primera pasada de revisión (con solo 10 eventos activos como muestra,
+  chica pero un comienzo): se sumaron `construccionentierra`,
+  `construccioncontierra` y `naturalbuilding` — temáticamente
+  relevantes y no específicos de un evento puntual (a diferencia de
+  nombres propios/lugares que también aparecieron, esos se descartaron).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
