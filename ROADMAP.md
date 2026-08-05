@@ -47,6 +47,12 @@ en los commits (`git log`); esto es el resumen narrativo.
   comunica con un tip en el formulario "Publicá tu evento": "si lo
   compartís en Instagram, taggeá #hayminga y la próxima vez lo
   detectamos automático".
+- **Fix: teléfono y email mezclados en `Contacto`**: la IA a veces
+  extrae ambos en un solo string ("+54 911 ..., mail@x.com"). Antes,
+  con un "@" en cualquier parte del campo se descartaba todo como email
+  y no aparecía el botón de WhatsApp aunque el teléfono estuviera ahí.
+  Ahora `contactoWhatsAppUrl()` separa por coma/slash y usa el pedazo
+  sin "@" para el teléfono.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
