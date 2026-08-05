@@ -23,5 +23,11 @@
   ],
   "dias_atras": 30,
   "consultas_por_dia": 3,
-  "max_imagenes_por_query": 5
+  "max_imagenes_por_query": 15,
+  "hashtags": [
+    "bioconstruccion", "construccionnatural", "bioarquitectura",
+    "superadobe", "quincha", "tapialera", "cob", "minga",
+    "arquitecturanatural", "permacultura"
+  ],
+  "max_por_hashtag": 30
 }

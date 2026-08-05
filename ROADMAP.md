@@ -5,6 +5,41 @@ Claude, Codex) entienda de un vistazo qué existe, por qué, y qué está en
 un estado temporal/no definitivo. El detalle línea por línea siempre está
 en los commits (`git log`); esto es el resumen narrativo.
 
+## 🚧 En curso: pipeline nuevo basado 100% en HikerAPI
+
+`import/src/hiker_pipeline.py` — reemplazo del pipeline viejo (Google
+Images/SerpAPI/Serper), todavía **sin activar en producción** (corre
+solo desde el workflow manual `[TEST] Pipeline nuevo con HikerAPI`, no
+desde el cron diario). Diferencias clave:
+
+- Descubre por **hashtag** (`config.json` → `hashtags`) en vez de
+  búsquedas de texto en Google Images — una llamada trae hasta 50 posts
+  recientes, cada uno con imagen completa, caption entero, fecha real de
+  publicación y ubicación (lat/lng si el que publicó la etiquetó).
+- Extracción **texto primero** (más rápido/liviano); solo pide la imagen
+  si el texto solo no alcanza para nombre/fecha.
+- Sin filtro de calidad por bytes, sin filtro de links ambiguos, sin
+  `source_matches_event()` — esos existían para compensar problemas
+  específicos de Google Images que HikerAPI no tiene (el link y la
+  imagen siempre vienen del mismo post).
+- Sin cola de reintentos persistente (`Candidatos`/`CandidateStore`): si
+  falla un post puntual, se loguea y se sigue. "No pasa nada si falla un
+  día."
+- Dedup: por link exacto (antes de gastar una llamada a la IA) y por
+  nombre+fecha+provincia (`append_events`, agarra reposteos con link
+  distinto del mismo evento).
+- **Confianza alta → se publica solo. Media/baja → `pendiente_confirmacion`**
+  (ya no todo pasa por revisión manual, a diferencia del resto del
+  pipeline viejo mientras `REVISION_MANUAL=true`).
+- Mail de error: por ahora se apoya en la notificación nativa de GitHub
+  Actions cuando falla el workflow (revisar que esté activada en
+  Settings → Notifications de la cuenta). No hay mailer propio todavía.
+
+Pendiente antes de reemplazar `import-eventos.yml` (el cron real): correr
+el workflow de prueba con datos reales, revisar calidad de los eventos
+que entra, y decidir si se retira `main.py`/`scraper.py` viejos del todo
+o quedan como referencia.
+
 ## ⚠️ Flags temporales activos ahora mismo
 
 - **`REVISION_MANUAL = true`** en `import/src/processor.py` y en
