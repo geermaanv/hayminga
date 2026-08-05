@@ -33,7 +33,10 @@
     "autoconstruccion", "viviendasustentable", "permaculturaargentina",
     "bioconstruccionargentina", "construirconbarro", "casanatural",
     "earthbag", "hayminga", "construccionentierra", "construccioncontierra",
-    "naturalbuilding"
+    "naturalbuilding",
+    "bioconstrucción", "construcciónnatural", "tallerbioconstrucción",
+    "cursobioconstrucción", "construcciónsustentable", "autoconstrucción",
+    "bioconstrucciónargentina", "construcciónentierra", "construccióncontierra"
   ],
   "max_por_hashtag": 15
 }

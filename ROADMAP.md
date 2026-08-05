@@ -78,6 +78,18 @@ en los commits (`git log`); esto es el resumen narrativo.
   media_type declarado (jpeg) no coincidía con los bytes reales
   (confirmado con un error real de un run). Ahora se detecta el formato
   mirando los magic bytes de la imagen.
+- **Hashtags con tilde**: `/v1/search/hashtags` reveló que Instagram
+  trata `bioconstrucción` (con tilde) y `bioconstruccion` (sin tilde)
+  como hashtags completamente distintos, con pools de posts separados
+  — el primero con **58 mil posts propios** que no estábamos mirando.
+  Se sumaron las variantes con tilde de volumen real (58k, 43k, 11k,
+  5.7k, etc. — se descartaron las de 1-2 posts, típicos typos). También
+  se probaron `/v1/hashtag/medias/clips` (feed separado de Reels) y
+  `/v1/search/users` (buscar cuentas por palabra clave) como
+  alternativas a `top`/`recent` — quedan para una vuelta futura si hace
+  falta más cobertura; la idea con más potencial ahí es trackear
+  directamente las cuentas de organizadores ya conocidos en vez de
+  depender solo de hashtags.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
