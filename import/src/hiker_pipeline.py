@@ -123,10 +123,11 @@ def _prompt_imagen(post: dict) -> str:
     return "\n\n".join(partes)
 
 
-# El free tier de Gemini para este modelo permite 15 llamadas/minuto.
-# Sin espaciarlas, un batch grande revienta en 429 y se pierden eventos
-# (pasó en la primera prueba: 100 de 152 posts se perdieron así).
-_GEMINI_MIN_INTERVAL = 4.5  # segundos entre llamadas
+# El free tier de Gemini para este modelo permite 15 llamadas/minuto; con
+# facturación activada en el proyecto el límite sube muchísimo (cientos/
+# miles de RPM). Configurable por env var para no tener que tocar código
+# si el límite real cambia — default conservador por si corre sin billing.
+_GEMINI_MIN_INTERVAL = float(os.environ.get("GEMINI_MIN_INTERVAL_SECONDS", "4.5"))
 _ultima_llamada_gemini = 0.0
 
 
