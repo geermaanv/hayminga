@@ -57,9 +57,11 @@ def _hiker_key() -> str:
     return key
 
 
-def fetch_hashtag_posts(hashtag: str, amount: int = 50) -> list[dict]:
+def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
+    # hashtag/medias/recent devuelve siempre [] (esa pestaña de Instagram
+    # está más restringida); hashtag/medias/top sí trae datos reales.
     resp = requests.get(
-        "https://api.hikerapi.com/v1/hashtag/medias/recent",
+        "https://api.hikerapi.com/v1/hashtag/medias/top",
         params={"name": hashtag, "amount": amount},
         headers={"x-access-key": _hiker_key()},
         timeout=30,
