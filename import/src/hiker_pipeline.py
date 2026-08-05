@@ -138,6 +138,26 @@ def _esperar_turno_gemini():
     _ultima_llamada_gemini = time.monotonic()
 
 
+# Claude es pago (a diferencia de Gemini free tier): si Gemini se queda sin
+# cuota diaria a mitad de corrida, sin este techo se cae a Claude para todo
+# el resto del batch. Con esto, superado el límite simplemente se skipea
+# el resto (mismo criterio de "no pasa nada si falla un día").
+_MAX_CLAUDE_CALLS = int(os.environ.get("MAX_CLAUDE_CALLS_PER_RUN", "15"))
+_claude_calls = 0
+
+
+class _ClaudeLimitExceeded(Exception):
+    pass
+
+
+def _llamar_claude_con_limite(fn, *args):
+    global _claude_calls
+    if _claude_calls >= _MAX_CLAUDE_CALLS:
+        raise _ClaudeLimitExceeded()
+    _claude_calls += 1
+    return fn(*args)
+
+
 def _call_gemini_text(prompt_text: str) -> str:
     _esperar_turno_gemini()
     api_key = os.environ["GEMINI_API_KEY"]
@@ -172,6 +192,19 @@ def _call_gemini_image(image_bytes: bytes, media_type: str, prompt_text: str) ->
         ),
     )
     return (response.text or "").strip()
+
+
+def _call_claude_text(prompt_text: str) -> str:
+    api_key = os.environ["ANTHROPIC_API_KEY"]
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt_text}],
+    )
+    raw = response.content[0].text.strip()
+    return raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
 
 def _call_claude_image(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
@@ -222,7 +255,13 @@ def _incompleto(data: dict) -> bool:
 def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
     """Texto primero; imagen solo si el texto no alcanzó. Devuelve el
     dict crudo del modelo (sin validar todavía) o None si no se pudo."""
-    raw = _call_gemini_text(_prompt_texto(post))
+    try:
+        raw = _call_gemini_text(_prompt_texto(post))
+    except genai_errors.ClientError:
+        try:
+            raw = _llamar_claude_con_limite(_call_claude_text, _prompt_texto(post))
+        except _ClaudeLimitExceeded:
+            return None
     data = _parse_json(raw)
 
     if (data is None or _incompleto(data)) and image_path:
@@ -231,7 +270,10 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
         try:
             raw = _call_gemini_image(image_bytes, media_type, _prompt_imagen(post))
         except genai_errors.ClientError:
-            raw = _call_claude_image(image_bytes, media_type, _prompt_imagen(post))
+            try:
+                raw = _llamar_claude_con_limite(_call_claude_image, image_bytes, media_type, _prompt_imagen(post))
+            except _ClaudeLimitExceeded:
+                return data
         data2 = _parse_json(raw)
         if data2 is not None:
             data = data2
