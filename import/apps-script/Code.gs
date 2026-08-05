@@ -93,6 +93,8 @@ function doPost(e) {
       respuesta = { success: true, id: solicitarContacto_(data) };
     } else if (data.accion === 'confirmar_evento') {
       respuesta = { success: true, id: confirmarEvento_(data) };
+    } else if (data.accion === 'descartar_evento') {
+      respuesta = { success: true, id: descartarEvento_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -374,6 +376,28 @@ function confirmarEvento_(data) {
   var rango = sheet.getRange(filaEncontrada, 1, 1, valores[0].length);
   rango.setNumberFormat('@'); // texto plano, evita que Sheets convierta a booleano/fecha
   rango.setValues(valores);
+  return data.id;
+}
+
+
+// Descarta un evento pendiente sin borrar la fila (columna 1 = Activo,
+// columna 17 = Estado) — queda en la planilla por si hace falta revisarlo
+// o revertirlo a mano, pero nunca se publica.
+function descartarEvento_(data) {
+  if (!data.id) throw new Error('Falta el id del evento a descartar');
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
+  var ultimaFila = sheet.getLastRow();
+  var ids = sheet.getRange(2, 15, ultimaFila - 1, 1).getValues(); // columna O = Id
+  var filaEncontrada = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(data.id)) { filaEncontrada = i + 2; break; }
+  }
+  if (filaEncontrada === -1) throw new Error('No se encontró el evento ' + data.id);
+
+  sheet.getRange(filaEncontrada, 1).setNumberFormat('@').setValue('false');
+  sheet.getRange(filaEncontrada, 17).setNumberFormat('@').setValue('descartado');
   return data.id;
 }
 
