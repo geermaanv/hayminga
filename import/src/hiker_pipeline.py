@@ -162,7 +162,11 @@ def _llamar_claude_con_limite(fn, *args):
 def _call_gemini_text(prompt_text: str) -> str:
     _esperar_turno_gemini()
     api_key = os.environ["GEMINI_API_KEY"]
-    client = genai.Client(api_key=api_key)
+    # Sin esto, una llamada colgada (red/servidor) bloquea el proceso
+    # entero indefinidamente — pasó en un run real: 2 hashtags procesados
+    # en 30s y después 44 minutos sin ningún log hasta que el timeout del
+    # workflow lo canceló.
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=30_000))
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=[prompt_text],
@@ -180,7 +184,11 @@ def _call_gemini_text(prompt_text: str) -> str:
 def _call_gemini_image(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
     _esperar_turno_gemini()
     api_key = os.environ["GEMINI_API_KEY"]
-    client = genai.Client(api_key=api_key)
+    # Sin esto, una llamada colgada (red/servidor) bloquea el proceso
+    # entero indefinidamente — pasó en un run real: 2 hashtags procesados
+    # en 30s y después 44 minutos sin ningún log hasta que el timeout del
+    # workflow lo canceló.
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=30_000))
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=[types.Part.from_bytes(data=image_bytes, mime_type=media_type), prompt_text],

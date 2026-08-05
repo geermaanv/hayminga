@@ -31,6 +31,16 @@ en los commits (`git log`); esto es el resumen narrativo.
   `GEMINI_MIN_INTERVAL_SECONDS` (configurable sin tocar código, default
   4.5s si algún día corre sin billing). Costo esperado: centavos por mes
   con el volumen actual (Gemini Flash es muy barato por request).
+- **Fix de cuelgue indefinido** (ago 2026): un run de prueba con el
+  pacing más rápido procesó 2 hashtags en 30s y después quedó **colgado
+  44 minutos sin ningún log**, hasta que lo canceló el timeout de 45min
+  del workflow. Causa: `genai.Client` no tenía timeout HTTP configurado
+  — si una sola llamada a Gemini se cuelga (red/servidor), el proceso
+  espera indefinidamente en vez de fallar y seguir. Se agregó
+  `http_options=types.HttpOptions(timeout=30_000)` (30s). De paso se
+  activó `PYTHONUNBUFFERED=1` en el workflow — sin eso, un cuelgue como
+  este no deja ningún log (los `print()` quedan en el buffer y se
+  pierden si el proceso es cancelado antes de flushearlos).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
