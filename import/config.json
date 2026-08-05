@@ -26,8 +26,13 @@
   "max_imagenes_por_query": 15,
   "hashtags": [
     "bioconstruccion", "construccionnatural", "bioarquitectura",
-    "superadobe", "quincha", "tapialera", "cob", "minga",
-    "arquitecturanatural", "permacultura"
+    "superadobe", "quincha", "cob", "minga", "arquitecturanatural",
+    "permacultura", "tallerbioconstruccion", "cursobioconstruccion",
+    "tapial", "barro", "adobe", "ecoladrillos", "casasdebarro",
+    "arquitecturasustentable", "construccionsustentable",
+    "autoconstruccion", "viviendasustentable", "permaculturaargentina",
+    "bioconstruccionargentina", "construirconbarro", "casanatural",
+    "earthbag"
   ],
-  "max_por_hashtag": 30
+  "max_por_hashtag": 15
 }
