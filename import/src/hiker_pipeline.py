@@ -24,6 +24,7 @@ Confianza alta → se publica solo. Media/baja → pendiente_confirmacion
 """
 
 import os
+import time
 import json
 import base64
 import requests
@@ -122,7 +123,23 @@ def _prompt_imagen(post: dict) -> str:
     return "\n\n".join(partes)
 
 
+# El free tier de Gemini para este modelo permite 15 llamadas/minuto.
+# Sin espaciarlas, un batch grande revienta en 429 y se pierden eventos
+# (pasó en la primera prueba: 100 de 152 posts se perdieron así).
+_GEMINI_MIN_INTERVAL = 4.5  # segundos entre llamadas
+_ultima_llamada_gemini = 0.0
+
+
+def _esperar_turno_gemini():
+    global _ultima_llamada_gemini
+    espera = _GEMINI_MIN_INTERVAL - (time.monotonic() - _ultima_llamada_gemini)
+    if espera > 0:
+        time.sleep(espera)
+    _ultima_llamada_gemini = time.monotonic()
+
+
 def _call_gemini_text(prompt_text: str) -> str:
+    _esperar_turno_gemini()
     api_key = os.environ["GEMINI_API_KEY"]
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
@@ -140,6 +157,7 @@ def _call_gemini_text(prompt_text: str) -> str:
 
 
 def _call_gemini_image(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
+    _esperar_turno_gemini()
     api_key = os.environ["GEMINI_API_KEY"]
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(

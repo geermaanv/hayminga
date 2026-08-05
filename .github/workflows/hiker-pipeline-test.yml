@@ -10,7 +10,7 @@ on:
 jobs:
   hiker-pipeline-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     defaults:
       run:
