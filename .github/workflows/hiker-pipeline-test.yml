@@ -1,4 +1,4 @@
-name: [TEST] Pipeline nuevo con HikerAPI
+name: "[TEST] Pipeline nuevo con HikerAPI"
 
 # Solo manual, no toca el cron de producción (import-eventos.yml). Sirve
 # para probar hiker_pipeline.py con datos reales antes de reemplazar el
