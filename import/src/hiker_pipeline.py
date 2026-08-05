@@ -258,6 +258,12 @@ def procesar_post(post: dict, existing_links: set) -> dict | None:
     data["fecha_descubrimiento"] = datetime.now(timezone.utc).isoformat()
     data = validate_event_data(data)
 
+    # Los hashtags son globales (no hay forma de filtrar por país en la
+    # búsqueda); lo que no es de Argentina se descarta acá, no tiene
+    # sentido ocupar una fila del Sheet con algo que nunca va a publicarse.
+    if data.get("pais") and data["pais"] != "Argentina":
+        return None
+
     # Ubicación real etiquetada por quien publicó > geocoding de texto
     if post.get("lat") and post.get("lng"):
         data["latitud"] = post["lat"]
