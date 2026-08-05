@@ -53,6 +53,14 @@ en los commits (`git log`); esto es el resumen narrativo.
   y no aparecía el botón de WhatsApp aunque el teléfono estuviera ahí.
   Ahora `contactoWhatsAppUrl()` separa por coma/slash y usa el pedazo
   sin "@" para el teléfono.
+- **Filtro de antigüedad del posteo**: `hashtag/medias/top` trae los
+  posteos con más likes/comentarios históricamente, no los recientes —
+  mezcla contenido evergreen viejo (detectado con un caso real: un
+  posteo con comentarios de "hace 122 semanas") con eventos nuevos.
+  Ahora se descarta directo, antes de gastar una llamada a la IA,
+  cualquier post publicado hace más de 270 días (`taken_at_ts` de
+  HikerAPI) — casi ningún evento real se anuncia con tanta
+  anticipación.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

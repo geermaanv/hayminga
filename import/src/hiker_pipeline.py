@@ -290,6 +290,14 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
     return data
 
 
+# hashtag/medias/top trae los posteos con más likes/comentarios
+# HISTÓRICAMENTE, no los recientes — mezcla contenido evergreen viejo con
+# eventos nuevos reales. Casi ningún evento se anuncia con tanta
+# anticipación, así que un posteo publicado hace más de esto casi seguro
+# ya pasó: ni vale la pena gastar una llamada a la IA en extraerlo.
+_MAX_ANTIGUEDAD_POST_DIAS = 270
+
+
 def procesar_post(post: dict, existing_links: set) -> dict | None:
     # Comparar por shortcode (código del posteo), no por link exacto: el
     # mismo posteo puede llegar como /p/, /reel/ o /reels/ según quién lo
@@ -299,6 +307,11 @@ def procesar_post(post: dict, existing_links: set) -> dict | None:
         return None
     if post["link"] in existing_links:
         return None
+
+    if post.get("taken_at_ts"):
+        antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(post["taken_at_ts"], tz=timezone.utc)
+        if antiguedad.days > _MAX_ANTIGUEDAD_POST_DIAS:
+            return None
 
     IMAGES_DIR.mkdir(exist_ok=True)
     image_path = IMAGES_DIR / (post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg")
