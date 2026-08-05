@@ -5,19 +5,27 @@ Claude, Codex) entienda de un vistazo qué existe, por qué, y qué está en
 un estado temporal/no definitivo. El detalle línea por línea siempre está
 en los commits (`git log`); esto es el resumen narrativo.
 
-## 🚧 En curso: pipeline nuevo basado 100% en HikerAPI
+## ✅ Pipeline de producción: HikerAPI (reemplazó a Google Images)
 
-`import/src/hiker_pipeline.py` — reemplazo del pipeline viejo (Google
-Images/SerpAPI/Serper), todavía **sin activar en producción** (corre
-solo desde el workflow manual `[TEST] Pipeline nuevo con HikerAPI`, no
-desde el cron diario). Diferencias clave:
+`import-eventos.yml` (el cron diario, 08:00 hora Argentina) corre ahora
+`import/src/hiker_pipeline.py` en vez de `main.py`. Diferencias clave:
 
-- Descubre por **hashtag** (`config.json` → `hashtags`) en vez de
-  búsquedas de texto en Google Images — una llamada trae hasta 50 posts
-  recientes, cada uno con imagen completa, caption entero, fecha real de
-  publicación y ubicación (lat/lng si el que publicó la etiquetó).
-- Extracción **texto primero** (más rápido/liviano); solo pide la imagen
-  si el texto solo no alcanza para nombre/fecha.
+- Descubre por **hashtag** (`config.json` → `hashtags`, 24 validados
+  contra la API real) en vez de búsquedas de texto en Google Images —
+  una llamada trae hasta 30 posts (usa `hashtag/medias/top`; el endpoint
+  `recent` está más restringido y devuelve siempre vacío), cada uno con
+  imagen completa, caption entero, fecha real de publicación y ubicación
+  (lat/lng si el que publicó la etiquetó).
+- Extracción: primera pasada solo con texto (filtra gratis lo que no es
+  evento); si sí es evento, siempre se manda también la imagen (ya
+  recibe el caption como contexto, casi siempre saca más datos que el
+  texto solo).
+- Fallback a Claude tanto en el paso de texto como en el de imagen si
+  Gemini se queda sin cuota (con techo de `MAX_CLAUDE_CALLS_PER_RUN` por
+  corrida — Claude es pago).
+- Se descartan directo (sin escribir fila) los eventos de otros países —
+  los hashtags son globales, no hay forma de filtrar por país en la
+  búsqueda misma.
 - Sin filtro de calidad por bytes, sin filtro de links ambiguos, sin
   `source_matches_event()` — esos existían para compensar problemas
   específicos de Google Images que HikerAPI no tiene (el link y la
@@ -27,18 +35,22 @@ desde el cron diario). Diferencias clave:
   día."
 - Dedup: por link exacto (antes de gastar una llamada a la IA) y por
   nombre+fecha+provincia (`append_events`, agarra reposteos con link
-  distinto del mismo evento).
+  distinto del mismo evento). Verificado con dos corridas seguidas: no
+  duplica.
 - **Confianza alta → se publica solo. Media/baja → `pendiente_confirmacion`**
-  (ya no todo pasa por revisión manual, a diferencia del resto del
-  pipeline viejo mientras `REVISION_MANUAL=true`).
+  (ya no todo pasa por revisión manual, a diferencia de lo que entra por
+  mail/formulario mientras `REVISION_MANUAL=true`).
 - Mail de error: por ahora se apoya en la notificación nativa de GitHub
   Actions cuando falla el workflow (revisar que esté activada en
   Settings → Notifications de la cuenta). No hay mailer propio todavía.
+- La carga por **mail** (`email_intake.py`, tag `HME`) sigue corriendo
+  en el mismo workflow, sin cambios — es una capacidad separada que
+  HikerAPI no reemplaza.
 
-Pendiente antes de reemplazar `import-eventos.yml` (el cron real): correr
-el workflow de prueba con datos reales, revisar calidad de los eventos
-que entra, y decidir si se retira `main.py`/`scraper.py` viejos del todo
-o quedan como referencia.
+**`main.py`, `src/scraper.py` (funciones de Google Images/SerpAPI/Serper),
+`src/candidates.py` y `seen_hashes.txt`/`seen_links.txt` quedan sin usar**
+en producción — no se borraron del repo (por si hace falta volver atrás
+o como referencia), pero ya no corren desde ningún workflow.
 
 ## ⚠️ Flags temporales activos ahora mismo
 
