@@ -828,8 +828,15 @@ function actualizarBotonAgenda() {
 
 function contactoWhatsAppUrl(contacto) {
   if (!contacto || contacto === 'null') return '';
-  if (contacto.indexOf('@') !== -1) return ''; // es un email, no un teléfono
-  var digitos = contacto.replace(/\D/g, '');
+  // el campo Contacto puede traer teléfono y email mezclados en el mismo
+  // string (ej. lo que extrae la IA de un flyer: "+54 911 ..., mail@x.com")
+  // — nos quedamos con el pedazo que no tiene "@" para sacar el teléfono.
+  var partes = contacto.split(/[,/]/);
+  var parteTel = partes.find(function(p) {
+    return p.indexOf('@') === -1 && p.replace(/\D/g, '').length >= 8;
+  });
+  if (!parteTel) return '';
+  var digitos = parteTel.replace(/\D/g, '');
   if (digitos.length < 8) return '';
   if (digitos.indexOf('54') === 0) {
     // ya viene con código de país; asegurar el 9 de celular después del 54
