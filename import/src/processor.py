@@ -498,7 +498,7 @@ def extract_event_data(image_path: Path, metadata: dict):
         data["fuente_verificada"] = verified
         if not verified:
             data["activo"] = False
-            data["estado"] = "revision_fuente"
+            data["estado"] = "pendiente_confirmacion"
             data["link_promocional"] = ""
             data["motivo_revision"] = "imagen_y_link_sin_coincidencia_suficiente"
             print(

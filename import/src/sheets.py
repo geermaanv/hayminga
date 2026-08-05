@@ -157,7 +157,7 @@ def event_to_row(event: dict) -> list:
         nombre.lower(),  # procesado — clave de deduplicación
         event.get("id") or generate_id(),
         event.get("contacto") or "",
-        event.get("estado") or ("confirmado" if event.get("activo") else "pendiente"),
+        event.get("estado") or ("confirmado" if event.get("activo") else "pendiente_confirmacion"),
         event.get("pais") or "",
         event.get("confianza") or "",
         event.get("fuente") or "",

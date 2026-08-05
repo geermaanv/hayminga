@@ -219,12 +219,21 @@ Varias rondas de pulido de header/filtros iterando con prototipos
 - **Fix de UI**: el mensaje "¡No quedan más eventos pendientes!" vivía
   dentro del `<form>` que se oculta cuando la cola está vacía, así que
   nunca se veía — se movió afuera del form.
-- Pendiente de decidir: ~24 eventos quedan con `Estado="pendiente"`
-  (genérico, no `pendiente_confirmacion`) porque `validate_event_data`
-  los marca `activo=false` por datos incompletos (fecha no confirmada,
-  etc.) antes de que se evalúe la confianza — no entran a la cola de
-  `?pendientes` tal como está hoy. Falta decidir si sumarlos a la cola o
-  dejarlos fuera del flujo de revisión.
+- **Simplificación de `Estado`** (ago 2026): había 5 valores posibles,
+  dos de ellos (`pendiente` y `pendiente_confirmacion`) sonaban casi
+  igual pero significaban cosas distintas — el primero era el fallback
+  genérico para eventos con datos incompletos, y no entraba a la cola de
+  `?pendientes` (quedaban invisibles). Se unificaron en uno solo:
+  **`pendiente_confirmacion`** — ahora cualquier evento inactivo entra a
+  revisión, sin excepción. Se sacó **`revision_fuente`** (específico del
+  pipeline viejo de Google Images, que ahora usa la misma etiqueta). El
+  modelo final:
+  - `Activo` (true/false): si se muestra en el sitio — el on/off rápido.
+  - `Estado`: complementario, para curación — `confirmado`,
+    `pendiente_confirmacion` (candidato a revisar en `?pendientes`),
+    `descartado` (no se borra la fila, solo se saca de circulación —
+    así el dedup por shortcode lo sigue reconociendo si el pipeline lo
+    vuelve a encontrar y no lo reinserta).
 
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
