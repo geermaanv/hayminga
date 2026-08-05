@@ -23,6 +23,14 @@ en los commits (`git log`); esto es el resumen narrativo.
 - Fallback a Claude tanto en el paso de texto como en el de imagen si
   Gemini se queda sin cuota (con techo de `MAX_CLAUDE_CALLS_PER_RUN` por
   corrida — Claude es pago).
+- **Facturación activada en el proyecto de Gemini (`haymingaorg`)**
+  (ago 2026): el free tier limitaba a ~15 requests/minuto, lo que forzaba
+  un pacing de 4.5s entre llamadas y hacía que una corrida de 24 hashtags
+  tardara ~37 minutos. Con billing habilitado el límite sube muchísimo,
+  así que el intervalo bajó a 0.5s vía la env var
+  `GEMINI_MIN_INTERVAL_SECONDS` (configurable sin tocar código, default
+  4.5s si algún día corre sin billing). Costo esperado: centavos por mes
+  con el volumen actual (Gemini Flash es muy barato por request).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
