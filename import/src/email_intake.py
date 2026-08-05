@@ -17,6 +17,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from src.processor import extract_event_data, RETRY
+from src.scraper import fetch_hikerapi_media
 from src.sheets import append_events, event_dedupe_key, SPREADSHEET_ID, SCOPES
 
 QUEUE_SHEET = "Cola_Manual"
@@ -126,12 +127,23 @@ CRAWLER_HEADERS = {
 }
 
 
-def download_instagram_image(link: str, dest: Path) -> str:
+def download_instagram_image(link: str, dest: Path, hiker: dict | None = None) -> str:
     """Cuando alguien comparte solo el link del post (sin adjuntar el
-    flyer), bajamos la imagen directo del post público vía su etiqueta
-    og:image — la misma que usa WhatsApp para armar la vista previa.
-    Devuelve la URL de esa imagen (para guardarla como thumbnail) o ''
-    si no se pudo."""
+    flyer), bajamos la imagen del post público. Primero HikerAPI (imagen
+    sin recortar, si ya se consultó arriba y se pasa en `hiker`); si no
+    está configurada o falla, cae al og:image de la página — el mismo
+    mecanismo que usa WhatsApp para la vista previa, pero recortado a un
+    cuadrado por Instagram. Devuelve la URL de la imagen (para guardarla
+    como thumbnail) o '' si no se pudo."""
+    if hiker and hiker.get("image_url"):
+        try:
+            resp = requests.get(hiker["image_url"], headers=HEADERS, timeout=20)
+            if resp.status_code == 200 and len(resp.content) >= 1000:
+                dest.write_bytes(resp.content)
+                return hiker["image_url"]
+        except Exception as e:
+            print(f"[email_intake] Error bajando imagen de HikerAPI: {e}")
+
     try:
         page = requests.get(link, headers=CRAWLER_HEADERS, timeout=20)
         match = OG_IMAGE_RE.search(page.text)
@@ -163,12 +175,13 @@ def process_queue() -> int:
     for item in pending:
         dest = IMAGES_DIR / f"manual_{item['sheet_row']}.jpg"
         link = extract_link(item["cuerpo"])
+        hiker = fetch_hikerapi_media(link) if link else None
 
         thumbnail = item["imagen_url"]
         if thumbnail:
             ok = download_drive_image(thumbnail, dest)
         elif link:
-            thumbnail = download_instagram_image(link, dest)
+            thumbnail = download_instagram_image(link, dest, hiker=hiker)
             ok = bool(thumbnail)
         else:
             ok = False
@@ -177,8 +190,14 @@ def process_queue() -> int:
             mark_row(service, item["sheet_row"], "error: no se pudo descargar la imagen")
             continue
 
+        caption = item["cuerpo"]
+        if hiker and hiker.get("caption"):
+            # el cuerpo del mail suele ser solo el link; el caption real
+            # de HikerAPI trae mucho más texto (fecha, contacto, lugar)
+            caption = (item["cuerpo"] + "\n\n" + hiker["caption"]).strip()
+
         metadata = {
-            "caption": item["cuerpo"],
+            "caption": caption,
             "link": link,
             "thumbnail": thumbnail,
             "source": "email",

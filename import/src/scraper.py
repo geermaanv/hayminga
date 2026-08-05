@@ -99,13 +99,54 @@ def passes_quality_filter(data: bytes) -> bool:
     return max(w, h) >= MIN_IMAGE_DIM
 
 
+def fetch_hikerapi_media(link: str) -> dict | None:
+    """Post real de Instagram vía HikerAPI (https://hikerapi.com):
+    caption completo, imagen sin recortar y fecha real de publicación
+    (taken_at_ts). Paga (~$0.0006/request), key en HIKERAPI_KEY — si no
+    está configurada o la llamada falla, quien invoca cae a su propio
+    fallback (og:image / SerpAPI / Serper)."""
+    api_key = os.getenv("HIKERAPI_KEY")
+    if not api_key or not link:
+        return None
+    try:
+        resp = requests.get(
+            "https://api.hikerapi.com/v1/media/by/url",
+            params={"url": link},
+            headers={"x-access-key": api_key},
+            timeout=20,
+        )
+        if resp.status_code != 200:
+            _provider_error("HikerAPI", f"HTTP {resp.status_code}")
+            return None
+        data = resp.json()
+        return {
+            "caption": data.get("caption_text") or "",
+            "taken_at_ts": data.get("taken_at_ts"),
+            "image_url": data.get("thumbnail_url") or "",
+        }
+    except Exception as exc:
+        _provider_error("HikerAPI", f"error: {exc}")
+        return None
+
+
 def fetch_caption(link: str) -> str:
-    """Busca el snippet de caption real del post vía Google Search normal
-    (no Images) — es la copia cacheada por Google, no un pedido a Instagram.
-    Cuesta una llamada de SerpAPI, así que processor.py la pide bajo demanda
-    (solo para eventos reales con datos incompletos), no acá al descargar."""
+    """Busca el caption real del post. Primero intenta HikerAPI (caption
+    completo + fecha real de publicación); si no está configurada o falla,
+    cae al snippet indexado por Google Search vía SerpAPI/Serper — la
+    copia cacheada por Google, no un pedido a Instagram. Cuesta una
+    llamada, así que processor.py la pide bajo demanda (solo para eventos
+    reales con datos incompletos), no al descargar."""
     if not link:
         return ""
+
+    hiker = fetch_hikerapi_media(link)
+    if hiker and hiker.get("caption"):
+        partes = []
+        if hiker.get("taken_at_ts"):
+            fecha_pub = datetime.fromtimestamp(hiker["taken_at_ts"], tz=timezone.utc).date().isoformat()
+            partes.append(f"Fecha de publicación indexada: {fecha_pub}")
+        partes.append(hiker["caption"])
+        return "\n".join(partes).strip()
 
     serpapi_key = os.getenv("SERPAPI_KEY")
     if serpapi_key:
@@ -327,13 +368,29 @@ def download_images_for_query(
             if not passes_quality_filter(data):
                 continue
 
+            # Recién acá, con un candidato que ya pasó el filtro gratuito,
+            # vale la pena gastar una llamada de HikerAPI: reemplaza el
+            # thumbnail recortado de Google por la imagen completa del
+            # post (y trae el caption real de una, sin esperar a que
+            # processor.py lo pida por separado).
+            hiker = fetch_hikerapi_media(link) if link else None
+            if hiker and hiker.get("image_url"):
+                try:
+                    hiker_resp = requests.get(hiker["image_url"], headers=HEADERS, timeout=10)
+                    if hiker_resp.status_code == 200:
+                        hiker_valid, hiker_ext = is_valid_image(hiker_resp.content)
+                        if hiker_valid:
+                            data, ext = hiker_resp.content, hiker_ext
+                except Exception as exc:
+                    _provider_error("HikerAPI", f"error bajando imagen completa: {exc}")
+
             h = image_hash(data)
             if h in seen:
                 continue
 
-            # el caption ya NO se busca acá — processor.py lo pide bajo demanda
-            # solo para eventos reales con datos incompletos, para no gastar
-            # una llamada de SerpAPI en cada imagen que después resulta basura
+            if hiker and hiker.get("caption"):
+                item["caption"] = hiker["caption"]
+
             slug     = hashlib.md5(query.encode()).hexdigest()[:6]
             filename = IMAGES_DIR / f"{slug}_{h[:12]}.{ext}"
             filename.write_bytes(data)
@@ -342,7 +399,7 @@ def download_images_for_query(
                 json.dumps({
                     "link": link,
                     "thumbnail": item.get("thumbnail", ""),
-                    "caption": item.get("caption", ""),
+                    "caption": (hiker or {}).get("caption") or item.get("caption", ""),
                 }, ensure_ascii=False)
             )
 
