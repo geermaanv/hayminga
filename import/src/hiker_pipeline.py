@@ -246,15 +246,12 @@ def _parse_json(raw: str) -> dict | None:
         return None
 
 
-def _incompleto(data: dict) -> bool:
-    if not data.get("es_evento", True):
-        return False
-    return not (data.get("nombre") and data.get("fecha_inicio"))
-
-
 def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
-    """Texto primero; imagen solo si el texto no alcanzó. Devuelve el
-    dict crudo del modelo (sin validar todavía) o None si no se pudo."""
+    """Primera pasada solo con texto, nada más que para filtrar gratis lo
+    que claramente no es un evento. Si SÍ es evento (o el texto no fue
+    concluyente), se manda la imagen también — ya recibe el caption como
+    contexto además de la foto, así que casi siempre saca más datos que
+    el texto solo (dirección exacta, WhatsApp escrito en el flyer, etc.)."""
     try:
         raw = _call_gemini_text(_prompt_texto(post))
     except genai_errors.ClientError:
@@ -264,7 +261,10 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
             return None
     data = _parse_json(raw)
 
-    if (data is None or _incompleto(data)) and image_path:
+    if data is not None and not data.get("es_evento", True):
+        return data  # el texto ya alcanzó para descartarlo, no gastar la imagen
+
+    if image_path:
         image_bytes = image_path.read_bytes()
         media_type = "image/jpeg" if image_path.suffix.lower() != ".png" else "image/png"
         try:
