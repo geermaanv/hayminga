@@ -24,6 +24,7 @@ Confianza alta → se publica solo. Media/baja → pendiente_confirmacion
 """
 
 import os
+import re
 import time
 import json
 import base64
@@ -326,6 +327,10 @@ def procesar_post(post: dict, existing_links: set) -> dict | None:
     data["link_promocional"] = post["link"]
     data["fuente"] = "hikerapi_hashtag"
     data["fecha_descubrimiento"] = datetime.now(timezone.utc).isoformat()
+    # Para más adelante: juntar hashtags de eventos activos y ver cuáles
+    # no están todavía en config.json (los posts suelen traer muchos más
+    # de los que buscamos nosotros).
+    data["hashtags_post"] = " ".join(sorted(set(re.findall(r"#\w+", post.get("caption") or ""))))
     data = validate_event_data(data)
 
     # Los hashtags son globales (no hay forma de filtrar por país en la

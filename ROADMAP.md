@@ -61,6 +61,11 @@ en los commits (`git log`); esto es el resumen narrativo.
   cualquier post publicado hace más de 270 días (`taken_at_ts` de
   HikerAPI) — casi ningún evento real se anuncia con tanta
   anticipación.
+- **Columna `Hashtags_Post`**: se guardan todos los hashtags del caption
+  de cada post descubierto (no solo el que lo trajo) — los posts suelen
+  traer muchos más hashtags de los que buscamos nosotros. Por ahora solo
+  se acumula el dato; falta armar el proceso de revisión periódica para
+  ver cuáles conviene sumar a `config.json`.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
