@@ -195,6 +195,37 @@ Varias rondas de pulido de header/filtros iterando con prototipos
 - Footer + header con link de WhatsApp para recibir novedades
   ("Recibí novedades por WA"), separado del canal de compartir flyers.
 
+## Etapa 9.5 — Curación de duplicados y ajustes a la cola de revisión (ago 2026)
+
+- **Botón "Descartar"** en `?pendientes`: antes solo se podía Aprobar o
+  Saltar; ahora también se puede sacar un evento de circulación sin
+  borrar la fila (`Activo=false` / `Estado=descartado`, reversible a
+  mano en la Sheet). Nueva acción `descartar_evento` en `Code.gs`.
+- **Dedup por shortcode de Instagram** (`sheets.py`,
+  `instagram_shortcode()`): el mismo posteo puede compartirse como
+  `/p/`, `/reel/` o `/reels/` — comparar el link exacto no alcanza.
+  Detectado con un caso real: "Escuela de verano - DeBarro" (cargado a
+  mano) y "Formación Práctica en Arquitectura Biológica..." (descubierto
+  por HikerAPI) eran el mismo posteo con títulos distintos — ninguno de
+  los dos dedups existentes lo agarró. Ahora `append_events` compara
+  primero por shortcode (duplicado cierto → se descarta) y, si eso no
+  matchea pero sí matchea nombre+fecha+provincia (duplicado ambiguo:
+  mismo evento, posteo de origen distinto), **inserta igual pero a
+  revisión** (`pendiente_confirmacion`) con una nota automática en la
+  Descripción señalando el posible duplicado y el Id del existente, para
+  que se fusionen los datos a mano en vez de perderlos o pisarlos en
+  silencio. `hiker_pipeline.py` también compara por shortcode antes de
+  gastar la primera llamada a la IA.
+- **Fix de UI**: el mensaje "¡No quedan más eventos pendientes!" vivía
+  dentro del `<form>` que se oculta cuando la cola está vacía, así que
+  nunca se veía — se movió afuera del form.
+- Pendiente de decidir: ~24 eventos quedan con `Estado="pendiente"`
+  (genérico, no `pendiente_confirmacion`) porque `validate_event_data`
+  los marca `activo=false` por datos incompletos (fecha no confirmada,
+  etc.) antes de que se evalúe la confianza — no entran a la cola de
+  `?pendientes` tal como está hoy. Falta decidir si sumarlos a la cola o
+  dejarlos fuera del flujo de revisión.
+
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:

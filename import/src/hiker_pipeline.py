@@ -40,7 +40,7 @@ from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
     validate_event_data,
 )
-from src.sheets import append_events, get_service, SPREADSHEET_ID, SHEET_NAME
+from src.sheets import append_events, get_service, instagram_shortcode, SPREADSHEET_ID, SHEET_NAME
 
 IMAGES_DIR = Path("images_hiker")
 
@@ -283,6 +283,12 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 
 
 def procesar_post(post: dict, existing_links: set) -> dict | None:
+    # Comparar por shortcode (código del posteo), no por link exacto: el
+    # mismo posteo puede llegar como /p/, /reel/ o /reels/ según quién lo
+    # comparta (ej. carga manual vs. lo que arma esta función más abajo).
+    shortcode = instagram_shortcode(post["link"])
+    if shortcode and shortcode in existing_links:
+        return None
     if post["link"] in existing_links:
         return None
 

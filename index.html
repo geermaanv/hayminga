@@ -436,6 +436,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
       <button class="btn-cerrar" onclick="cerrarFormEvento()">✕</button>
     </div>
     <p class="evento-form-sub">Completá los datos — lo revisamos y lo publicamos a la brevedad, gratis, sin intermediarios.</p>
+    <div id="evento-revision-info" class="evento-form-sub" style="display:none;color:var(--tierra);"></div>
 
     <form id="form-evento" onsubmit="enviarEvento(event)">
       <input type="text" name="web" class="honeypot-field" tabindex="-1" autocomplete="off">
@@ -522,8 +523,6 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
           <input type="text" id="evento-longitud" placeholder="ej. -58.38">
         </div>
       </div>
-
-      <div id="evento-revision-info" class="evento-form-sub" style="display:none;color:var(--tierra);"></div>
 
       <button type="submit" class="btn-publicar" id="btn-publicar-evento">Publicar evento</button>
       <button type="button" class="btn-cancelar" id="btn-saltar-evento" onclick="saltarRevision()" style="display:none;">Saltar (ver el próximo sin aprobar)</button>
@@ -831,7 +830,14 @@ function contactoWhatsAppUrl(contacto) {
   if (contacto.indexOf('@') !== -1) return ''; // es un email, no un teléfono
   var digitos = contacto.replace(/\D/g, '');
   if (digitos.length < 8) return '';
-  if (digitos.length <= 10) digitos = '549' + digitos.replace(/^0|^15/, ''); // asume Argentina sin código de país
+  if (digitos.indexOf('54') === 0) {
+    // ya viene con código de país; asegurar el 9 de celular después del 54
+    if (digitos.indexOf('549') !== 0) digitos = '549' + digitos.slice(2);
+  } else {
+    digitos = digitos.replace(/^0/, ''); // 0 de larga distancia (ej. 011...)
+    digitos = digitos.replace(/^(\d{2,4})15(\d{6,8})$/, '$1$2'); // 15 de celular (ej. 011 15-1234-5678)
+    digitos = '549' + digitos;
+  }
   return 'https://wa.me/' + digitos;
 }
 

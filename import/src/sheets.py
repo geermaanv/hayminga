@@ -99,8 +99,22 @@ def event_dedupe_key(event: dict) -> str:
     return "|".join((nombre, fecha, provincia))
 
 
-def load_processed_keys(service) -> set:
-    """Construye claves nombre+fecha+provincia desde las filas existentes."""
+_IG_SHORTCODE_RE = re.compile(r"instagram\.com/(?:p|reel|reels)/([A-Za-z0-9_-]+)")
+
+
+def instagram_shortcode(link: str) -> str:
+    """El mismo posteo de Instagram se puede linkear como /p/, /reel/ o
+    /reels/ según quién lo comparta — comparar solo el código evita
+    duplicados como el mismo evento cargado a mano y descubierto por el
+    pipeline con URLs distintas mismo posteo."""
+    match = _IG_SHORTCODE_RE.search(link or "")
+    return match.group(1) if match else ""
+
+
+def load_processed_events(service) -> list[dict]:
+    """Trae nombre/fecha/provincia, link e Id de cada fila existente —
+    se usa para detectar tanto duplicados exactos (mismo posteo) como
+    ambiguos (misma clave nombre+fecha+provincia, contenido distinto)."""
     try:
         result = (
             service.spreadsheets().values()
@@ -108,17 +122,20 @@ def load_processed_keys(service) -> set:
             .execute()
         )
         values = result.get("values", [])
-        keys = set()
+        out = []
         for row in values:
             row = (row + [""] * len(COLUMNS))[:len(COLUMNS)]
-            keys.add(event_dedupe_key({
+            out.append({
+                "key": event_dedupe_key({
+                    "nombre": row[1], "fecha_inicio_iso": row[4], "provincia": row[7],
+                }),
+                "shortcode": instagram_shortcode(row[10]),
+                "id": row[14],
                 "nombre": row[1],
-                "fecha_inicio_iso": row[4],
-                "provincia": row[7],
-            }))
-        return keys
+            })
+        return out
     except Exception:
-        return set()
+        return []
 
 
 def event_to_row(event: dict) -> list:
@@ -156,7 +173,9 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
 
     service = get_service()
     ensure_header(service)
-    processed = load_processed_keys(service)
+    existentes = load_processed_events(service)
+    processed = {e["key"] for e in existentes}
+    shortcodes = {e["shortcode"]: e for e in existentes if e["shortcode"]}
     print(f"[sheets] {len(processed)} evento(s) ya registrados")
 
     rows = []
@@ -165,14 +184,32 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
         nombre = (event.get("nombre") or "").strip()
         if not nombre:
             continue
+
+        shortcode = instagram_shortcode(event.get("link_promocional"))
+        if shortcode and shortcode in shortcodes:
+            print(f"[sheets] Duplicado (mismo posteo de Instagram), saltando: '{nombre}'")
+            continue
+
         key = event_dedupe_key(event)
         if key in processed:
-            print(f"[sheets] Duplicado, saltando: '{nombre}'")
-            continue
+            existente = next((e for e in existentes if e["key"] == key), None)
+            print(f"[sheets] Posible duplicado ambiguo (misma clave, link distinto), "
+                  f"pasa a revisión: '{nombre}'")
+            nota = (
+                f"⚠️ Posible duplicado del evento existente "
+                f"'{existente['nombre'] if existente else '?'}' "
+                f"(id {existente['id'] if existente else '?'}) — mismo nombre/fecha/provincia "
+                "pero distinto posteo de origen. Revisar y fusionar datos si corresponde.\n\n"
+            )
+            event["descripcion"] = nota + (event.get("descripcion") or "")
+            event["activo"] = False
+            event["estado"] = "pendiente_confirmacion"
 
         event.setdefault("id", generate_id())
         rows.append(event_to_row(event))
         processed.add(key)
+        if shortcode:
+            shortcodes[shortcode] = {"nombre": nombre, "id": event["id"]}
         inserted_keys.add(key)
 
     if not rows:
