@@ -41,6 +41,12 @@ en los commits (`git log`); esto es el resumen narrativo.
   activó `PYTHONUNBUFFERED=1` en el workflow — sin eso, un cuelgue como
   este no deja ningún log (los `print()` quedan en el buffer y se
   pierden si el proceso es cancelado antes de flushearlos).
+- **Hashtag propio `#hayminga`** (ago 2026): sumado a `config.json` como
+  canal de descubrimiento 100% confiable y controlado por la comunidad
+  (no depende de hashtags genéricos que también usa cualquiera). Se
+  comunica con un tip en el formulario "Publicá tu evento": "si lo
+  compartís en Instagram, taggeá #hayminga y la próxima vez lo
+  detectamos automático".
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
