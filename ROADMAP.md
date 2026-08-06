@@ -101,6 +101,11 @@ en los commits (`git log`); esto es el resumen narrativo.
   veces país e idioma no alcanzan (ej. una cuenta de España que postea
   en español). Se agregó una lista de usernames de Instagram a excluir
   directo, antes de gastar cualquier llamada — primer caso: `okambuva`.
+- **3 corridas por día** en vez de 1 (08:00, 14:00, 20:00 hora
+  Argentina) — el dedup por shortcode descarta lo ya visto antes de
+  gastar IA, así que el costo extra es mínimo (~$0.02/corrida en
+  llamadas de descubrimiento a HikerAPI, más solo lo que haga falta de
+  Gemini/Claude para lo genuinamente nuevo).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
