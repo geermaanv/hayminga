@@ -351,6 +351,12 @@ def procesar_post(post: dict, existing_links: set) -> dict | None:
     if data.get("pais") and data["pais"] != "Argentina":
         return None
 
+    # Hashtags en español también traen resultados de cuentas que postean
+    # en inglés (comunidad internacional de bioconstrucción/permacultura);
+    # hayminga es un sitio en español, no tiene sentido publicarlos.
+    if data.get("idioma") == "en":
+        return None
+
     # Ubicación real etiquetada por quien publicó > geocoding de texto
     if post.get("lat") and post.get("lng"):
         data["latitud"] = post["lat"]

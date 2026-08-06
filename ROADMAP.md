@@ -90,6 +90,13 @@ en los commits (`git log`); esto es el resumen narrativo.
   falta más cobertura; la idea con más potencial ahí es trackear
   directamente las cuentas de organizadores ya conocidos en vez de
   depender solo de hashtags.
+- **Filtro de idioma**: hashtags en español también traen resultados de
+  cuentas que postean en inglés (comunidad internacional de
+  bioconstrucción/permacultura) — hayminga es en español, no tiene
+  sentido publicarlos. Se sumó `idioma` al schema de extracción
+  (`es`/`en`/`otro`) y se descarta directo si es `en`, mismo criterio
+  que el filtro de país (solo descarta con señal positiva, no si vino
+  vacío).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

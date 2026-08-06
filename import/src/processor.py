@@ -94,6 +94,7 @@ EVENT_SCHEMA = {
         "organizador": {"type": "string", "nullable": True},
         "direccion": {"type": "string", "nullable": True},
         "contacto": {"type": "string", "nullable": True},
+        "idioma": {"type": "string", "nullable": True, "enum": ["es", "en", "otro"]},
         "confianza": {"type": "string", "enum": ["alta", "media", "baja"]},
     },
     "required": ["es_evento", "anio_confirmado"],
@@ -113,6 +114,8 @@ y mes sin año, usá el año de esa publicación. Nunca uses automáticamente el
 año actual. Sin año visible ni fecha de publicación, devolvé fechas null y
 anio_confirmado=false.
 Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
+Marcá idioma con el idioma principal del texto del flyer/caption ("es",
+"en" u "otro").
 No determines si está activo: el sistema lo calcula después usando fecha y país.
 """
 
