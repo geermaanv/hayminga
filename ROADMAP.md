@@ -97,6 +97,10 @@ en los commits (`git log`); esto es el resumen narrativo.
   (`es`/`en`/`otro`) y se descarta directo si es `en`, mismo criterio
   que el filtro de país (solo descarta con señal positiva, no si vino
   vacío).
+- **Blacklist de cuentas** (`config.json` → `cuentas_excluidas`): a
+  veces país e idioma no alcanzan (ej. una cuenta de España que postea
+  en español). Se agregó una lista de usernames de Instagram a excluir
+  directo, antes de gastar cualquier llamada — primer caso: `okambuva`.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

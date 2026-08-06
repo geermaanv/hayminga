@@ -38,5 +38,8 @@
     "cursobioconstrucción", "construcciónsustentable", "autoconstrucción",
     "bioconstrucciónargentina", "construcciónentierra", "construccióncontierra"
   ],
-  "max_por_hashtag": 15
+  "max_por_hashtag": 15,
+  "cuentas_excluidas": [
+    "okambuva"
+  ]
 }

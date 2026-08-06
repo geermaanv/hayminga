@@ -87,6 +87,7 @@ def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
             "lng": location.get("lng"),
             "location_name": location.get("name") or "",
             "location_address": location.get("address") or "",
+            "username": ((item.get("user") or {}).get("username") or "").lower(),
         })
     return posts
 
@@ -311,7 +312,10 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 _MAX_ANTIGUEDAD_POST_DIAS = 270
 
 
-def procesar_post(post: dict, existing_links: set) -> dict | None:
+def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = frozenset()) -> dict | None:
+    if post.get("username") and post["username"] in cuentas_excluidas:
+        return None
+
     # Comparar por shortcode (código del posteo), no por link exacto: el
     # mismo posteo puede llegar como /p/, /reel/ o /reels/ según quién lo
     # comparta (ej. carga manual vs. lo que arma esta función más abajo).
@@ -378,6 +382,7 @@ def run() -> int:
     if not hashtags:
         print("[hiker_pipeline] Sin hashtags configurados en config.json")
         return 0
+    cuentas_excluidas = {c.lstrip("@").lower() for c in config.get("cuentas_excluidas") or []}
 
     service = get_service()
     existing = service.spreadsheets().values().get(
@@ -397,7 +402,7 @@ def run() -> int:
 
         for post in posts:
             try:
-                evento = procesar_post(post, existing_links)
+                evento = procesar_post(post, existing_links, cuentas_excluidas)
             except Exception as e:
                 print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                 continue
