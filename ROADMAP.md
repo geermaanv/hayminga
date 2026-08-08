@@ -154,12 +154,16 @@ en los commits (`git log`); esto es el resumen narrativo.
   propio algoritmo de Instagram — señal mucho mejor que revisar lista
   de seguidores: ~30 de 39 eran relevantes, contra ~15 de 400 de la
   lista de seguidores cruda). Total: 74 cuentas.
-- **Descubrimiento automático de candidatas** (`descubrir_candidatos()`
-  en `curar_fuentes.py`, corre junto con la baja en el mismo workflow
-  semanal/diario): consulta "sugeridas" para cada cuenta que ya
-  seguimos, junta las que no están en `config.json` y las reporta
-  (ordenadas por cuántas de nuestras cuentas las sugirieron) — no las
-  agrega solo, mismo criterio que las altas de hashtags.
+- **Descubrimiento automático de candidatas, con alta automática**
+  (`descubrir_candidatos()` en `curar_fuentes.py`): consulta "sugeridas"
+  para cada cuenta seguida y **agrega directo a `config.json`** las que
+  no estén ya — a diferencia de los hashtags, esto sí quedó full-auto
+  (decisión explícita del usuario: "prefiero arriesgarme" — el riesgo
+  es bajo porque la baja automática de 50 intentos sin hit se encarga
+  de sacar sola cualquier alta mala). Para no repetir la misma consulta
+  de "sugeridas" en cada corrida, se registra en una hoja nueva
+  (`CuentasConsultadas`: Username, FechaConsulta) cuándo se consultó
+  cada cuenta — solo se vuelve a consultar después de 30 días.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

@@ -9,23 +9,33 @@ config.json. No se automatizan altas (esas necesitan criterio de
 calidad, no solo un número) — solo bajas, que son de bajo riesgo y
 fácilmente reversibles (agregar la fuente de nuevo a mano).
 
-También descubre candidatas nuevas a mano (no las agrega solo): usa
-v2/user/suggested/profiles de HikerAPI — las cuentas que Instagram
+También descubre candidatas nuevas y las agrega directo a config.json:
+usa v2/user/suggested/profiles de HikerAPI — las cuentas que Instagram
 sugiere como similares a cada una de las que ya seguimos. Da señal
 mucho mejor que revisar la lista de seguidores de una cuenta (ahí la
-mayoría es ruido — fans, cuentas personales sin relación al tema).
+mayoría es ruido — fans, cuentas personales sin relación al tema). El
+riesgo de una alta mala es bajo: si no produce nada, la baja automática
+la saca sola a los 50 intentos.
+
+Para no repetir la misma consulta de "sugeridas" en cada corrida, se
+registra en la hoja CuentasConsultadas cuándo se consultó cada cuenta
+— solo se vuelve a consultar después de _DIAS_ANTES_DE_RECONSULTAR.
 """
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 import requests
 
-from src.sheets import get_service, cargar_fuentes_stats
+from src.sheets import (
+    get_service, cargar_fuentes_stats,
+    cargar_cuentas_consultadas, marcar_cuentas_consultadas,
+)
 
 UMBRAL_INTENTOS_SIN_HIT = 50
-MIN_SUGERENCIAS_PARA_MOSTRAR = 2  # sugerida por al menos N cuentas nuestras
+_DIAS_ANTES_DE_RECONSULTAR = 30
 
 CONFIG_PATH = Path("config.json")
 
@@ -96,19 +106,37 @@ def _sugeridas_para(username: str) -> list[str]:
     return [u["username"] for u in resp.json().get("users", []) if u.get("username")]
 
 
-def descubrir_candidatos() -> list[tuple[str, int]]:
+def descubrir_candidatos() -> list[str]:
     """Consulta 'sugeridas' de Instagram para cada cuenta que ya seguimos
-    y devuelve las que no están todavía en config.json, ordenadas por
-    cuántas de nuestras cuentas la sugirieron (más veces = más señal).
-    No las agrega solo — solo las reporta para revisión manual."""
+    (salteando las consultadas hace menos de _DIAS_ANTES_DE_RECONSULTAR)
+    y agrega directo a config.json las que no estén ya ahí."""
+    service = get_service()
     config = json.loads(CONFIG_PATH.read_text())
     cuentas_actuales = {c.lower() for c in config.get("cuentas_seguidas") or []}
     excluidas = {c.lower() for c in config.get("cuentas_excluidas") or []}
 
-    conteo: dict[str, int] = {}
+    consultadas = cargar_cuentas_consultadas(service)
+    hoy = date.today()
+    a_consultar = []
     for username in sorted(cuentas_actuales):
+        fecha_str = consultadas.get(username)
+        if fecha_str:
+            dias = (hoy - date.fromisoformat(fecha_str)).days
+            if dias < _DIAS_ANTES_DE_RECONSULTAR:
+                continue
+        a_consultar.append(username)
+
+    if not a_consultar:
+        print("[curar_fuentes] Todas las cuentas se consultaron hace poco, nada para revisar")
+        return []
+    print(f"[curar_fuentes] Consultando sugeridas para {len(a_consultar)} cuenta(s)")
+
+    nuevas: set[str] = set()
+    consultadas_ahora = []
+    for username in a_consultar:
         try:
             sugeridas = _sugeridas_para(username)
+            consultadas_ahora.append(username)
         except Exception as e:
             print(f"[curar_fuentes] @{username}: error consultando sugeridas — {e}")
             continue
@@ -116,19 +144,19 @@ def descubrir_candidatos() -> list[tuple[str, int]]:
             s = s.lower()
             if s in cuentas_actuales or s in excluidas:
                 continue
-            conteo[s] = conteo.get(s, 0) + 1
+            nuevas.add(s)
 
-    candidatos = sorted(
-        ((u, n) for u, n in conteo.items() if n >= MIN_SUGERENCIAS_PARA_MOSTRAR),
-        key=lambda x: -x[1],
-    )
-    if candidatos:
-        print(f"[curar_fuentes] {len(candidatos)} cuenta(s) candidata(s) nueva(s) (revisar a mano):")
-        for u, n in candidatos:
-            print(f"  @{u} (sugerida por {n} cuenta(s) nuestra(s))")
-    else:
+    marcar_cuentas_consultadas(service, consultadas_ahora)
+
+    if not nuevas:
         print("[curar_fuentes] Sin candidatas nuevas esta vez")
-    return candidatos
+        return []
+
+    config["cuentas_seguidas"] = sorted(cuentas_actuales | nuevas)
+    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
+    for u in sorted(nuevas):
+        print(f"[curar_fuentes] Cuenta nueva agregada: @{u}")
+    return sorted(nuevas)
 
 
 if __name__ == "__main__":

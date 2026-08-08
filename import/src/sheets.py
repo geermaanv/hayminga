@@ -26,6 +26,11 @@ SHEET_NAME      = "Eventos"
 FUENTES_STATS_SHEET_NAME = "FuentesStats"
 FUENTES_STATS_HEADERS = ["Tipo", "Nombre", "IntentosSinHit", "UltimoHit"]
 
+# Qué cuentas ya se consultaron por "sugeridas" (v2/user/suggested/profiles)
+# — evita repetir la misma consulta en cada corrida del curador.
+CUENTAS_CONSULTADAS_SHEET_NAME = "CuentasConsultadas"
+CUENTAS_CONSULTADAS_HEADERS = ["Username", "FechaConsulta"]
+
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
 # esperan esas posiciones.
@@ -166,6 +171,52 @@ def actualizar_fuentes_stats(service, resultados: dict[tuple, bool]):
             insertDataOption="INSERT_ROWS",
             body={"values": nuevas},
         ).execute()
+
+
+def cargar_cuentas_consultadas(service) -> dict[str, str]:
+    """Devuelve {username: fecha_ultima_consulta_iso}."""
+    get_or_create_sheet_with_headers(service, CUENTAS_CONSULTADAS_SHEET_NAME, CUENTAS_CONSULTADAS_HEADERS)
+    result = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_CONSULTADAS_SHEET_NAME}!A2:B")
+        .execute()
+    )
+    return {row[0]: row[1] for row in result.get("values", []) if row}
+
+
+def marcar_cuentas_consultadas(service, usernames: list[str]):
+    if not usernames:
+        return
+    hoy = date.today().isoformat()
+    existentes = cargar_cuentas_consultadas(service)
+    nuevas = [u for u in usernames if u not in existentes]
+    repetidas = [u for u in usernames if u in existentes]
+
+    if nuevas:
+        service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{CUENTAS_CONSULTADAS_SHEET_NAME}!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [[u, hoy] for u in nuevas]},
+        ).execute()
+
+    if repetidas:
+        result = (
+            service.spreadsheets().values()
+            .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_CONSULTADAS_SHEET_NAME}!A2:B")
+            .execute()
+        )
+        filas = {row[0]: i for i, row in enumerate(result.get("values", []), start=2) if row}
+        updates = [
+            {"range": f"{CUENTAS_CONSULTADAS_SHEET_NAME}!B{filas[u]}", "values": [[hoy]]}
+            for u in repetidas if u in filas
+        ]
+        if updates:
+            service.spreadsheets().values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body={"valueInputOption": "RAW", "data": updates},
+            ).execute()
 
 
 def _col_letter(n: int) -> str:
