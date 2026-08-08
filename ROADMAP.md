@@ -149,7 +149,17 @@ en los commits (`git log`); esto es el resumen narrativo.
   `tierraarquitectura`, `tribudelatierra`, `vuelta_tierra`,
   `ecovilla_gaia` — referentes argentinos identificados por el usuario
   (no solo seguidores genéricos de una cuenta, sino divulgadores y
-  estudios con alcance real).
+  estudios con alcance real). Se sumaron 39 más vía
+  `v2/user/suggested/profiles` (cuentas similares a De Barro según el
+  propio algoritmo de Instagram — señal mucho mejor que revisar lista
+  de seguidores: ~30 de 39 eran relevantes, contra ~15 de 400 de la
+  lista de seguidores cruda). Total: 74 cuentas.
+- **Descubrimiento automático de candidatas** (`descubrir_candidatos()`
+  en `curar_fuentes.py`, corre junto con la baja en el mismo workflow
+  semanal/diario): consulta "sugeridas" para cada cuenta que ya
+  seguimos, junta las que no están en `config.json` y las reporta
+  (ordenadas por cuántas de nuestras cuentas las sugirieron) — no las
+  agrega solo, mismo criterio que las altas de hashtags.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
