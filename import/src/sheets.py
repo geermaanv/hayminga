@@ -12,12 +12,19 @@ import json
 import uuid
 import re
 import unicodedata
+from datetime import date
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 SCOPES          = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID  = os.environ["GOOGLE_SPREADSHEET_ID"]
 SHEET_NAME      = "Eventos"
+
+# Estadísticas de fuentes de descubrimiento (hashtags/cuentas de
+# hiker_pipeline.py) — las lee y actualiza el curador semanal
+# (curar_fuentes.py) para dar de baja solas las que dejaron de servir.
+FUENTES_STATS_SHEET_NAME = "FuentesStats"
+FUENTES_STATS_HEADERS = ["Tipo", "Nombre", "IntentosSinHit", "UltimoHit"]
 
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
@@ -75,6 +82,90 @@ def ensure_header(service):
             body={"values": [faltantes]},
         ).execute()
         print(f"[sheets] Header actualizado, columnas agregadas: {faltantes}")
+
+
+def _sheet_existe(service, sheet_name: str) -> bool:
+    meta = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+    return any(s["properties"]["title"] == sheet_name for s in meta["sheets"])
+
+
+def get_or_create_sheet_with_headers(service, sheet_name: str, headers: list[str]):
+    if not _sheet_existe(service, sheet_name):
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]},
+        ).execute()
+        service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{sheet_name}!A1",
+            valueInputOption="RAW",
+            body={"values": [headers]},
+        ).execute()
+        print(f"[sheets] Hoja '{sheet_name}' creada")
+
+
+def cargar_fuentes_stats(service) -> dict[tuple, dict]:
+    """Devuelve {(tipo, nombre): {"fila": N, "intentos_sin_hit": int}}."""
+    get_or_create_sheet_with_headers(service, FUENTES_STATS_SHEET_NAME, FUENTES_STATS_HEADERS)
+    result = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{FUENTES_STATS_SHEET_NAME}!A2:D")
+        .execute()
+    )
+    stats = {}
+    for i, row in enumerate(result.get("values", []), start=2):
+        row = (row + [""] * 4)[:4]
+        tipo, nombre = row[0], row[1]
+        try:
+            intentos = int(row[2] or 0)
+        except ValueError:
+            intentos = 0
+        stats[(tipo, nombre)] = {"fila": i, "intentos_sin_hit": intentos}
+    return stats
+
+
+def actualizar_fuentes_stats(service, resultados: dict[tuple, bool]):
+    """resultados: {(tipo, nombre): hubo_hit_en_esta_corrida}. Suma 1 al
+    contador si no hubo hit, lo resetea a 0 si sí hubo — así 50 intentos
+    seguidos sin producir nada es la señal de "esta fuente ya no sirve"."""
+    if not resultados:
+        return
+    stats = cargar_fuentes_stats(service)
+    hoy = date.today().isoformat()
+    updates = []
+    nuevas = []
+    for (tipo, nombre), hubo_hit in resultados.items():
+        actual = stats.get((tipo, nombre))
+        if actual is None:
+            nuevas.append([tipo, nombre, "0" if hubo_hit else "1", hoy if hubo_hit else ""])
+            continue
+        nuevo_valor = 0 if hubo_hit else actual["intentos_sin_hit"] + 1
+        if hubo_hit:
+            updates.append({
+                "range": f"{FUENTES_STATS_SHEET_NAME}!C{actual['fila']}:D{actual['fila']}",
+                "values": [[str(nuevo_valor), hoy]],
+            })
+        else:
+            # no tocar UltimoHit (columna D) si no hubo hit — se mantiene el histórico
+            updates.append({
+                "range": f"{FUENTES_STATS_SHEET_NAME}!C{actual['fila']}",
+                "values": [[str(nuevo_valor)]],
+            })
+
+    if updates:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"valueInputOption": "RAW", "data": updates},
+        ).execute()
+
+    if nuevas:
+        service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{FUENTES_STATS_SHEET_NAME}!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": nuevas},
+        ).execute()
 
 
 def _col_letter(n: int) -> str:

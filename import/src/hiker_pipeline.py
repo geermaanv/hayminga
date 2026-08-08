@@ -41,7 +41,10 @@ from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
     validate_event_data,
 )
-from src.sheets import append_events, get_service, instagram_shortcode, SPREADSHEET_ID, SHEET_NAME
+from src.sheets import (
+    append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
+    SPREADSHEET_ID, SHEET_NAME,
+)
 
 IMAGES_DIR = Path("images_hiker")
 
@@ -451,6 +454,7 @@ def run() -> int:
     print(f"[hiker_pipeline] {len(existing_links)} link(s) ya en el Sheet")
 
     eventos = []
+    fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
     for hashtag in hashtags:
         try:
             posts = fetch_hashtag_posts(hashtag)
@@ -458,6 +462,7 @@ def run() -> int:
             print(f"[hiker_pipeline] #{hashtag}: error consultando HikerAPI — {e}")
             continue
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
+        fuentes_resultados[("hashtag", hashtag)] = False
 
         for post in posts:
             try:
@@ -468,6 +473,7 @@ def run() -> int:
             if evento:
                 eventos.append(evento)
                 existing_links.add(post["link"])
+                fuentes_resultados[("hashtag", hashtag)] = True
 
     # Timeline real de cuentas ya conocidas de organizadores argentinos —
     # a diferencia de los hashtags, no compite por popularidad global, así
@@ -480,6 +486,7 @@ def run() -> int:
             print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
             continue
         print(f"[hiker_pipeline] @{username}: {len(posts)} post(s)")
+        fuentes_resultados[("cuenta", username)] = False
 
         # No se da de baja sola — se marca en el log para revisión manual,
         # mismo criterio que la curación de hashtags (juntar el dato,
@@ -502,9 +509,16 @@ def run() -> int:
             if evento:
                 eventos.append(evento)
                 existing_links.add(post["link"])
+                fuentes_resultados[("cuenta", username)] = True
 
     inserted = append_events(eventos)
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s)")
+
+    try:
+        actualizar_fuentes_stats(service, fuentes_resultados)
+    except Exception as e:
+        print(f"[hiker_pipeline] error actualizando FuentesStats — {e}")
+
     return inserted
 
 

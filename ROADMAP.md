@@ -131,6 +131,25 @@ en los commits (`git log`); esto es el resumen narrativo.
   pipeline solo marca en el log cuando una cuenta seguida no publicó en
   más de 180 días, mismo criterio que la curación de hashtags (juntar
   el dato, decidir a mano con más contexto).
+- **Auto-curación de fuentes** (ago 2026): en vez de revisar hashtags y
+  cuentas a mano, `hiker_pipeline.py` ahora registra en una hoja nueva
+  (`FuentesStats`: Tipo, Nombre, IntentosSinHit, UltimoHit) si cada
+  hashtag/cuenta produjo al menos 1 evento en la corrida — el contador
+  se resetea a 0 con cualquier hit, suma 1 si no hubo nada. Un workflow
+  nuevo (`curar-fuentes.yml`, diario 09:00 Arg — temporal, hasta tener
+  más volumen; después pasa a semanal) corre
+  `curar_fuentes.py`: cualquier fuente con **50+ intentos seguidos sin
+  producir nada** se saca sola de `config.json`, con commit y push
+  automático (permissions: contents: write). Solo automatiza la
+  **baja** — las altas de candidatos nuevos siguen siendo manuales
+  porque necesitan criterio de calidad, no solo un número (ver el
+  ejemplo de hashtags descartados por ser nombres propios/lugares).
+- **Más cuentas seguidas**: sumadas `maxipermacultura`,
+  `permacultura.naturalia`, `arteytierrabioconstruccion`,
+  `tierraarquitectura`, `tribudelatierra`, `vuelta_tierra`,
+  `ecovilla_gaia` — referentes argentinos identificados por el usuario
+  (no solo seguidores genéricos de una cuenta, sino divulgadores y
+  estudios con alcance real).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

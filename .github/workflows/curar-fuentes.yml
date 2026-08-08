@@ -1,0 +1,52 @@
+name: Curar fuentes de descubrimiento (hashtags/cuentas)
+
+on:
+  schedule:
+    - cron: "0 12 * * *"  # 09:00 hora Argentina, todos los días (temporal, hasta tener más volumen)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  curar-fuentes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    defaults:
+      run:
+        working-directory: import
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: import/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Dar de baja fuentes sin resultados
+        env:
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python -m src.curar_fuentes
+
+      - name: Commitear cambios si hubo bajas
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add config.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en config.json"
+          else
+            git commit -m "Curar fuentes: baja automática de hashtags/cuentas sin resultados (50+ intentos)"
+            git push
+          fi
