@@ -30,7 +30,7 @@ import json
 import base64
 import requests
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 from google import genai
 from google.genai import types
@@ -410,6 +410,14 @@ def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = froz
     # de los que buscamos nosotros).
     data["hashtags_post"] = " ".join(sorted(set(re.findall(r"#\w+", post.get("caption") or ""))))
     data = validate_event_data(data)
+
+    # Un posteo puede ser reciente (pasa el filtro de antigüedad de arriba,
+    # que mira cuándo se PUBLICÓ el post) pero anunciar un evento que ya
+    # pasó (ej. reposteos, posts indexados tarde). Acá no hay ambigüedad
+    # como con país/idioma: si el evento ya fue, no tiene sentido revisarlo.
+    fecha_relevante = data.get("fecha_fin_iso") or data.get("fecha_inicio_iso")
+    if fecha_relevante and fecha_relevante < date.today().isoformat():
+        return None
 
     # Los hashtags son globales (no hay forma de filtrar por país en la
     # búsqueda); lo que no es de Argentina se descarta acá, no tiene

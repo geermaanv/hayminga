@@ -164,6 +164,22 @@ en los commits (`git log`); esto es el resumen narrativo.
   de "sugeridas" en cada corrida, se registra en una hoja nueva
   (`CuentasConsultadas`: Username, FechaConsulta) cuándo se consultó
   cada cuenta — solo se vuelve a consultar después de 30 días.
+- **Filtro de eventos ya pasados**: el filtro de antigüedad existente
+  mira cuándo se publicó el POST, no la fecha del EVENTO — un posteo
+  reciente puede anunciar algo que ya pasó (confirmado con casos
+  reales: "Bioferia Festival" con fecha abril 2026, descubierto en
+  agosto). Ahora se descarta directo si `fecha_fin`/`fecha_inicio` ya
+  quedó en el pasado — a diferencia de país/idioma, acá no hay
+  ambigüedad posible.
+- **Gaps conocidos, sin resolver todavía**: (1) país sigue quedando
+  vacío para algunos posts de fuera de Argentina (México confirmado en
+  un caso real) — el filtro de idioma no ayuda porque el post estaba en
+  español; (2) el mismo curso/evento real promocionado con varios posts
+  de Instagram distintos (mismo organizador, texto/fecha ligeramente
+  distinto en cada uno) genera duplicados que el dedup por
+  nombre+fecha+provincia no siempre agarra — mismo patrón que el caso
+  DeBarro de la Etapa 9.5, pendiente de una solución más robusta
+  (fuzzy matching o comparar por organizador).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
