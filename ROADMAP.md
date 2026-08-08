@@ -115,6 +115,22 @@ en los commits (`git log`); esto es el resumen narrativo.
   del post, **antes** de gastar la llamada a la IA — más confiable y
   ahorra costo. El filtro de `idioma` que devuelve la IA se mantiene
   como capa adicional, no se sacó.
+- **Descubrimiento por cuenta seguida** (`config.json` →
+  `cuentas_seguidas`), además de hashtags: los hashtags genéricos
+  compiten por popularidad global (`top`), y la comunidad de
+  bioconstrucción argentina termina eclipsada por países con más
+  volumen online (España, México). `fetch_user_posts()` usa
+  `/v1/user/medias` — el timeline real y cronológico de una cuenta
+  puntual, sin ese sesgo. Sembrado con `redprotierraargentina` y ~26
+  cuentas de organizaciones/practicantes argentinos conocidos (filtradas
+  a mano de una lista de seguidores mucho más grande — se descartaron
+  cuentas personales sin actividad de bioconstrucción visible). Mismos
+  filtros que los hashtags (dedup, antigüedad, idioma, país, blacklist).
+  No reemplaza los hashtags, es una fuente adicional.
+- **Curación de cuentas inactivas**: no se dan de baja solas — el
+  pipeline solo marca en el log cuando una cuenta seguida no publicó en
+  más de 180 días, mismo criterio que la curación de hashtags (juntar
+  el dato, decidir a mano con más contexto).
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

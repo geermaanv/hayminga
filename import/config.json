@@ -41,5 +41,16 @@
   "max_por_hashtag": 15,
   "cuentas_excluidas": [
     "okambuva"
+  ],
+  "cuentas_seguidas": [
+    "redprotierraargentina", "barrobot3d", "estepa_solar",
+    "bioconstrucciontercermundista", "masa.termica", "cuchara_y_barro",
+    "tica.bioarquitectura", "latinyscom", "cooperativacaminantes",
+    "diplomadobioarquitectura", "hornero_tec", "debarroformacion",
+    "hermanobarro", "caldero.arq", "micasita.debarro",
+    "casa_aldea_permacultura", "restaura.com.ar", "eolh_bioconstruccion",
+    "solitec.ar", "chakanabioconstruccion", "raiz.bioconstruccion",
+    "nopalbioconstruccion", "totxo.arq.lab", "diplomaturadetierra",
+    "superadobedelsur", "mariposa.de.barro", "materia.cruda"
   ]
 }

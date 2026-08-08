@@ -59,6 +59,25 @@ def _hiker_key() -> str:
     return key
 
 
+def _item_a_post(item: dict) -> dict | None:
+    code = item.get("code")
+    image_url = item.get("thumbnail_url") or ""
+    if not code or not image_url:
+        return None
+    location = item.get("location") or {}
+    return {
+        "link": f"https://www.instagram.com/p/{code}/",
+        "image_url": image_url,
+        "caption": item.get("caption_text") or "",
+        "taken_at_ts": item.get("taken_at_ts"),
+        "lat": location.get("lat"),
+        "lng": location.get("lng"),
+        "location_name": location.get("name") or "",
+        "location_address": location.get("address") or "",
+        "username": ((item.get("user") or {}).get("username") or "").lower(),
+    }
+
+
 def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
     # hashtag/medias/recent devuelve siempre [] (esa pestaña de Instagram
     # está más restringida); hashtag/medias/top sí trae datos reales.
@@ -71,25 +90,34 @@ def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
     resp.raise_for_status()
     data = resp.json()
     items = data if isinstance(data, list) else data.get("items", [])
-    posts = []
-    for item in items:
-        code = item.get("code")
-        image_url = item.get("thumbnail_url") or ""
-        if not code or not image_url:
-            continue
-        location = item.get("location") or {}
-        posts.append({
-            "link": f"https://www.instagram.com/p/{code}/",
-            "image_url": image_url,
-            "caption": item.get("caption_text") or "",
-            "taken_at_ts": item.get("taken_at_ts"),
-            "lat": location.get("lat"),
-            "lng": location.get("lng"),
-            "location_name": location.get("name") or "",
-            "location_address": location.get("address") or "",
-            "username": ((item.get("user") or {}).get("username") or "").lower(),
-        })
-    return posts
+    return [p for item in items if (p := _item_a_post(item))]
+
+
+def fetch_user_posts(username: str, amount: int = 12) -> list[dict]:
+    """A diferencia de hashtag/medias/top (más comentado/likeado
+    HISTÓRICAMENTE), esto trae el timeline real y cronológico de una
+    cuenta puntual — para cuentas ya conocidas de organizadores
+    argentinos, es mucho más confiable que pescar en hashtags globales."""
+    resp = requests.get(
+        "https://api.hikerapi.com/v1/user/by/username",
+        params={"username": username},
+        headers={"x-access-key": _hiker_key()},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    user_id = resp.json().get("pk")
+    if not user_id:
+        return []
+    resp = requests.get(
+        "https://api.hikerapi.com/v1/user/medias",
+        params={"user_id": user_id, "amount": amount},
+        headers={"x-access-key": _hiker_key()},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    items = resp.json()
+    items = items if isinstance(items, list) else items.get("items", [])
+    return [p for item in items if (p := _item_a_post(item))]
 
 
 def _download_image(url: str, dest: Path) -> bool:
@@ -311,6 +339,10 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 # ya pasó: ni vale la pena gastar una llamada a la IA en extraerlo.
 _MAX_ANTIGUEDAD_POST_DIAS = 270
 
+# Umbral para marcar en el log una cuenta seguida como posiblemente
+# inactiva (no da de baja sola, ver el loop de cuentas_seguidas en run()).
+_MAX_INACTIVIDAD_CUENTA_DIAS = 180
+
 # La IA no es confiable marcando idioma/país cuando el flyer no lo dice
 # explícito (confirmado con casos reales: "4-day cob course", "Bamboo
 # Anatomy Workshop" quedaron con Pais e idioma vacíos y pasaron el
@@ -426,6 +458,40 @@ def run() -> int:
             print(f"[hiker_pipeline] #{hashtag}: error consultando HikerAPI — {e}")
             continue
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
+
+        for post in posts:
+            try:
+                evento = procesar_post(post, existing_links, cuentas_excluidas)
+            except Exception as e:
+                print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
+                continue
+            if evento:
+                eventos.append(evento)
+                existing_links.add(post["link"])
+
+    # Timeline real de cuentas ya conocidas de organizadores argentinos —
+    # a diferencia de los hashtags, no compite por popularidad global, así
+    # que es más confiable para encontrar eventos argentinos genuinos.
+    cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
+    for username in cuentas_seguidas:
+        try:
+            posts = fetch_user_posts(username)
+        except Exception as e:
+            print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
+            continue
+        print(f"[hiker_pipeline] @{username}: {len(posts)} post(s)")
+
+        # No se da de baja sola — se marca en el log para revisión manual,
+        # mismo criterio que la curación de hashtags (juntar el dato,
+        # decidir con más contexto que solo el número).
+        ultimo_post_ts = max((p["taken_at_ts"] for p in posts if p.get("taken_at_ts")), default=None)
+        if ultimo_post_ts:
+            antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(ultimo_post_ts, tz=timezone.utc)
+            if antiguedad.days > _MAX_INACTIVIDAD_CUENTA_DIAS:
+                print(f"[hiker_pipeline] @{username}: sin posts hace {antiguedad.days} días, "
+                      f"revisar si sigue activa")
+        elif posts == []:
+            print(f"[hiker_pipeline] @{username}: 0 posts encontrados, revisar si la cuenta existe/es pública")
 
         for post in posts:
             try:
