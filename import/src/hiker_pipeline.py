@@ -311,6 +311,30 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 # ya pasó: ni vale la pena gastar una llamada a la IA en extraerlo.
 _MAX_ANTIGUEDAD_POST_DIAS = 270
 
+# La IA no es confiable marcando idioma/país cuando el flyer no lo dice
+# explícito (confirmado con casos reales: "4-day cob course", "Bamboo
+# Anatomy Workshop" quedaron con Pais e idioma vacíos y pasaron el
+# filtro). Un chequeo de palabras comunes sobre el caption real, antes
+# de gastar la llamada a la IA, es más confiable y además ahorra costo.
+_PALABRAS_ES = {
+    "de", "la", "el", "en", "y", "que", "para", "con", "un", "una", "los",
+    "las", "del", "se", "por", "curso", "taller", "evento", "vení",
+    "inscripción", "inscripciones", "cupos", "más", "info", "gratis",
+}
+_PALABRAS_EN = {
+    "the", "and", "for", "with", "workshop", "course", "learn", "book",
+    "now", "our", "your", "we", "you", "this", "join", "register", "class",
+}
+
+
+def _parece_ingles(texto: str) -> bool:
+    palabras = re.findall(r"[a-záéíóúñ']+", (texto or "").lower())
+    if len(palabras) < 6:
+        return False
+    en = sum(1 for p in palabras if p in _PALABRAS_EN)
+    es = sum(1 for p in palabras if p in _PALABRAS_ES)
+    return en >= 3 and en > es
+
 
 def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = frozenset()) -> dict | None:
     if post.get("username") and post["username"] in cuentas_excluidas:
@@ -329,6 +353,9 @@ def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = froz
         antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(post["taken_at_ts"], tz=timezone.utc)
         if antiguedad.days > _MAX_ANTIGUEDAD_POST_DIAS:
             return None
+
+    if _parece_ingles(post.get("caption")):
+        return None
 
     IMAGES_DIR.mkdir(exist_ok=True)
     image_path = IMAGES_DIR / (post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg")

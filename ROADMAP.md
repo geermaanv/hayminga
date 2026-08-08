@@ -106,6 +106,15 @@ en los commits (`git log`); esto es el resumen narrativo.
   gastar IA, así que el costo extra es mínimo (~$0.02/corrida en
   llamadas de descubrimiento a HikerAPI, más solo lo que haga falta de
   Gemini/Claude para lo genuinamente nuevo).
+- **Filtro de idioma por código, no por la IA**: confirmado con casos
+  reales (`4-day cob course`, `Bamboo Anatomy Workshop`) que la IA no
+  marca `pais`/`idioma` de forma confiable cuando el flyer no lo dice
+  explícito — quedaban con esos campos vacíos y pasaban el filtro,
+  obligando a descartarlos a mano. Se agregó `_parece_ingles()`: cuenta
+  palabras comunes en español vs inglés directo sobre el caption real
+  del post, **antes** de gastar la llamada a la IA — más confiable y
+  ahorra costo. El filtro de `idioma` que devuelve la IA se mantiene
+  como capa adicional, no se sacó.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.
