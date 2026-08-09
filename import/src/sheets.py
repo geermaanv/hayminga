@@ -31,6 +31,12 @@ FUENTES_STATS_HEADERS = ["Tipo", "Nombre", "IntentosSinHit", "UltimoHit"]
 CUENTAS_CONSULTADAS_SHEET_NAME = "CuentasConsultadas"
 CUENTAS_CONSULTADAS_HEADERS = ["Username", "FechaConsulta"]
 
+# Cache de user_id de Instagram por username — evita gastar una llamada
+# extra a /v1/user/by/username en cada corrida para cuentas que ya
+# resolvimos antes (HikerAPI es pago por request).
+CUENTAS_IDS_SHEET_NAME = "CuentasIds"
+CUENTAS_IDS_HEADERS = ["Username", "UserId"]
+
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
 # esperan esas posiciones.
@@ -217,6 +223,35 @@ def marcar_cuentas_consultadas(service, usernames: list[str]):
                 spreadsheetId=SPREADSHEET_ID,
                 body={"valueInputOption": "RAW", "data": updates},
             ).execute()
+
+
+def cargar_cuentas_ids(service) -> dict[str, int]:
+    get_or_create_sheet_with_headers(service, CUENTAS_IDS_SHEET_NAME, CUENTAS_IDS_HEADERS)
+    result = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:B")
+        .execute()
+    )
+    out = {}
+    for row in result.get("values", []):
+        if len(row) >= 2 and row[1]:
+            try:
+                out[row[0]] = int(row[1])
+            except ValueError:
+                continue
+    return out
+
+
+def guardar_cuentas_ids(service, nuevos: dict[str, int]):
+    if not nuevos:
+        return
+    service.spreadsheets().values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{CUENTAS_IDS_SHEET_NAME}!A1",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": [[u, str(pk)] for u, pk in nuevos.items()]},
+    ).execute()
 
 
 def _col_letter(n: int) -> str:

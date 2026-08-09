@@ -32,6 +32,7 @@ import requests
 from src.sheets import (
     get_service, cargar_fuentes_stats,
     cargar_cuentas_consultadas, marcar_cuentas_consultadas,
+    cargar_cuentas_ids, guardar_cuentas_ids,
 )
 
 UMBRAL_INTENTOS_SIN_HIT = 50
@@ -93,8 +94,9 @@ def _pk_de(username: str) -> int | None:
     return resp.json().get("pk")
 
 
-def _sugeridas_para(username: str) -> list[str]:
-    pk = _pk_de(username)
+def _sugeridas_para(username: str, pk: int | None = None) -> list[str]:
+    if pk is None:
+        pk = _pk_de(username)
     if not pk:
         return []
     resp = requests.get(
@@ -131,11 +133,18 @@ def descubrir_candidatos() -> list[str]:
         return []
     print(f"[curar_fuentes] Consultando sugeridas para {len(a_consultar)} cuenta(s)")
 
+    ids_cacheados = cargar_cuentas_ids(service)
+    ids_nuevos = {}
     nuevas: set[str] = set()
     consultadas_ahora = []
     for username in a_consultar:
         try:
-            sugeridas = _sugeridas_para(username)
+            pk = ids_cacheados.get(username)
+            if pk is None:
+                pk = _pk_de(username)
+                if pk:
+                    ids_nuevos[username] = pk
+            sugeridas = _sugeridas_para(username, pk=pk)
             consultadas_ahora.append(username)
         except Exception as e:
             print(f"[curar_fuentes] @{username}: error consultando sugeridas — {e}")
@@ -147,6 +156,7 @@ def descubrir_candidatos() -> list[str]:
             nuevas.add(s)
 
     marcar_cuentas_consultadas(service, consultadas_ahora)
+    guardar_cuentas_ids(service, ids_nuevos)
 
     if not nuevas:
         print("[curar_fuentes] Sin candidatas nuevas esta vez")

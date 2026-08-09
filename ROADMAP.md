@@ -180,6 +180,16 @@ en los commits (`git log`); esto es el resumen narrativo.
   nombre+fecha+provincia no siempre agarra — mismo patrón que el caso
   DeBarro de la Etapa 9.5, pendiente de una solución más robusta
   (fuzzy matching o comparar por organizador).
+- **Control de costo de HikerAPI** (ago 2026): llegado a $4 gastados en
+  pocos días, se hizo el cálculo — 3 corridas/día × (33 hashtags + 74
+  cuentas × 2 llamadas c/u para resolver el `user_id`) ≈ 543
+  llamadas/día ≈ $10/mes, por arriba del presupuesto original de
+  $5/mes. Dos cortes: (1) cron bajado de 3x a **2x/día** (08:00 y 20:00
+  Arg); (2) **cache de `user_id` por username** (hoja nueva
+  `CuentasIds`) — antes se resolvía en cada corrida así ya se conociera
+  la cuenta, ahora solo la primera vez. Usado tanto en el pipeline
+  diario como en el descubrimiento de candidatas del curador. Costo
+  estimado después de los cortes: ~$1.80/mes.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

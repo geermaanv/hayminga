@@ -43,6 +43,7 @@ from src.processor import (
 )
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
+    cargar_cuentas_ids, guardar_cuentas_ids,
     SPREADSHEET_ID, SHEET_NAME,
 )
 
@@ -96,11 +97,7 @@ def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
     return [p for item in items if (p := _item_a_post(item))]
 
 
-def fetch_user_posts(username: str, amount: int = 12) -> list[dict]:
-    """A diferencia de hashtag/medias/top (más comentado/likeado
-    HISTÓRICAMENTE), esto trae el timeline real y cronológico de una
-    cuenta puntual — para cuentas ya conocidas de organizadores
-    argentinos, es mucho más confiable que pescar en hashtags globales."""
+def resolver_user_id(username: str) -> int | None:
     resp = requests.get(
         "https://api.hikerapi.com/v1/user/by/username",
         params={"username": username},
@@ -108,7 +105,19 @@ def fetch_user_posts(username: str, amount: int = 12) -> list[dict]:
         timeout=20,
     )
     resp.raise_for_status()
-    user_id = resp.json().get("pk")
+    return resp.json().get("pk")
+
+
+def fetch_user_posts(username: str, amount: int = 12, user_id: int | None = None) -> list[dict]:
+    """A diferencia de hashtag/medias/top (más comentado/likeado
+    HISTÓRICAMENTE), esto trae el timeline real y cronológico de una
+    cuenta puntual — para cuentas ya conocidas de organizadores
+    argentinos, es mucho más confiable que pescar en hashtags globales.
+
+    `user_id` opcional: pasarlo (cacheado) evita una llamada extra a
+    HikerAPI para resolverlo — es pago por request."""
+    if user_id is None:
+        user_id = resolver_user_id(username)
     if not user_id:
         return []
     resp = requests.get(
@@ -487,9 +496,16 @@ def run() -> int:
     # a diferencia de los hashtags, no compite por popularidad global, así
     # que es más confiable para encontrar eventos argentinos genuinos.
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
+    ids_cacheados = cargar_cuentas_ids(service)
+    ids_nuevos = {}
     for username in cuentas_seguidas:
         try:
-            posts = fetch_user_posts(username)
+            user_id = ids_cacheados.get(username)
+            if user_id is None:
+                user_id = resolver_user_id(username)
+                if user_id:
+                    ids_nuevos[username] = user_id
+            posts = fetch_user_posts(username, user_id=user_id)
         except Exception as e:
             print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
             continue
@@ -526,6 +542,11 @@ def run() -> int:
         actualizar_fuentes_stats(service, fuentes_resultados)
     except Exception as e:
         print(f"[hiker_pipeline] error actualizando FuentesStats — {e}")
+
+    try:
+        guardar_cuentas_ids(service, ids_nuevos)
+    except Exception as e:
+        print(f"[hiker_pipeline] error guardando CuentasIds — {e}")
 
     return inserted
 
