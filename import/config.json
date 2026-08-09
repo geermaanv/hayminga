@@ -66,7 +66,8 @@
   ],
   "max_por_hashtag": 15,
   "cuentas_excluidas": [
-    "okambuva"
+    "okambuva",
+    "mrbeast"
   ],
   "cuentas_seguidas": [
     "3.c.construcciones",
@@ -162,7 +163,6 @@
     "micamora.bioconstruccion",
     "micasita.debarro",
     "micropisos.comarca.andina",
-    "mrbeast",
     "mundohuertas",
     "naluum.permacultura",
     "nanderoga_",
