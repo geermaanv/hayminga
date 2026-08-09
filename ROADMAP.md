@@ -190,6 +190,15 @@ en los commits (`git log`); esto es el resumen narrativo.
   la cuenta, ahora solo la primera vez. Usado tanto en el pipeline
   diario como en el descubrimiento de candidatas del curador. Costo
   estimado después de los cortes: ~$1.80/mes.
+- **Fix urgente: `descubrir_candidatos()` sin filtro de calidad casi
+  agrega 900 cuentas de una** — al sacar el umbral de "sugerida por 2+
+  cuentas nuestras" (para que fuera full-auto), la primera corrida real
+  encontró que `suggested/profiles` de Instagram no es puramente
+  temático: devolvió surf en Francia, acroyoga en los Alpes y cientos
+  de cuentas sin relación. No llegó a commitearse (falló el push por
+  una carrera con otro commit en paralelo, suerte). Se repuso el umbral
+  (`MIN_SUGERENCIAS_PARA_AGREGAR = 2`) — sigue siendo full-auto, solo
+  con un piso mínimo de señal real antes de agregar.
 - Se descartan directo (sin escribir fila) los eventos de otros países —
   los hashtags son globales, no hay forma de filtrar por país en la
   búsqueda misma.

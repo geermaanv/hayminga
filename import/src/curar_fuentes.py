@@ -37,6 +37,7 @@ from src.sheets import (
 
 UMBRAL_INTENTOS_SIN_HIT = 50
 _DIAS_ANTES_DE_RECONSULTAR = 30
+MIN_SUGERENCIAS_PARA_AGREGAR = 2  # sugerida por al menos N cuentas nuestras
 
 CONFIG_PATH = Path("config.json")
 
@@ -135,7 +136,7 @@ def descubrir_candidatos() -> list[str]:
 
     ids_cacheados = cargar_cuentas_ids(service)
     ids_nuevos = {}
-    nuevas: set[str] = set()
+    conteo: dict[str, int] = {}
     consultadas_ahora = []
     for username in a_consultar:
         try:
@@ -153,7 +154,14 @@ def descubrir_candidatos() -> list[str]:
             s = s.lower()
             if s in cuentas_actuales or s in excluidas:
                 continue
-            nuevas.add(s)
+            conteo[s] = conteo.get(s, 0) + 1
+
+    # "sugeridas" de Instagram no es puramente temático — sin este piso
+    # mínimo, una corrida real trajo más de 900 cuentas sin relación
+    # (surf en Francia, acroyoga en los Alpes, etc.). Que la sugiera más
+    # de una cuenta nuestra es la señal de que sí tiene que ver con el
+    # tema, no solo con el algoritmo genérico de "cuentas parecidas".
+    nuevas = {u for u, n in conteo.items() if n >= MIN_SUGERENCIAS_PARA_AGREGAR}
 
     marcar_cuentas_consultadas(service, consultadas_ahora)
     guardar_cuentas_ids(service, ids_nuevos)
