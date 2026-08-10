@@ -349,7 +349,10 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
 # eventos nuevos reales. Casi ningún evento se anuncia con tanta
 # anticipación, así que un posteo publicado hace más de esto casi seguro
 # ya pasó: ni vale la pena gastar una llamada a la IA en extraerlo.
-_MAX_ANTIGUEDAD_POST_DIAS = 270
+# Bajado de 270 a 180 (caso real: post de 252 días/36 semanas con curso
+# online sin fecha explícita — sobrevivió los dos filtros de fecha
+# porque no había fecha_inicio para comparar Y estaba bajo los 270 días).
+_MAX_ANTIGUEDAD_POST_DIAS = 180
 
 # Umbral para marcar en el log una cuenta seguida como posiblemente
 # inactiva (no da de baja sola, ver el loop de cuentas_seguidas en run()).

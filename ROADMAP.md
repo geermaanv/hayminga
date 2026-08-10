@@ -5,6 +5,16 @@ Claude, Codex) entienda de un vistazo qué existe, por qué, y qué está en
 un estado temporal/no definitivo. El detalle línea por línea siempre está
 en los commits (`git log`); esto es el resumen narrativo.
 
+## ✅ Ajustes de filtrado (ago 2026)
+
+- **Umbral de antigüedad de posteo bajado de 270 a 180 días**: caso real
+  encontrado revisando `?pendientes` — un post de 252 días (36 semanas,
+  visible en el primer comentario) anunciaba un "curso online" sin
+  fecha de inicio extraída. Sobrevivió los dos filtros de fecha: el de
+  "evento ya pasado" no tenía nada para comparar (sin `fecha_inicio`),
+  y el de antigüedad del posteo todavía no llegaba a los 270 días.
+- Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
+
 ## ✅ Resumen semanal por Telegram (ago 2026)
 
 `enviar-resumen.yml` (martes 09:00 hora Argentina) corre
