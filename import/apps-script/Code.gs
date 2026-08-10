@@ -473,7 +473,7 @@ function enviarResumenSemanalDirectorio() {
   var eventos = proximosEventosActivos_();
   var cuerpo = armarCuerpoResumen_(eventos);
   var asunto = eventos.length
-    ? 'hayminga — ' + eventos.length + ' evento(s) próximo(s) de bioconstrucción'
+    ? 'hayminga — ' + eventos.length + (eventos.length === 1 ? ' evento próximo de bioconstrucción' : ' eventos próximos de bioconstrucción')
     : 'hayminga — resumen semanal';
 
   emails.forEach(function(email) {
