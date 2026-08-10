@@ -5,6 +5,32 @@ Claude, Codex) entienda de un vistazo qué existe, por qué, y qué está en
 un estado temporal/no definitivo. El detalle línea por línea siempre está
 en los commits (`git log`); esto es el resumen narrativo.
 
+## ✅ Resumen semanal por Telegram (ago 2026)
+
+`enviar-resumen.yml` (martes 09:00 hora Argentina) corre
+`enviar_resumen_telegram.py`: arma un resumen de los próximos eventos
+activos (hasta 60 días adelante, tope 15 eventos) y lo manda al bot de
+Telegram `@geermaanv_bot`. De ahí el usuario lo reenvía a mano por
+WhatsApp — todavía no hay Comunidad de WhatsApp armada ni API de
+WhatsApp Business (decisión explícita: con 2 suscriptores no vale la
+pena la fricción de armar la Comunidad todavía; se arma cuando el
+volumen lo justifique).
+
+Formato del mensaje: `📅 fecha | Provincia - Tipo — *Título*` + link al
+posteo original (no a hayminga.org — el sitio no tiene páginas
+individuales por evento, así que el link de origen es lo único que
+lleva directo al flyer). El link a `https://hayminga.org` va **primero**
+en el mensaje a propósito: WhatsApp arma la vista previa grande con el
+primer link que encuentra en todo el texto — si no, agarra el link de
+Instagram del primer evento y la tarjeta tapa el resto de la lista
+(confirmado con una prueba real).
+
+Todo mensaje saliente a usuarios finales tiene que incluir el
+recordatorio de cómo aportar eventos (compartir captura/link por WA,
+mandar por mail, o taggear `#hayminga` si publican ellos en Instagram)
+— pedido explícito del usuario, guardado también en memoria para
+sesiones futuras.
+
 ## ✅ Pipeline de producción: HikerAPI (reemplazó a Google Images)
 
 `import-eventos.yml` (el cron diario, 08:00 hora Argentina) corre ahora
