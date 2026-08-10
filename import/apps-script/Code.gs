@@ -441,6 +441,103 @@ function notificarPendientes() {
 }
 
 
+/**
+ * Corré esta función UNA VEZ desde el editor para instalar el trigger
+ * semanal del resumen de eventos por mail al Directorio. Se puede
+ * volver a correr sin problema (borra el trigger viejo primero).
+ */
+function configurarTriggerResumenSemanal() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'enviarResumenSemanalDirectorio') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('enviarResumenSemanalDirectorio')
+    .timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(9).create();
+}
+
+/**
+ * Mismo resumen semanal que se manda por Telegram (ver
+ * import/src/enviar_resumen_telegram.py), pero por mail a cada persona
+ * del Directorio — todas dieron consentimiento explícito al anotarse
+ * (checkbox "Autorizo a que me manden novedades y avisos de hayminga").
+ */
+function enviarResumenSemanalDirectorio() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  var dirSheet = ss.getSheetByName(DIRECTORIO_SHEET_NAME);
+  if (!dirSheet || dirSheet.getLastRow() < 2) return;
+  var emails = dirSheet.getRange(2, 6, dirSheet.getLastRow() - 1, 1).getValues() // columna F = Email
+    .map(function(r) { return String(r[0] || '').trim(); })
+    .filter(function(e) { return e; });
+  if (emails.length === 0) return;
+
+  var eventos = proximosEventosActivos_();
+  var cuerpo = armarCuerpoResumen_(eventos);
+  var asunto = eventos.length
+    ? 'hayminga — ' + eventos.length + ' evento(s) próximo(s) de bioconstrucción'
+    : 'hayminga — resumen semanal';
+
+  emails.forEach(function(email) {
+    MailApp.sendEmail({ to: email, subject: asunto, body: cuerpo });
+  });
+}
+
+var _CTA_RESUMEN = '¿Conocés un evento? Compartí la captura o el link por WhatsApp, ' +
+  'mandalo por mail, o si publicás vos en Instagram taggeá #hayminga.';
+
+function proximosEventosActivos_(diasHaciaAdelante, maxEventos) {
+  diasHaciaAdelante = diasHaciaAdelante || 60;
+  maxEventos = maxEventos || 15;
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
+  var ultimaFila = sheet.getLastRow();
+  if (ultimaFila < 2) return [];
+
+  var filas = sheet.getRange(2, 1, ultimaFila - 1, 12).getValues(); // hasta columna L = Tipo_Evento
+  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  var limite = new Date(hoy.getTime() + diasHaciaAdelante * 24 * 60 * 60 * 1000);
+
+  var eventos = [];
+  filas.forEach(function(row) {
+    if (row[0] !== 'true') return; // columna A = Activo
+    var fecha = parsearFechaDDMMYYYY_(row[4]); // columna E = Fecha_Inicio
+    if (!fecha || fecha < hoy || fecha > limite) return;
+    eventos.push({
+      nombre: row[1], fecha: fecha, provincia: row[7],
+      esVirtual: row[6] === 'true', tipoEvento: row[11], link: row[10],
+    });
+  });
+
+  eventos.sort(function(a, b) { return a.fecha - b.fecha; });
+  return eventos.slice(0, maxEventos);
+}
+
+function parsearFechaDDMMYYYY_(valor) {
+  var m = String(valor || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+}
+
+function armarCuerpoResumen_(eventos) {
+  if (eventos.length === 0) {
+    return 'Esta semana no hay eventos nuevos confirmados para los próximos días.\n\n' + _CTA_RESUMEN;
+  }
+  var lineas = ['https://hayminga.org', '', _CTA_RESUMEN, ''];
+  eventos.forEach(function(ev) {
+    var fechaStr = Utilities.formatDate(ev.fecha, 'GMT-3', 'dd/MM');
+    var lugar = ev.esVirtual ? 'Virtual' : (ev.provincia || '');
+    var partes = [lugar, ev.tipoEvento].filter(function(p) { return p; });
+    var encabezado = partes.join(' - ');
+    var linea = fechaStr + (encabezado ? ' | ' + encabezado : '') + ' — ' + ev.nombre;
+    lineas.push(linea);
+    if (ev.link) lineas.push(ev.link);
+    lineas.push('');
+  });
+  lineas.push(_CTA_RESUMEN);
+  return lineas.join('\n');
+}
+
+
 function normalizarFecha_(fechaStr) {
   // el <input type="date"> del form manda YYYY-MM-DD; el resto del
   // pipeline (Python + frontend) usa DD/MM/YYYY para Fecha_Inicio/Fecha_Fin

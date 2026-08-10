@@ -30,6 +30,15 @@ recordatorio de cómo aportar eventos (compartir captura/link por WA,
 mandar por mail, o taggear `#hayminga` si publican ellos en Instagram)
 — pedido explícito del usuario, guardado también en memoria para
 sesiones futuras.
+- **Mismo resumen, por mail al Directorio**: `Code.gs` ahora tiene
+  `enviarResumenSemanalDirectorio()` (trigger semanal, martes 09:00,
+  instalado corriendo `configurarTriggerResumenSemanal()` una vez desde
+  el editor de Apps Script) — manda el mismo contenido que el mensaje
+  de Telegram a cada email del Directorio. No hizo falta pedir opt-in
+  retroactivo: el formulario de alta del Directorio ya tiene desde
+  siempre un checkbox de consentimiento fijo ("Autorizo a que me manden
+  novedades y avisos de hayminga"), así que todos los que ya están
+  anotados ya lo autorizaron.
 
 ## ✅ Pipeline de producción: HikerAPI (reemplazó a Google Images)
 
