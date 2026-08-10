@@ -472,9 +472,7 @@ function enviarResumenSemanalDirectorio() {
 
   var eventos = proximosEventosActivos_();
   var cuerpo = armarCuerpoResumen_(eventos);
-  var asunto = eventos.length
-    ? 'hayminga — ' + eventos.length + (eventos.length === 1 ? ' evento próximo de bioconstrucción' : ' eventos próximos de bioconstrucción')
-    : 'hayminga — resumen semanal';
+  var asunto = 'Nuevos cursos, talleres y eventos de bioconstrucción — hayminga.org';
 
   emails.forEach(function(email) {
     MailApp.sendEmail({ to: email, subject: asunto, body: cuerpo });
