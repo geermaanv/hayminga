@@ -89,7 +89,7 @@ def _formatear_mensaje(eventos: list[dict]) -> str:
     # el texto — si no, agarra el link de Instagram del primer evento y la
     # tarjeta gigante tapa el resto de la lista.
     lineas = [
-        "🌿 *Próximos eventos de bioconstrucción en Argentina*", "",
+        "🌿 Próximos eventos de bioconstrucción en Argentina", "",
         "https://hayminga.org", "",
         _CTA, "",
     ]
@@ -101,7 +101,7 @@ def _formatear_mensaje(eventos: list[dict]) -> str:
         linea = f"📅 {fecha_str}"
         if encabezado:
             linea += f" | {encabezado}"
-        linea += f" — *{ev['nombre']}*"
+        linea += f" — {ev['nombre']}"
         lineas.append(linea)
         if ev["link"]:
             lineas.append(ev["link"])
@@ -117,9 +117,13 @@ def enviar_resumen():
 
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    # Sin parse_mode a propósito: los títulos y links son texto arbitrario
+    # que no controlamos (vienen de Instagram) — un solo "_" o "*" sin
+    # pareja en cualquiera de ellos rompe el parseo de Markdown de Telegram
+    # y tira el mensaje entero (pasó en producción con un link real).
     resp = requests.post(
         f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": mensaje, "parse_mode": "Markdown"},
+        json={"chat_id": chat_id, "text": mensaje},
         timeout=20,
     )
     resp.raise_for_status()

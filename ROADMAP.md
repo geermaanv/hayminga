@@ -26,6 +26,17 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Fix: el resumen semanal por Telegram fallaba en producción (ago 2026)
+
+El primer envío real (martes 11/08) falló con `400 Bad Request` —
+`parse_mode: Markdown` de Telegram necesita `*`/`_` en pares para
+negrita/itálica, y un link real de Instagram tenía un solo `_` suelto
+(`Dbq_cDrsRhl`), rompiendo el parseo de todo el mensaje. Como los
+títulos y links son texto arbitrario que no controlamos, se sacó
+`parse_mode` del todo — el mensaje va en texto plano (los links siguen
+siendo clickeables igual, Telegram los detecta solo). El mail al
+Directorio (Apps Script, sin este problema) llegó bien esa misma vez.
+
 ## ✅ Resumen semanal por Telegram (ago 2026)
 
 `enviar-resumen.yml` (martes 09:00 hora Argentina) corre
