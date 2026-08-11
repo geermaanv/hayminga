@@ -290,6 +290,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 <header>
   <div class="header-left">
     <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
+    <span id="contador-pendientes" style="display:none;font-size:0.7rem;color:var(--texto-suave);opacity:0.6;margin-left:0.3rem;" title="pendientes / total de eventos"></span>
     <a class="wa-pill" href="https://wa.me/5491126728949?text=%C2%A1Hola%20Hayminga%21%20Quiero%20recibir%20las%20novedades%20de%20eventos%20de%20bioconstrucci%C3%B3n.%20%28Guardo%20este%20n%C3%BAmero%20en%20mis%20contactos%20para%20que%20me%20lleguen%20%F0%9F%99%82%29" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.32A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.1c-.22.62-1.28 1.18-1.77 1.24-.45.06-1.02.08-1.65-.1-.38-.11-.87-.28-1.5-.55-2.64-1.14-4.36-3.8-4.5-3.98-.13-.18-1.08-1.43-1.08-2.73s.68-1.93.92-2.2c.24-.26.53-.33.7-.33h.5c.16 0 .38-.06.6.46.22.53.75 1.83.82 1.97.07.13.11.29.02.47-.09.18-.14.29-.27.44-.13.16-.28.35-.4.47-.13.13-.27.27-.11.53.16.26.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.16 1.34.26.13.42.11.57-.07.16-.18.66-.77.84-1.03.18-.26.35-.22.6-.13.24.09 1.55.73 1.82.87.26.13.44.2.5.31.07.11.07.65-.14 1.27z"/></svg>
       <span class="wa-pill-full">Novedades por WA</span>
@@ -725,6 +726,7 @@ function cargarDatos() {
       todosLosEventosSinFiltrar = todosLosEventos;
       todosLosEventos = todosLosEventosSinFiltrar
         .filter(function(ev) { return ev['Activo'] === 'true' || ev['Activo'] === true; });
+      mostrarContadorPendientes();
       poblarProvincias();
       poblarProvinciasMob();
       poblarPeriodos();
@@ -1352,6 +1354,18 @@ function cerrarFormEvento(ev) {
   if (ev && ev.target !== document.getElementById('form-evento-overlay')) return;
   document.getElementById('form-evento-overlay').classList.remove('activo');
   document.body.style.overflow = '';
+}
+
+// Contador chico en el header (ej. "2/80" = pendientes/total) — solo de
+// referencia rápida para el usuario, no es información sensible.
+function mostrarContadorPendientes() {
+  var pendientes = todosLosEventosSinFiltrar.filter(function(ev) {
+    return ev['Estado'] === 'pendiente_confirmacion';
+  }).length;
+  var total = todosLosEventosSinFiltrar.length;
+  var el = document.getElementById('contador-pendientes');
+  el.textContent = pendientes + '/' + total;
+  el.style.display = 'inline';
 }
 
 // ---- Revisión manual (cambio temporal): ?pendientes ----

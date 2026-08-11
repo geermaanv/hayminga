@@ -26,6 +26,24 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Extracción de texto narrativo + contador en el header (ago 2026)
+
+- **Prompt mejorado para texto narrativo largo**: caso real por mail —
+  un evento con fecha y teléfono presentes en el cuerpo del mail
+  (estilo conversacional, no flyer estructurado) salió con confianza
+  baja e inactivo porque el modelo no los detectó "enterrados" en un
+  párrafo largo. Se agregó instrucción explícita al `SYSTEM_PROMPT` de
+  leer el texto completo buscando estos datos en cualquier parte, y se
+  agregó una **fecha de referencia** (fecha de recepción del mail/
+  descubrimiento) al prompt del path de `processor.py` — antes solo
+  `hiker_pipeline.py` se la daba al modelo, así que emails/scraping sin
+  año explícito en el texto no tenían forma de anclar "22 de agosto" a
+  un año concreto.
+- **Contador pendientes/total en el header** (`index.html`): texto
+  chico tipo "2/80" al lado del logo, referencia rápida para revisar
+  si hay algo en `?pendientes` sin tener que entrar — no es información
+  sensible, se calcula en el cliente con los datos que ya se cargan.
+
 ## ✅ Fix: el resumen semanal por Telegram fallaba en producción (ago 2026)
 
 El primer envío real (martes 11/08) falló con `400 Bad Request` —

@@ -107,12 +107,16 @@ La estructura de salida está definida por el schema de la API.
 Fecha de hoy: {HOY}
 
 Extraé únicamente información visible en la imagen o presente en el caption.
+El caption puede ser un texto narrativo largo (ej. un mail contando el evento
+en tono conversacional, no un flyer con campos separados) — leelo completo:
+la fecha, el teléfono/contacto o el lugar pueden estar en cualquier parte del
+párrafo, no solo al principio o en una línea destacada.
 Usá DD/MM/YYYY para las fechas. Si no conocés un dato opcional, devolvé null.
 Marcá anio_confirmado=true si el año aparece escrito en la imagen/caption o
-si se proporcionó una fecha de publicación indexada. Si el evento muestra día
-y mes sin año, usá el año de esa publicación. Nunca uses automáticamente el
-año actual. Sin año visible ni fecha de publicación, devolvé fechas null y
-anio_confirmado=false.
+si se proporcionó una fecha de referencia (publicación o recepción del
+contenido). Si el evento muestra día y mes sin año, usá el año de esa fecha
+de referencia. Nunca uses automáticamente el año actual. Sin año visible ni
+fecha de referencia, devolvé fechas null y anio_confirmado=false.
 Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
 Marcá idioma con el idioma principal del texto del flyer/caption ("es",
 "en" u "otro").
@@ -157,13 +161,17 @@ def parse_fecha(fecha_str: str | None) -> tuple[str, str]:
     return "", ""
 
 
-def _build_prompt_text(caption: str) -> str:
+def _build_prompt_text(caption: str, fecha_referencia: str = "") -> str:
     if not caption:
         return PROMPT_TEXT
-    return (
-        f"{PROMPT_TEXT}\n\nCaption real del post (texto de Instagram, puede "
-        f"tener fecha/lugar/contacto que no está en la imagen):\n{caption}"
-    )
+    partes = [
+        PROMPT_TEXT,
+        "\n\nCaption real del post (texto de Instagram, puede tener "
+        f"fecha/lugar/contacto que no está en la imagen):\n{caption}",
+    ]
+    if fecha_referencia:
+        partes.append(f"\n\nFecha de referencia (publicación/recepción de este contenido): {fecha_referencia}")
+    return "".join(partes)
 
 
 def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
@@ -455,7 +463,8 @@ def extract_event_data(image_path: Path, metadata: dict):
     image_bytes, media_type = read_image(image_path)
 
     supplied_caption = str(metadata.get("caption") or "").strip()
-    initial_prompt = _build_prompt_text(supplied_caption)
+    fecha_referencia = str(metadata.get("discovered_at") or "").strip()
+    initial_prompt = _build_prompt_text(supplied_caption, fecha_referencia)
     raw = _get_raw_json(image_path, image_bytes, media_type, initial_prompt)
     if raw is None:
         return RETRY
@@ -478,7 +487,7 @@ def extract_event_data(image_path: Path, metadata: dict):
             combined_context = "\n".join(
                 part for part in (supplied_caption, indexed_context) if part
             )
-            prompt_text = _build_prompt_text(combined_context)
+            prompt_text = _build_prompt_text(combined_context, fecha_referencia)
             raw2 = _get_raw_json(image_path, image_bytes, media_type, prompt_text)
             data2 = _parse_json_evento(raw2, image_path) if raw2 else None
             if data2 and data2.get("es_evento", True):
