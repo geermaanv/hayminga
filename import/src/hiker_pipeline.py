@@ -499,44 +499,51 @@ def run() -> int:
     # a diferencia de los hashtags, no compite por popularidad global, así
     # que es más confiable para encontrar eventos argentinos genuinos.
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
-    ids_cacheados = cargar_cuentas_ids(service)
     ids_nuevos = {}
-    for username in cuentas_seguidas:
-        try:
-            user_id = ids_cacheados.get(username)
-            if user_id is None:
-                user_id = resolver_user_id(username)
-                if user_id:
-                    ids_nuevos[username] = user_id
-            posts = fetch_user_posts(username, user_id=user_id)
-        except Exception as e:
-            print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
-            continue
-        print(f"[hiker_pipeline] @{username}: {len(posts)} post(s)")
-        fuentes_resultados[("cuenta", username)] = False
-
-        # No se da de baja sola — se marca en el log para revisión manual,
-        # mismo criterio que la curación de hashtags (juntar el dato,
-        # decidir con más contexto que solo el número).
-        ultimo_post_ts = max((p["taken_at_ts"] for p in posts if p.get("taken_at_ts")), default=None)
-        if ultimo_post_ts:
-            antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(ultimo_post_ts, tz=timezone.utc)
-            if antiguedad.days > _MAX_INACTIVIDAD_CUENTA_DIAS:
-                print(f"[hiker_pipeline] @{username}: sin posts hace {antiguedad.days} días, "
-                      f"revisar si sigue activa")
-        elif posts == []:
-            print(f"[hiker_pipeline] @{username}: 0 posts encontrados, revisar si la cuenta existe/es pública")
-
-        for post in posts:
+    try:
+        # Todo este bloque va en un try/except: un fallo transitorio acá
+        # (pasó dos veces con un SSLEOFError de red) no debe hacer perder
+        # los eventos ya encontrados por hashtag arriba — antes el script
+        # moría entero y nunca llegaba a append_events().
+        ids_cacheados = cargar_cuentas_ids(service)
+        for username in cuentas_seguidas:
             try:
-                evento = procesar_post(post, existing_links, cuentas_excluidas)
+                user_id = ids_cacheados.get(username)
+                if user_id is None:
+                    user_id = resolver_user_id(username)
+                    if user_id:
+                        ids_nuevos[username] = user_id
+                posts = fetch_user_posts(username, user_id=user_id)
             except Exception as e:
-                print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
+                print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
                 continue
-            if evento:
-                eventos.append(evento)
-                existing_links.add(post["link"])
-                fuentes_resultados[("cuenta", username)] = True
+            print(f"[hiker_pipeline] @{username}: {len(posts)} post(s)")
+            fuentes_resultados[("cuenta", username)] = False
+
+            # No se da de baja sola — se marca en el log para revisión manual,
+            # mismo criterio que la curación de hashtags (juntar el dato,
+            # decidir con más contexto que solo el número).
+            ultimo_post_ts = max((p["taken_at_ts"] for p in posts if p.get("taken_at_ts")), default=None)
+            if ultimo_post_ts:
+                antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(ultimo_post_ts, tz=timezone.utc)
+                if antiguedad.days > _MAX_INACTIVIDAD_CUENTA_DIAS:
+                    print(f"[hiker_pipeline] @{username}: sin posts hace {antiguedad.days} días, "
+                          f"revisar si sigue activa")
+            elif posts == []:
+                print(f"[hiker_pipeline] @{username}: 0 posts encontrados, revisar si la cuenta existe/es pública")
+
+            for post in posts:
+                try:
+                    evento = procesar_post(post, existing_links, cuentas_excluidas)
+                except Exception as e:
+                    print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
+                    continue
+                if evento:
+                    eventos.append(evento)
+                    existing_links.add(post["link"])
+                    fuentes_resultados[("cuenta", username)] = True
+    except Exception as e:
+        print(f"[hiker_pipeline] error en la sección de cuentas seguidas — {e}")
 
     inserted = append_events(eventos)
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s)")

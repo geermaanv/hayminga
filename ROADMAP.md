@@ -5,6 +5,17 @@ Claude, Codex) entienda de un vistazo qué existe, por qué, y qué está en
 un estado temporal/no definitivo. El detalle línea por línea siempre está
 en los commits (`git log`); esto es el resumen narrativo.
 
+## ✅ Fix urgente: un fallo de red tiraba todo el trabajo del día (ago 2026)
+
+Las dos corridas del 10/08 fallaron con el mismo `SSLEOFError` (hiccup
+de red transitorio) justo en `cargar_cuentas_ids()`, al arrancar la
+sección de cuentas seguidas — **después** de terminar los 33 hashtags.
+Como no estaba protegido con try/except, el script moría entero ahí y
+nunca llegaba a `append_events()`: se perdían todos los eventos ya
+encontrados por hashtag en esa corrida, no solo lo de cuentas. Se
+envolvió toda la sección de cuentas seguidas en un try/except — un
+fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
+
 ## ✅ Ajustes de filtrado (ago 2026)
 
 - **Umbral de antigüedad de posteo bajado de 270 a 180 días**: caso real
