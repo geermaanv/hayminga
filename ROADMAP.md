@@ -26,6 +26,25 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Fix crítico: guardado incremental, no todo al final (ago 2026)
+
+Un run real (14/08) quedó **cancelado por el timeout de 45min** del
+workflow, atascado en la sección de cuentas seguidas por un día
+particularmente malo de red (timeouts de HikerAPI, 504/503 de Gemini,
+más el volumen extra de `recent`). Como `append_events()` se llamaba
+una sola vez al final de `run()`, cuando GitHub mató el proceso **se
+perdieron los 45 minutos completos de trabajo** — ni un evento se
+guardó. Es peor que el `SSLEOFError` de antes (ese se podía atrapar con
+try/except; un kill externo por timeout no se puede atrapar en Python
+de ninguna forma).
+
+Fix: ahora se llama a `append_events()` **después de cada hashtag y
+cada cuenta**, no al final. Si el proceso muere a mitad de camino, se
+pierde como mucho lo de la fuente que estaba procesando en ese momento,
+no todo el run. `FuentesStats`/`CuentasIds` siguen guardándose solo al
+final (menor severidad si se pierden — es solo recalcular en la
+próxima corrida, no perder eventos reales).
+
 ## ✅ Descubrimiento de posts realmente recientes por hashtag (ago 2026)
 
 `hashtag/medias/top` mezcla popularidad histórica con lo nuevo — la

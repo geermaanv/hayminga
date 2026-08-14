@@ -521,7 +521,7 @@ def run() -> int:
     existing_links |= {instagram_shortcode(row[0]) for row in existing if row and instagram_shortcode(row[0])}
     print(f"[hiker_pipeline] {len(existing_links)} link(s) ya en el Sheet")
 
-    eventos = []
+    eventos_totales_insertados = [0]  # lista para poder mutar desde dentro de los loops
     fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
     for hashtag in hashtags:
         posts = []
@@ -538,6 +538,7 @@ def run() -> int:
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
         fuentes_resultados[("hashtag", hashtag)] = False
 
+        eventos_hashtag = []
         for post in posts:
             try:
                 evento = procesar_post(post, existing_links, cuentas_excluidas)
@@ -545,10 +546,21 @@ def run() -> int:
                 print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                 continue
             if evento:
-                eventos.append(evento)
+                eventos_hashtag.append(evento)
                 existing_links.add(post["link"])
                 existing_links.add(instagram_shortcode(post["link"]))
                 fuentes_resultados[("hashtag", hashtag)] = True
+
+        # Guardar ya (no acumular todo para el final): un run de 33 hashtags
+        # + ~140 cuentas puede superar el timeout de 45min del workflow si
+        # hay un día lento de red (pasó en producción). Si el proceso muere
+        # a mitad de camino, esto asegura que lo ya encontrado no se pierda.
+        if eventos_hashtag:
+            try:
+                inserted_hashtag = append_events(eventos_hashtag)
+                eventos_totales_insertados[0] += inserted_hashtag
+            except Exception as e:
+                print(f"[hiker_pipeline] #{hashtag}: error guardando en el Sheet — {e}")
 
     # Timeline real de cuentas ya conocidas de organizadores argentinos —
     # a diferencia de los hashtags, no compite por popularidad global, así
@@ -587,6 +599,7 @@ def run() -> int:
             elif posts == []:
                 print(f"[hiker_pipeline] @{username}: 0 posts encontrados, revisar si la cuenta existe/es pública")
 
+            eventos_cuenta = []
             for post in posts:
                 try:
                     evento = procesar_post(post, existing_links, cuentas_excluidas)
@@ -594,15 +607,22 @@ def run() -> int:
                     print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                     continue
                 if evento:
-                    eventos.append(evento)
+                    eventos_cuenta.append(evento)
                     existing_links.add(post["link"])
                     existing_links.add(instagram_shortcode(post["link"]))
                     fuentes_resultados[("cuenta", username)] = True
+
+            if eventos_cuenta:
+                try:
+                    inserted_cuenta = append_events(eventos_cuenta)
+                    eventos_totales_insertados[0] += inserted_cuenta
+                except Exception as e:
+                    print(f"[hiker_pipeline] @{username}: error guardando en el Sheet — {e}")
     except Exception as e:
         print(f"[hiker_pipeline] error en la sección de cuentas seguidas — {e}")
 
-    inserted = append_events(eventos)
-    print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s)")
+    inserted = eventos_totales_insertados[0]
+    print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s) en total")
 
     try:
         actualizar_fuentes_stats(service, fuentes_resultados)
