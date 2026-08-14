@@ -12,7 +12,7 @@ import json
 import uuid
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
@@ -48,6 +48,20 @@ COLUMNS = [
     "Confianza", "Fuente", "Fecha_Descubrimiento",
     "Latitud", "Longitud", "Hashtags_Post",
 ]
+
+
+def parse_fecha_flexible(valor: str | None) -> date | None:
+    """Parsea una fecha en DD/MM/YYYY o YYYY-MM-DD; None si no matchea
+    ninguno de los dos formatos. Formatos usados en distintos puntos del
+    pipeline (extracción de IA, filas del Sheet)."""
+    if not valor:
+        return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def generate_id() -> str:
