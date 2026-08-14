@@ -1,9 +1,12 @@
 """
-Persistencia de candidatos descubiertos automáticamente.
+candidates.py — ARCHIVADO, no corre en producción (ver ROADMAP.md).
 
-La hoja `Candidatos` funciona como cola durable: un resultado se registra
-antes de llamar a Gemini y conserva estado, intentos y resultado aunque el
-runner efímero de GitHub Actions desaparezca.
+Cola de reintentos persistente (hoja `Candidatos`) del pipeline viejo
+de Google Images — hiker_pipeline.py no tiene cola de reintentos a
+propósito ("no pasa nada si falla un día", ver su docstring). Se
+guarda como referencia histórica; el import de scraper de abajo ya no
+resuelve (esas funciones viven en scraper_google_images.py, en esta
+misma carpeta) — no lo ejecutes tal cual.
 """
 
 import re
@@ -13,7 +16,7 @@ from pathlib import Path
 
 import requests
 
-from src.scraper import HEADERS, IMAGES_DIR, is_valid_image, passes_quality_filter
+from legacy.scraper_google_images import HEADERS, IMAGES_DIR, is_valid_image, passes_quality_filter
 from src.sheets import SPREADSHEET_ID, get_service
 
 

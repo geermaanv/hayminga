@@ -1,8 +1,12 @@
 """
-main.py — hayminga.org pipeline v2
-Google Images (última semana, imágenes grandes) → Gemini Vision (Claude
-como fallback) → Google Sheets. También procesa la cola de eventos
-cargados manualmente por mail (ver src/email_intake.py).
+main.py — ARCHIVADO, no corre en producción (ver ROADMAP.md).
+
+Pipeline original: Google Images → Gemini Vision (Claude de fallback)
+→ Google Sheets, reemplazado por src/hiker_pipeline.py. Se guarda como
+referencia histórica — sus imports (src.scraper.download_all,
+src.candidates.CandidateStore) ya no existen donde este archivo los
+busca, porque esas funciones se archivaron junto con este en
+import/legacy/. No lo ejecutes tal cual.
 """
 
 import sys
