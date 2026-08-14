@@ -26,6 +26,17 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Reintentos en llamadas a Sheets que fallaban seguido (ago 2026)
+
+El `SSLEOFError` intermitente pegaba siempre en el mismo lugar
+(`cargar_cuentas_ids()`, justo al arrancar la sección de cuentas
+seguidas) — 2 de las últimas 3 corridas reales. El fix de guardado
+incremental evita que tire todo el run a la basura, pero seguía
+bloqueando esa sección entera cada vez. Se agregó `_con_reintentos()`
+(3 intentos, 2s de espera) aplicado a esa llamada y a `_sheet_existe()`
+— son fallos de red transitorios, no de datos, así que reintentar es lo
+correcto en vez de solo loguear y perder la sección.
+
 ## ✅ Fix crítico: guardado incremental, no todo al final (ago 2026)
 
 Un run real (14/08) quedó **cancelado por el timeout de 45min** del

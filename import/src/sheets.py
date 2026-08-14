@@ -9,6 +9,7 @@ Columnas: Activo, Nombre, Dirección, Periodo, Fecha_Inicio, Fecha_Fin,
 
 import os
 import json
+import time
 import uuid
 import re
 import unicodedata
@@ -75,6 +76,22 @@ def get_service():
     return build("sheets", "v4", credentials=creds)
 
 
+def _con_reintentos(fn, intentos: int = 3, espera: float = 2.0):
+    """Reintenta una llamada a la API de Sheets ante fallos transitorios de
+    red — confirmado en producción: un SSLEOFError intermitente pegaba
+    justo al arrancar la sección de cuentas seguidas, tirando esa parte
+    del run a la basura (2 de las últimas 3 corridas)."""
+    ultimo_error = None
+    for intento in range(intentos):
+        try:
+            return fn()
+        except Exception as e:
+            ultimo_error = e
+            if intento < intentos - 1:
+                time.sleep(espera)
+    raise ultimo_error
+
+
 def ensure_header(service):
     result = (
         service.spreadsheets().values()
@@ -110,7 +127,7 @@ def ensure_header(service):
 
 
 def _sheet_existe(service, sheet_name: str) -> bool:
-    meta = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+    meta = _con_reintentos(lambda: service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute())
     return any(s["properties"]["title"] == sheet_name for s in meta["sheets"])
 
 
@@ -241,11 +258,11 @@ def marcar_cuentas_consultadas(service, usernames: list[str]):
 
 def cargar_cuentas_ids(service) -> dict[str, int]:
     get_or_create_sheet_with_headers(service, CUENTAS_IDS_SHEET_NAME, CUENTAS_IDS_HEADERS)
-    result = (
+    result = _con_reintentos(lambda: (
         service.spreadsheets().values()
         .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:B")
         .execute()
-    )
+    ))
     out = {}
     for row in result.get("values", []):
         if len(row) >= 2 and row[1]:
