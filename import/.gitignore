@@ -4,3 +4,4 @@ seen_hashes.txt
 seen_links.txt
 __pycache__/
 *.pyc
+run_summary.json

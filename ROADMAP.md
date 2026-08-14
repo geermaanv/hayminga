@@ -544,6 +544,47 @@ Varias rondas de pulido de header/filtros iterando con prototipos
     así el dedup por shortcode lo sigue reconociendo si el pipeline lo
     vuelve a encontrar y no lo reinserta).
 
+## Etapa 9.6 — Alerta por Telegram y medición de `recent` vs `top` (14/08/2026)
+
+**El problema**: las corridas fallaban en silencio. Un run cancelado por
+timeout y tres corridas con la sección de cuentas seguidas caída por
+`SSLEOFError` pasaron desapercibidas hasta que alguien entró a mirar
+Actions a mano.
+
+Se agregó `src/notificar_run.py`, que corre como último paso de
+`import-eventos.yml` con `if: always()` (el caso que más importa avisar es
+justamente el de la corrida que se cancela) y manda a `@geermaanv_bot`:
+resultado del job, eventos nuevos guardados, si la sección de cuentas
+seguidas cayó y con qué error, y cuántos eventos quedaron **pendientes de
+confirmar** vs **publicados (Activo=true)**. El pipeline deja un
+`run_summary.json` (gitignoreado) para pasarle los datos al paso de
+notificación; si no existe, el notificador reporta "corrida incompleta",
+que es exactamente el caso del timeout.
+
+**Sobre `recent` vs `top`** (Etapa anterior, commit 7fcd5d5): se intentó
+evaluar si valió la pena y **con el logging que había no se podía
+responder**. Lo que sí se midió, comparando corridas:
+
+| | posts por corrida | llamadas HikerAPI a hashtags | eventos nuevos |
+|---|---|---|---|
+| Solo `top` (11-13/08, 5 corridas) | ~450 | 28 | 0, 12, 0, 3, 3 |
+| `recent` + `top` (14/08, 4 corridas) | ~1150 | ~64 | 2, 0, 0, 0 |
+
+El costo es claro (2.3x llamadas, la sección pasó de ~10 a ~22 min, y eso
+contribuyó al run cancelado por el timeout de 45 min). El beneficio **no**:
+la caída de eventos nuevos está contaminada porque en la misma ventana los
+links ya conocidos pasaron de 107 a 220 — o sea, saturación natural del
+backlog, no necesariamente culpa de `recent`. Además el commit mezcló tres
+cambios (endpoint nuevo, 2 hashtags nuevos, fix de dedup por shortcode).
+
+Por eso se instrumentó la atribución por endpoint (contar es gratis, no
+agrega llamadas): cuántos posts trajo cada uno, cuántos shortcodes trajo
+`recent` que `top` no tenía, y **cuántos eventos escritos vinieron de un
+post que solo `recent` traía**. Ese último número es el que decide. Si
+después de una semana sigue en 0, `recent` se saca: está pagando 2x por
+nada. Va en el mensaje de Telegram; cuando se decida, se puede sacar esa
+línea de `notificar_run.py`.
+
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:

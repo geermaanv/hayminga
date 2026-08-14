@@ -118,5 +118,7 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (2x/día),
 
 ## Tests
 
-39/39 pasando (`cd import && python -m unittest discover -s tests -q`)
-antes y después de los cambios de esta sesión.
+27/27 pasando (`cd import && python -m unittest discover -s tests -q`).
+El conteo bajó de 39 a 22 cuando se movió código a `import/legacy/` (los
+tests de ese código se fueron con él); los 5 restantes son los nuevos de
+`notificar_run.py`.

@@ -59,3 +59,15 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
         run: python -m src.email_intake
+
+      # if: always() a propósito — el caso que más importa avisar es
+      # justamente el de la corrida que falla o se cancela por timeout.
+      - name: Avisar resultado por Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          ESTADO_JOB: ${{ job.status }}
+        run: python -m src.notificar_run

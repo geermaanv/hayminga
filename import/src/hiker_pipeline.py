@@ -523,16 +523,31 @@ def run() -> int:
 
     eventos_totales_insertados = [0]  # lista para poder mutar desde dentro de los loops
     fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
+    # Atribución recent vs top: sumar /recent duplicó las llamadas a HikerAPI
+    # por hashtag y el tiempo de la sección, pero los logs no registraban de
+    # qué endpoint venía cada post, así que no había forma de saber si aportó
+    # algún evento que /top no hubiera traído igual. Contar es gratis (no
+    # agrega llamadas); con una semana de datos se decide si /recent se queda.
+    atribucion = {"posts_recent": 0, "posts_top": 0, "solo_en_recent": 0, "eventos_solo_recent": 0}
     for hashtag in hashtags:
         posts = []
+        shortcodes_recent = set()
         try:
-            posts.extend(fetch_hashtag_posts_recent(hashtag))
+            posts_recent = fetch_hashtag_posts_recent(hashtag)
+            shortcodes_recent = {instagram_shortcode(p["link"]) for p in posts_recent}
+            atribucion["posts_recent"] += len(posts_recent)
+            posts.extend(posts_recent)
         except Exception as e:
             print(f"[hiker_pipeline] #{hashtag} (recent): error consultando HikerAPI — {e}")
         try:
-            posts.extend(fetch_hashtag_posts(hashtag))
+            posts_top = fetch_hashtag_posts(hashtag)
+            atribucion["posts_top"] += len(posts_top)
+            shortcodes_top = {instagram_shortcode(p["link"]) for p in posts_top}
+            atribucion["solo_en_recent"] += len(shortcodes_recent - shortcodes_top)
+            posts.extend(posts_top)
         except Exception as e:
             print(f"[hiker_pipeline] #{hashtag} (top): error consultando HikerAPI — {e}")
+            shortcodes_top = set()
         if not posts:
             continue
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
@@ -547,8 +562,11 @@ def run() -> int:
                 continue
             if evento:
                 eventos_hashtag.append(evento)
+                shortcode = instagram_shortcode(post["link"])
+                if shortcode in shortcodes_recent and shortcode not in shortcodes_top:
+                    atribucion["eventos_solo_recent"] += 1
                 existing_links.add(post["link"])
-                existing_links.add(instagram_shortcode(post["link"]))
+                existing_links.add(shortcode)
                 fuentes_resultados[("hashtag", hashtag)] = True
 
         # Guardar ya (no acumular todo para el final): un run de 33 hashtags
@@ -567,6 +585,7 @@ def run() -> int:
     # que es más confiable para encontrar eventos argentinos genuinos.
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
     ids_nuevos = {}
+    error_cuentas = ""
     try:
         # Todo este bloque va en un try/except: un fallo transitorio acá
         # (pasó dos veces con un SSLEOFError de red) no debe hacer perder
@@ -620,9 +639,25 @@ def run() -> int:
                     print(f"[hiker_pipeline] @{username}: error guardando en el Sheet — {e}")
     except Exception as e:
         print(f"[hiker_pipeline] error en la sección de cuentas seguidas — {e}")
+        error_cuentas = str(e)
 
     inserted = eventos_totales_insertados[0]
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s) en total")
+    print(f"[hiker_pipeline] atribución hashtags — recent: {atribucion['posts_recent']} post(s), "
+          f"top: {atribucion['posts_top']} post(s), solo en recent: {atribucion['solo_en_recent']}, "
+          f"eventos que solo recent trajo: {atribucion['eventos_solo_recent']}")
+
+    # Resumen para el paso de notificación del workflow (corre con if: always(),
+    # así que si el pipeline se muere antes de esta línea el archivo no existe
+    # y el notificador lo reporta como corrida incompleta).
+    try:
+        Path("run_summary.json").write_text(json.dumps({
+            "eventos_insertados": inserted,
+            "error_cuentas_seguidas": error_cuentas,
+            "atribucion": atribucion,
+        }))
+    except Exception as e:
+        print(f"[hiker_pipeline] error escribiendo run_summary.json — {e}")
 
     try:
         actualizar_fuentes_stats(service, fuentes_resultados)

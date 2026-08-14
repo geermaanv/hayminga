@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -399,6 +400,69 @@ class EmailIntakeTests(unittest.TestCase):
             email_intake.process_queue()
 
         mark_row.assert_called_once_with(get_service.return_value, 2, "reintentar")
+
+
+class NotificarRunTests(unittest.TestCase):
+    """El notificador corre con if: always(), así que lo que más importa es
+    que no explote justo en el caso que tiene que avisar (run incompleto,
+    Sheet caído)."""
+
+    def _mensaje(self, estado_job="success", resumen=None, contar=None):
+        from src import notificar_run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                if resumen is not None:
+                    Path("run_summary.json").write_text(json.dumps(resumen))
+                with patch.object(notificar_run, "contar_estados") as contar_mock:
+                    if isinstance(contar, Exception):
+                        contar_mock.side_effect = contar
+                    else:
+                        contar_mock.return_value = contar or (0, 0)
+                    return notificar_run.armar_mensaje(estado_job)
+            finally:
+                os.chdir(cwd)
+
+    def test_incluye_pendientes_y_publicados(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 3, "error_cuentas_seguidas": "", "atribucion": {}},
+            contar=(7, 42),
+        )
+        self.assertIn("Eventos nuevos guardados: 3", mensaje)
+        self.assertIn("Pendientes de confirmar: 7", mensaje)
+        self.assertIn("Publicados (activos): 42", mensaje)
+        self.assertIn("?pendientes", mensaje)
+
+    def test_reporta_caida_de_cuentas_seguidas(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 0, "error_cuentas_seguidas": "EOF occurred in violation of protocol"},
+            contar=(1, 10),
+        )
+        self.assertIn("cuentas seguidas CAYÓ", mensaje)
+
+    def test_sin_resumen_avisa_corrida_incompleta(self):
+        # Caso timeout/cancelación: el pipeline nunca escribió run_summary.json.
+        mensaje = self._mensaje(estado_job="cancelled", resumen=None, contar=(2, 10))
+        self.assertIn("no llegó a terminar", mensaje)
+        self.assertIn("cancelled", mensaje)
+
+    def test_error_contando_no_rompe_el_aviso(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 1},
+            contar=RuntimeError("sheet caído"),
+        )
+        self.assertIn("Eventos nuevos guardados: 1", mensaje)
+        self.assertIn("No se pudieron contar", mensaje)
+
+    def test_incluye_atribucion_recent_vs_top(self):
+        mensaje = self._mensaje(resumen={
+            "eventos_insertados": 1,
+            "atribucion": {"posts_recent": 700, "posts_top": 450,
+                           "solo_en_recent": 300, "eventos_solo_recent": 0},
+        })
+        self.assertIn("eventos que aportó solo recent: 0", mensaje)
 
 
 if __name__ == "__main__":
