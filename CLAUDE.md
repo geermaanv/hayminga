@@ -37,6 +37,8 @@ python -m unittest tests.test_scraper -v          # single module
 python main.py                                    # legacy Google Images pipeline (do not use)
 ```
 
+**`python -m src.hiker_pipeline`, `curar_fuentes`, and `enviar_resumen_telegram` all spend real money** (HikerAPI, and Claude when Gemini quota runs out) — never run them just to check a code change. The tests are the free way to validate logic: every external call (HikerAPI, Gemini, Claude, Sheets API, Telegram) is mocked in `tests/`, so `python -m unittest discover -s tests -v` exercises the real pipeline logic without touching any paid API. If you're validating a change to `hiker_pipeline.py`/`processor.py`/`sheets.py`, add or extend a test with a mocked response rather than doing a live run.
+
 Trigger a manual production run:
 
 ```bash
