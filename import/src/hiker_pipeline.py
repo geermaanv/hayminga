@@ -82,6 +82,50 @@ def _item_a_post(item: dict) -> dict | None:
     }
 
 
+def _item_v2_a_post(media: dict) -> dict | None:
+    code = media.get("code")
+    candidatos = (media.get("image_versions2") or {}).get("candidates") or []
+    image_url = candidatos[0]["url"] if candidatos else ""
+    if not code or not image_url:
+        return None
+    location = media.get("location") or {}
+    return {
+        "link": f"https://www.instagram.com/p/{code}/",
+        "image_url": image_url,
+        "caption": (media.get("caption") or {}).get("text") or "",
+        "taken_at_ts": media.get("taken_at"),
+        "lat": location.get("lat"),
+        "lng": location.get("lng"),
+        "location_name": location.get("name") or "",
+        "location_address": location.get("address") or "",
+        "username": ((media.get("user") or {}).get("username") or "").lower(),
+    }
+
+
+def fetch_hashtag_posts_recent(hashtag: str, amount: int = 30) -> list[dict]:
+    """v1/hashtag/medias/recent devuelve siempre [] (esa pestaña de
+    Instagram está más restringida ahí), pero v2 sí funciona y trae
+    contenido genuinamente reciente (confirmado: posts de 1-3 días) —
+    a diferencia de /top que mezcla popularidad histórica con lo nuevo."""
+    resp = requests.get(
+        "https://api.hikerapi.com/v2/hashtag/medias/recent",
+        params={"name": hashtag, "amount": amount},
+        headers={"x-access-key": _hiker_key()},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    sections = ((data.get("response") or {}).get("sections")) or []
+    posts = []
+    for section in sections:
+        medias = (section.get("layout_content") or {}).get("medias") or []
+        for m in medias:
+            post = _item_v2_a_post(m.get("media") or {})
+            if post:
+                posts.append(post)
+    return posts
+
+
 def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
     # hashtag/medias/recent devuelve siempre [] (esa pestaña de Instagram
     # está más restringida); hashtag/medias/top sí trae datos reales.
@@ -470,16 +514,26 @@ def run() -> int:
     existing = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!K2:K",
     ).execute().get("values", [])
+    # Se guardan ambas formas (link completo y shortcode) para que el
+    # chequeo temprano en procesar_post() haga match sin importar si el
+    # link viene como /p/, /reel/ o /reels/.
     existing_links = {row[0] for row in existing if row}
+    existing_links |= {instagram_shortcode(row[0]) for row in existing if row and instagram_shortcode(row[0])}
     print(f"[hiker_pipeline] {len(existing_links)} link(s) ya en el Sheet")
 
     eventos = []
     fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
     for hashtag in hashtags:
+        posts = []
         try:
-            posts = fetch_hashtag_posts(hashtag)
+            posts.extend(fetch_hashtag_posts_recent(hashtag))
         except Exception as e:
-            print(f"[hiker_pipeline] #{hashtag}: error consultando HikerAPI — {e}")
+            print(f"[hiker_pipeline] #{hashtag} (recent): error consultando HikerAPI — {e}")
+        try:
+            posts.extend(fetch_hashtag_posts(hashtag))
+        except Exception as e:
+            print(f"[hiker_pipeline] #{hashtag} (top): error consultando HikerAPI — {e}")
+        if not posts:
             continue
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
         fuentes_resultados[("hashtag", hashtag)] = False
@@ -493,6 +547,7 @@ def run() -> int:
             if evento:
                 eventos.append(evento)
                 existing_links.add(post["link"])
+                existing_links.add(instagram_shortcode(post["link"]))
                 fuentes_resultados[("hashtag", hashtag)] = True
 
     # Timeline real de cuentas ya conocidas de organizadores argentinos —
@@ -541,6 +596,7 @@ def run() -> int:
                 if evento:
                     eventos.append(evento)
                     existing_links.add(post["link"])
+                    existing_links.add(instagram_shortcode(post["link"]))
                     fuentes_resultados[("cuenta", username)] = True
     except Exception as e:
         print(f"[hiker_pipeline] error en la sección de cuentas seguidas — {e}")

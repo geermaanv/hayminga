@@ -26,6 +26,32 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Descubrimiento de posts realmente recientes por hashtag (ago 2026)
+
+`hashtag/medias/top` mezcla popularidad histórica con lo nuevo — la
+queja recurrente de "por qué no aparecen eventos nuevos" tenía una
+causa de fondo real. `v1/hashtag/medias/recent` (que se había probado
+antes) siempre devuelve vacío, pero **`v2/hashtag/medias/recent` sí
+funciona** — confirmado con datos reales: 27 posts de `#bioconstruccion`,
+todos de los últimos 1-3 días. Estructura de respuesta distinta (anidada
+en `sections`), se agregó `fetch_hashtag_posts_recent()` +
+`_item_v2_a_post()` como parser aparte. Ahora cada hashtag se consulta
+por las dos vías (recent primero, top como respaldo) — no reemplaza a
+`top`, lo complementa.
+
+De paso, fix de un bug de eficiencia (no de datos) encontrado al revisar
+esto: el chequeo temprano por shortcode en `procesar_post()` comparaba
+un shortcode pelado contra una lista de links completos — nunca hacía
+match, así que no ahorraba la llamada a la IA que debía. Se agregan los
+shortcodes al set de links conocidos.
+
+Sumados 2 hashtags más de la revisión de `Hashtags_Post` (ahora con 35
+eventos activos de muestra, antes 10): `aulaabierta`, `arteytierra`.
+Se encontró también un cluster de 6 hashtags de cultivo de hongos
+(`#fungi`, `#hongos`, `#micelio`, etc.) de un solo evento que mezcló
+bioconstrucción con micología — no se sumaron, traerían contenido de
+otro tema.
+
 ## ✅ Extracción de texto narrativo + contador en el header (ago 2026)
 
 - **Prompt mejorado para texto narrativo largo**: caso real por mail —

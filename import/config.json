@@ -64,7 +64,9 @@
     "construcciónentierra",
     "construccióncontierra",
     "biowoodframe",
-    "woodframe"
+    "woodframe",
+    "aulaabierta",
+    "arteytierra"
   ],
   "max_por_hashtag": 15,
   "cuentas_excluidas": [
