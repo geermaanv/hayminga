@@ -11,7 +11,7 @@ import base64
 import re
 import unicodedata
 from pathlib import Path
-from datetime import datetime, date
+from datetime import date
 from google import genai
 from google.genai import types
 from google.genai import errors as genai_errors
@@ -19,6 +19,7 @@ import anthropic
 
 from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
+from src import sheets
 
 # Cambio TEMPORAL para revisar la calidad de datos a mano: mientras esté en
 # True, ningún evento se auto-publica (activo queda en False y el estado en
@@ -149,16 +150,11 @@ def read_image(path: Path) -> tuple[bytes, str]:
 
 
 def parse_fecha(fecha_str: str | None) -> tuple[str, str]:
-    """Retorna (fecha_iso, periodo) desde DD/MM/YYYY."""
-    if not fecha_str:
+    """Retorna (fecha_iso, periodo) desde DD/MM/YYYY o YYYY-MM-DD."""
+    dt = sheets.parse_fecha_flexible(fecha_str)
+    if not dt:
         return "", ""
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
-        try:
-            dt = datetime.strptime(fecha_str.strip(), fmt)
-            return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m")
-        except ValueError:
-            continue
-    return "", ""
+    return dt.strftime("%Y-%m-%d"), dt.strftime("%Y-%m")
 
 
 def _build_prompt_text(caption: str, fecha_referencia: str = "") -> str:

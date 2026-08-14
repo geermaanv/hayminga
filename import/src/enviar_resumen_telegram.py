@@ -10,25 +10,14 @@ semanal (enviar-resumen.yml).
 """
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import requests
 
-from src.sheets import get_service, SPREADSHEET_ID, SHEET_NAME
+from src.sheets import get_service, parse_fecha_flexible, SPREADSHEET_ID, SHEET_NAME
 
 DIAS_HACIA_ADELANTE = 60
 MAX_EVENTOS_EN_RESUMEN = 15
-
-
-def _parse_fecha(valor: str) -> date | None:
-    if not valor:
-        return None
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(valor, fmt).date()
-        except ValueError:
-            continue
-    return None
 
 
 def proximos_eventos() -> list[dict]:
@@ -52,7 +41,7 @@ def proximos_eventos() -> list[dict]:
         row = (row + [""] * len(header))[:len(header)]
         if row[idx["Activo"]] != "true":
             continue
-        fecha = _parse_fecha(row[idx["Fecha_Inicio"]])
+        fecha = parse_fecha_flexible(row[idx["Fecha_Inicio"]])
         if not fecha or not (hoy <= fecha <= limite):
             continue
         eventos.append({
