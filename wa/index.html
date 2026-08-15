@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Novedades por WhatsApp — hayminga</title>
+<meta name="robots" content="noindex">
+
+<!-- Link corto para compartir por WhatsApp: hayminga.org/wa
+     El wa.me con el texto pre-cargado queda larguísimo y %-encodeado, que
+     en un mensaje de difusión se lee como spam. Esto redirige al mismo
+     lugar pero se puede leer y decir en voz alta, y el mensaje pre-cargado
+     se puede cambiar acá sin invalidar los links ya compartidos. -->
+<script>
+  var DESTINO = 'https://wa.me/5491126728949?text=' + encodeURIComponent(
+    '¡Hola Hayminga! Quiero recibir las novedades de eventos de bioconstrucción. ' +
+    '(Guardo este número en mis contactos para que me lleguen 🙂)'
+  );
+</script>
+
+<!-- Fallback sin JS: manda al número igual, sin el texto pre-cargado.
+     Es preferible perder el mensaje pre-cargado a no llegar a WhatsApp. -->
+<noscript><meta http-equiv="refresh" content="0;url=https://wa.me/5491126728949"></noscript>
+
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+       background:#f7f4ee;color:#3d3527;text-align:center;padding:1.5rem;}
+  .caja{max-width:22rem;}
+  h1{font-size:1.15rem;font-weight:600;margin:0 0 .5rem;}
+  p{font-size:.95rem;line-height:1.5;margin:0 0 1.25rem;color:#6b6152;}
+  a{display:inline-block;background:#25D366;color:#fff;text-decoration:none;
+    padding:.8rem 1.5rem;border-radius:999px;font-weight:600;}
+  .chico{font-size:.8rem;margin-top:1.25rem;}
+  .chico a{background:none;color:#6b6152;text-decoration:underline;padding:0;font-weight:400;}
+</style>
+</head>
+<body>
+  <div class="caja">
+    <h1>Te estamos abriendo WhatsApp…</h1>
+    <p>Mandanos el mensaje que aparece y <strong>guardá el número en tus contactos</strong>,
+       así te llegan las novedades cada semana.</p>
+    <a id="ir" href="https://wa.me/5491126728949">Abrir WhatsApp</a>
+    <p class="chico"><a href="https://hayminga.org/">Ir al portal de hayminga</a></p>
+  </div>
+
+<script>
+  document.getElementById('ir').href = DESTINO;
+  // replace() y no href: así el "atrás" del navegador vuelve al chat de
+  // origen y no rebota de nuevo contra esta misma redirección.
+  window.location.replace(DESTINO);
+</script>
+</body>
+</html>
