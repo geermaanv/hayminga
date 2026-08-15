@@ -48,6 +48,8 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
           GEMINI_MIN_INTERVAL_SECONDS: "0.5"
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          APPS_SCRIPT_SHARED_SECRET: ${{ secrets.APPS_SCRIPT_SHARED_SECRET }}
         run: python -m src.hiker_pipeline
 
       - name: Procesar cola de carga manual (mail)

@@ -67,6 +67,15 @@ var DRIVE_FOLDER_NAME = 'hayminga - flyers manuales';
 var GMAIL_LABEL_PROCESADO = 'hayminga-procesado';
 var DIAS_ATRAS_MAX = 3; // red de seguridad extra: nunca mirar mail más viejo que esto
 
+// Secreto compartido para la acción "subir_imagen" (usada por el pipeline
+// de Python, no por el formulario público) — sin esto, cualquiera con la
+// URL del Web App podría subir archivos arbitrarios usando el cupo de
+// Drive de la cuenta. NO se hardcodea acá (el repo es público) — se lee
+// de las Propiedades del Script. Configurarlo UNA VEZ desde el editor:
+// Configuración del proyecto (⚙️) → Propiedades del script → Agregar
+// propiedad → SUBIR_IMAGEN_SECRETO = (un valor random largo, el mismo
+// que se carga como secret de GitHub Actions APPS_SCRIPT_SHARED_SECRET).
+
 var QUEUE_HEADERS = ['Timestamp', 'Remitente', 'Asunto', 'CodigoReferencia', 'CuerpoTexto', 'ImagenDriveUrl', 'Procesado'];
 var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
@@ -95,6 +104,8 @@ function doPost(e) {
       respuesta = { success: true, id: confirmarEvento_(data) };
     } else if (data.accion === 'descartar_evento') {
       respuesta = { success: true, id: descartarEvento_(data) };
+    } else if (data.accion === 'subir_imagen') {
+      respuesta = { success: true, url: subirImagenADrive_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -266,6 +277,29 @@ function getOrCreateSheetWithHeaders_(nombre, headers) {
     sheet.appendRow(headers);
   }
   return sheet;
+}
+
+
+// Usado por hiker_pipeline.py: la imagen de HikerAPI/Instagram viene de
+// un link firmado y temporal (vence) — se sube acá para tener un link
+// propio y estable, mismo mecanismo que ya usa crearEventoManual_.
+function subirImagenADrive_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('No autorizado');
+  }
+  if (!data.imagen_base64) {
+    throw new Error('Falta imagen_base64');
+  }
+  var bytes = Utilities.base64Decode(data.imagen_base64);
+  if (bytes.length > MAX_IMAGEN_BYTES) {
+    throw new Error('Imagen demasiado grande (máx 8MB)');
+  }
+  var folder = getOrCreateFolder_('hayminga - imagenes de eventos');
+  var blob = Utilities.newBlob(bytes, data.imagen_mime || 'image/jpeg', data.imagen_nombre || 'evento.jpg');
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000';
 }
 
 

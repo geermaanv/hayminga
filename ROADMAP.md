@@ -26,6 +26,27 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Fix: imágenes rotas — links de Instagram vencen (ago 2026)
+
+Encontrado revisando el sitio: **22 de 37 eventos activos (59%) con la
+imagen rota**. Causa: `hiker_pipeline.py` guardaba el `thumbnail_url`
+que devuelve HikerAPI directo en la columna `img` — ese link es firmado
+y temporal (vence). Los eventos cargados por mail/formulario nunca
+tuvieron este problema porque Apps Script ya sube la imagen a Drive
+(cupo de la cuenta humana, no del service account de Python — un
+service account normal no tiene cupo de Drive propio).
+
+Fix: se agregó la acción `subir_imagen` en `Code.gs` (protegida con un
+secreto en Propiedades del Script, no hardcodeado — el repo es
+público) y `subir_imagen_a_drive()` en `hiker_pipeline.py`, que le pasa
+la imagen descargada a Apps Script vía POST y reemplaza el link de
+Instagram por el de Drive antes de escribir al Sheet. Si falla el
+upload, sigue con el link de Instagram como antes (mejor una imagen
+que vence tarde que ningún evento). Pendiente: correr un script aparte
+para re-subir las imágenes de los eventos ya publicados que están rotos
+(hace falta volver a pedirle a HikerAPI un link fresco por evento, ya
+que el guardado quedó vencido).
+
 ## ✅ Reintentos en llamadas a Sheets que fallaban seguido (ago 2026)
 
 El `SSLEOFError` intermitente pegaba siempre en el mismo lugar

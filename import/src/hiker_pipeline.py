@@ -196,6 +196,38 @@ def _detectar_media_type(image_bytes: bytes) -> str:
     return "image/jpeg"
 
 
+def subir_imagen_a_drive(image_bytes: bytes, media_type: str) -> str | None:
+    """El link de imagen que devuelve HikerAPI/Instagram es firmado y
+    temporal — vence (confirmado en producción: 22 de 37 eventos activos
+    con la imagen rota). Se sube a Drive vía Apps Script (mismo mecanismo
+    que ya usa el formulario de mail/web) para tener un link propio y
+    estable. Si falla, se sigue con el link de Instagram como estaba
+    antes — mejor una imagen que vence tarde que ningún evento."""
+    apps_script_url = os.environ.get("APPS_SCRIPT_URL")
+    secreto = os.environ.get("APPS_SCRIPT_SHARED_SECRET")
+    if not apps_script_url or not secreto:
+        return None
+    ext = "png" if media_type == "image/png" else ("webp" if media_type == "image/webp" else "jpg")
+    try:
+        resp = requests.post(
+            apps_script_url,
+            headers={"Content-Type": "text/plain"},  # evita preflight de CORS, igual que el frontend
+            data=json.dumps({
+                "accion": "subir_imagen",
+                "secreto": secreto,
+                "imagen_base64": base64.b64encode(image_bytes).decode("ascii"),
+                "imagen_mime": media_type,
+                "imagen_nombre": f"evento.{ext}",
+            }),
+            timeout=30,
+        )
+        data = resp.json()
+        return data.get("url") if data.get("success") else None
+    except Exception as e:
+        print(f"[hiker_pipeline] error subiendo imagen a Drive — {e}")
+        return None
+
+
 def _fecha_publicacion(post: dict) -> str:
     if not post.get("taken_at_ts"):
         return ""
@@ -458,6 +490,11 @@ def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = froz
         return None
 
     data["imagen_url"] = post["image_url"]
+    if image_path:
+        image_bytes_subida = image_path.read_bytes()
+        drive_url = subir_imagen_a_drive(image_bytes_subida, _detectar_media_type(image_bytes_subida))
+        if drive_url:
+            data["imagen_url"] = drive_url
     data["link_promocional"] = post["link"]
     data["fuente"] = "hikerapi_hashtag"
     data["fecha_descubrimiento"] = datetime.now(timezone.utc).isoformat()
