@@ -243,6 +243,47 @@ class ProcessorTests(unittest.TestCase):
         )
         self.assertFalse(event.get("pais"))
 
+    def test_validate_event_detects_country_from_phone_prefix(self):
+        event = processor.validate_event_data(
+            {"nombre": "Taller de bioconstrucción", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": None,
+             "contacto": "+52 55 1234 5678", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertEqual(event["pais"], "México")
+
+    def test_validate_event_accepts_00_prefix_for_phone_country(self):
+        event = processor.validate_event_data(
+            {"nombre": "Taller", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": None,
+             "contacto": "0051 987 654 321", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertEqual(event["pais"], "Perú")
+
+    def test_validate_event_does_not_flag_argentina_phone_prefix(self):
+        # +549... es el formato de celular argentino (9 = móvil), no un
+        # código de país distinto.
+        event = processor.validate_event_data(
+            {"nombre": "Taller", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": None,
+             "contacto": "+54 9 11 1234-5678", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(event.get("pais"))
+
+    def test_validate_event_ignores_phone_without_international_prefix(self):
+        # Sin "+" ni "00" no hay forma de saber el país desde el número —
+        # un teléfono local argentino ("11 4444-5555") no dice nada, y no
+        # se adivina para evitar falsos positivos.
+        event = processor.validate_event_data(
+            {"nombre": "Taller", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": None,
+             "contacto": "11 4444-5555", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(event.get("pais"))
+
     def test_validate_event_rejects_invalid_or_past_date(self):
         invalid = processor.validate_event_data(
             {"nombre": "Evento", "fecha_inicio": "32/13/2026", "pais": "Argentina"},

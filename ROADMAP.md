@@ -852,7 +852,44 @@ una vez en el mismo proceso (tests).
 2 tests nuevos: que cuenta cada llamada, y que NO cuenta la descarga de
 imagen.
 
-## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
+## Etapa 9.10 — Timeout a 60min, imagen rota desactivada a mano, teléfono como señal de país (16/08/2026)
+
+La corrida del 16/08 (~08:30 ART) se cortó por el timeout de 45min —
+**no por nada de lo cambiado la noche anterior**: confirmado con
+`gh run view` que la anotación fue `exceeded the maximum execution time`,
+no un conflicto del `concurrency.group` compartido con `email-intake.yml`.
+Causa real: HikerAPI tuvo un día degradado (18 errores 500/502/timeout
+consultando cuentas seguidas, de 84 de 137 procesadas antes del corte) —
+no es algo que se arregle de este lado. Dato bueno de paso: el guardado
+incremental ya evitó perder todo (~9-10 eventos se guardaron antes del
+corte), y **el detector de reposts de la Etapa 9.8 disparó dos veces en
+producción real esa misma corrida** — primera confirmación de que
+funciona con datos reales, no solo con los tests. `timeout-minutes` subido
+de 45 a 60 para darle margen a un mal día de HikerAPI sin perder la cola
+de cuentas completa.
+
+Revisando `?pendientes` se encontró "Obra Abierta" con la imagen rota
+(mismo patrón vencido de siempre) y sin forma de repararla (HikerAPI ya
+no tiene el post — `reparar_imagenes.py` no tiene nada que buscar).
+Desactivada a mano (`Activo=false` en la fila del Sheet, `Estado` se dejó
+en `confirmado` — no se tocó esa decisión, es un estado un poco atípico
+pero reversible si HikerAPI recupera el post).
+
+**Tercera señal para el filtro de país** (Etapa 9.7): el campo `contacto`
+extraído del flyer a veces trae un teléfono con prefijo internacional
+explícito (`+52`, `0051`...). A diferencia del texto de dirección, un
+código de país en un teléfono no tiene el problema de colisión con
+nombres de calle (Perú/Chile/México también son calles porteñas) — es una
+señal limpia. Solo se activa si el número trae el prefijo explícito
+("+"/"00"); un teléfono local sin eso no dice nada y no se adivina.
+`+549...` (formato de celular argentino) se trata como Argentina, no como
+señal de otro país. `_pais_desde_telefono()` corre como fallback de
+`_pais_desde_texto()` en el mismo punto de `validate_event_data()` — si el
+texto de dirección/organizador ya encontró algo, el teléfono ni se
+consulta.
+
+4 tests nuevos (detección México/+52, Perú/00, no-falso-positivo con
++549 argentino, y número local sin prefijo no dispara nada).
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:
 

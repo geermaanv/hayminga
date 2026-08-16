@@ -387,6 +387,42 @@ def _pais_desde_texto(*textos: str | None) -> str:
     return ""
 
 
+# Prefijo telefónico internacional en `contacto` — señal más limpia que
+# _pais_desde_texto: un "+52" o "0052" no colisiona con nombres de calle
+# como sí lo hacen Perú/Chile/México en `dirección`. Solo se activa si el
+# número trae el prefijo internacional explícito ("+"/"00") — un número
+# local sin eso ("11 4444-5555") no dice nada del país y no se adivina.
+_PREFIJOS_TELEFONO_NO_ARGENTINA = {
+    "52": "México", "57": "Colombia", "51": "Perú", "56": "Chile",
+    "34": "España", "598": "Uruguay", "595": "Paraguay", "593": "Ecuador",
+    "58": "Venezuela", "591": "Bolivia", "502": "Guatemala",
+    "506": "Costa Rica", "507": "Panamá",
+}
+_PREFIJO_TELEFONO_ARGENTINA = "54"
+_RE_PREFIJO_TELEFONO = re.compile(r"(?:\+|00)(\d{1,3})")
+
+
+def _pais_desde_telefono(value: str | None) -> str:
+    """Busca un prefijo internacional en el teléfono/contacto extraído del
+    flyer. +54 (o +549..., el "9" del formato móvil argentino) se trata
+    como Argentina, no como señal de nada."""
+    if not value:
+        return ""
+    match = _RE_PREFIJO_TELEFONO.search(value)
+    if not match:
+        return ""
+    codigo = match.group(1)
+    if codigo.startswith(_PREFIJO_TELEFONO_ARGENTINA):
+        return ""
+    # El código real puede ser más corto que los 3 dígitos capturados
+    # (ambigüedad de longitud de prefijo internacional) — probar de 3 a 1.
+    for largo in (3, 2, 1):
+        candidato = codigo[:largo]
+        if candidato in _PREFIJOS_TELEFONO_NO_ARGENTINA:
+            return _PREFIJOS_TELEFONO_NO_ARGENTINA[candidato]
+    return ""
+
+
 SOURCE_STOPWORDS = {
     "taller", "curso", "evento", "encuentro", "jornada", "minga",
     "bioconstruccion", "construccion", "natural", "naturales",
@@ -505,7 +541,7 @@ def validate_event_data(data: dict, today: date | None = None) -> dict:
     if not provincia and not result.get("pais"):
         pais_detectado = _pais_desde_texto(
             result.get("direccion"), result.get("organizador"),
-        )
+        ) or _pais_desde_telefono(result.get("contacto"))
         if pais_detectado:
             result["pais"] = pais_detectado
 
