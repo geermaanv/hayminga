@@ -162,21 +162,37 @@ La bioconstrucción es dispersa (eventos anunciados en Instagram, profesionales 
 
 ---
 
+## KPIs por fase
+
+### Fase 1 (HOY): Importación automática
+
+| KPI | Actual | Meta | Cómo medir |
+|-----|--------|------|-----------|
+| **% eventos a pendientes** | ~15% | <12% | pendientes / eventos_importados |
+| **Tasa de publicación** | ~85% | >80% | confirmados / (confirmados + descartados) |
+| **Antigüedad pendientes** | ~1.5d | <2d | promedio días en estado pending |
+| **Eventos activos** | 30-40 | 50+ | count(Activo=true, Estado=confirmado) |
+| **% sin imagen necesaria** | TBD | >40% | eventos_resueltos_solo_caption / total_procesados |
+
+---
+
 ## Estado actual (agosto 2026)
 
 **Fase:** 1 (Importación automática)
 
-**Métricas:**
-- Eventos activos: 30-40 (meta F1: 50+)
-- Pendientes por corrida: ~10-15 (meta F1: <10)
-- Aporte voluntario de organizadores: incipiente
-- Tráfico: no medido aún
+**KPIs:**
+- ✅ % a pendientes: ~15% (meta: <12%)
+- ✅ Tasa de publicación: ~85% (meta: >80%)
+- ✅ Antigüedad promedio: ~1.5 días (meta: <2d)
+- ⏳ Eventos activos: 30-40 (meta: 50+)
+- ❌ Sin imagen necesaria: TBD (medir próxima corrida)
 
 **Foco AHORA:**
-1. 🎯 **Mejorar proceso de importación** — bajar pendientes por corrida
-   - Automatizar más, detectar antes
-   - Ejemplo: detección de país temprana (ya implementado hoy)
-2. 🔍 **Explorar otras fuentes** si Instagram se satura (pero probablemente 90% está ahí)
-3. 📊 **Medir tráfico** — agregar GA4 tracking para entender dónde estamos
+1. 🎯 **Mejorar % a pendientes** — reducir de 15% a <12%
+   - Automatizar detección (país, idioma, fecha)
+   - Reducir ruido en importación
+2. 🔍 **Validar importancia de imagen** — medir si vale la pena descargar
+3. 🔎 **Explorar Eventbrite** si Instagram se satura (probablemente 90% ahí)
+4. 📊 **Medir tráfico** — agregar GA4 para entender usuarios
 
-**NO hacer ahora:** Fase 2/3, refactor de código, features bonitas. Todo debe servir a bajar pendientes.
+**NO hacer ahora:** Fase 2/3, refactor, features. Todo debe servir a mejorar KPIs F1.
