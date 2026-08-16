@@ -78,7 +78,11 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (2x/día),
    por corrida visible en los logs de Actions) — así una expansión futura
    de `cuentas_seguidas` no repite el susto de los $4 en pocos días sin que
    nadie lo note hasta la factura.
-4. **Repensar `hashtag/medias/top` en corridas repetidas**: cada corrida
+4. **Repensar `hashtag/medias/top` en corridas repetidas** — ahora con
+   datos que lo respaldan (ver "Resultado de la medición" en `ROADMAP.md`,
+   Etapa 9.6): en 3 corridas `top` aportó **0 eventos** y `recent` aportó
+   los 8. Revisar ~22/08/2026 con una semana de muestra. Texto original:
+   cada corrida
    vuelve a pagar por los mismos 30 posts de siempre en hashtags de alto
    volumen (dedup por shortcode los descarta gratis, pero la llamada a
    HikerAPI ya se pagó). Si el costo sigue subiendo, evaluar si vale correr

@@ -615,10 +615,44 @@ cambios (endpoint nuevo, 2 hashtags nuevos, fix de dedup por shortcode).
 Por eso se instrumentó la atribución por endpoint (contar es gratis, no
 agrega llamadas): cuántos posts trajo cada uno, cuántos shortcodes trajo
 `recent` que `top` no tenía, y **cuántos eventos escritos vinieron de un
-post que solo `recent` traía**. Ese último número es el que decide. Si
-después de una semana sigue en 0, `recent` se saca: está pagando 2x por
-nada. Va en el mensaje de Telegram; cuando se decida, se puede sacar esa
-línea de `notificar_run.py`.
+post que solo `recent` traía**. Ese último número es el que decide.
+
+### Resultado de la medición (15/08/2026, 3 corridas)
+
+| Corrida | posts `recent` | posts `top` | solo en `recent` | eventos que solo `recent` trajo | eventos totales |
+|---|---|---|---|---|---|
+| 14/08 20:09 | 886 | 634 | 808 | 0 | 0 |
+| 15/08 08:07 | 846 | 629 | 776 | **8** | 8 |
+| 15/08 20:08 | 874 | 633 | 805 | 0 | 0 |
+
+**`recent` se queda, sin discusión**: los 8 eventos que entraron vinieron
+todos de posts que solo `recent` traía. `top` aportó **0 eventos en las
+tres corridas**. La hipótesis previa (que `recent` estaba pagando 2x por
+nada) era exactamente al revés — buen recordatorio de por qué esto se
+midió en vez de decidirse por intuición.
+
+Dato lateral, igual de útil: **el solapamiento entre los dos endpoints es
+mínimo** — de ~870 posts de `recent`, ~800 son exclusivos suyos. Los dos
+endpoints casi no se pisan, y lo que trae `top` son en su mayoría posts
+que el dedup ya descarta por conocidos (es la hipótesis de la
+recomendación 4 de `ESTADO.md`, ahora con evidencia).
+
+**La pregunta abierta pasó a ser `top`**, no `recent`: son 42 llamadas por
+corrida (84/día, ~2500/mes) para 633 posts que en tres corridas no
+produjeron un solo evento. No se saca todavía por dos razones:
+
+1. Tres corridas es poca muestra, y dos dieron 0 eventos **en total** — o
+   sea, no es que `top` perdió contra `recent`, es que no hubo casi nada
+   para encontrar. Solo la corrida del 15 a la mañana tiene señal real.
+2. `top` es la red de seguridad: `recent` usa el endpoint v2, y ya se
+   vieron 404s (`#hayminga`). Si v2 se cae o cambia, hoy `top` es lo único
+   que sostiene el descubrimiento por hashtag.
+
+**Próximo paso (revisar ~22/08/2026)**: si tras una semana `top` sigue en
+0 eventos, bajarlo a una corrida por día en vez de dos (mitad del costo,
+red de seguridad intacta) antes de evaluar sacarlo del todo. La medición
+sigue llegando sola en el mensaje de Telegram; cuando se decida, se saca
+esa línea de `notificar_run.py`.
 
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
