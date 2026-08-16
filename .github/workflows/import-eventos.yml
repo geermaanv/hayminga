@@ -2,8 +2,13 @@ name: Importar eventos de bioconstrucción
 
 on:
   schedule:
-    - cron: "0 11 * * *"  # 08:00 hora Argentina
-    - cron: "0 23 * * *"  # 20:00 hora Argentina
+    # Una sola corrida por día: no hay volumen de eventos nuevos para dos
+    # (medido — ver ROADMAP.md, Etapa 9.6) y cada corrida se paga en
+    # llamadas a HikerAPI. Se conservó la de la mañana: es la única de las
+    # medidas que encontró eventos, y deja el día por delante para revisar
+    # ?pendientes. El minuto 7 (y no 0) es a propósito: los cron en punto
+    # son los más congestionados en Actions y se retrasan más.
+    - cron: "7 11 * * *"  # ~08:07 hora Argentina
   workflow_dispatch: {}
 
 concurrency:

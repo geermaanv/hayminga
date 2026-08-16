@@ -12,7 +12,7 @@ hashtag y por cuenta seguida (HikerAPI), extrae los datos con Gemini Vision
 (Claude como fallback pago) y escribe en la Sheet con dedup y cálculo
 determinista de `Activo`. Dos canales más alimentan la misma Sheet: mail
 con tag `HME` y el formulario web "+ Nuevo Evento" (Apps Script). Tres
-workflows de GitHub Actions orquestan todo: `import-eventos.yml` (2x/día),
+workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
 `curar-fuentes.yml` (diario, auto-baja/alta de fuentes) y
 `enviar-resumen.yml` (semanal, Telegram + mail al Directorio).
 

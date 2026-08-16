@@ -648,6 +648,25 @@ produjeron un solo evento. No se saca todavía por dos razones:
    vieron 404s (`#hayminga`). Si v2 se cae o cambia, hoy `top` es lo único
    que sostiene el descubrimiento por hashtag.
 
+### Cron bajado a 1 corrida por día (15/08/2026)
+
+Decisión del usuario a partir de estos mismos datos: no hay volumen de
+eventos nuevos para dos corridas diarias (dos de las tres medidas dieron 0
+eventos en total), y cada corrida se paga en llamadas a HikerAPI. Se pasó
+de `0 11` + `0 23` a un solo `7 11` (~08:07 hora Argentina).
+
+Se conservó la de la mañana por dos razones: es la única de las tres que
+encontró eventos, y deja el día por delante para revisar `?pendientes`. El
+minuto 7 en vez de 0 es a propósito — los cron en punto son los más
+congestionados en Actions y se retrasan más (las corridas a las `0 11`
+venían disparando 11:07-11:09 igual).
+
+**Efecto lateral a tener presente**: la cola de mail (`email_intake`) corre
+en el mismo workflow, así que un evento mandado por mail ahora puede tardar
+hasta 24h en procesarse en vez de 12. Si algún día molesta, la solución no
+es volver a dos corridas completas sino separar `email_intake` a su propio
+workflow — es gratis (no llama a HikerAPI).
+
 **Próximo paso (revisar ~22/08/2026)**: si tras una semana `top` sigue en
 0 eventos, bajarlo a una corrida por día en vez de dos (mitad del costo,
 red de seguridad intacta) antes de evaluar sacarlo del todo. La medición

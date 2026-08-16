@@ -16,7 +16,7 @@ Frontend ↔ importer are coupled only through the column layout in `src/sheets.
 
 Three workflows in `.github/workflows/`:
 
-- **`import-eventos.yml`** (08:00 and 20:00 Argentina) — runs `python -m src.hiker_pipeline`. **`main.py` and `src/scraper.py` are legacy** (Google Images / SerpAPI); kept in-repo for reference but no workflow calls them.
+- **`import-eventos.yml`** (~08:07 Argentina, once a day — was twice; there isn't enough new-event volume for two, and each run costs HikerAPI calls) — runs `python -m src.hiker_pipeline`. **`main.py` and `src/scraper.py` are legacy** (Google Images / SerpAPI); kept in-repo for reference but no workflow calls them.
 - **`curar-fuentes.yml`** (daily 09:00 Argentina, temporary cadence — becomes weekly once volume justifies it) — runs `src/curar_fuentes.py`: auto-removes hashtags/accounts with 50+ consecutive runs without a hit, and auto-adds new candidate accounts via Instagram's "sugeridas" endpoint (with `MIN_SUGERENCIAS_PARA_AGREGAR=2` gate to avoid the tangential-topic explosion — see roadmap).
 - **`enviar-resumen.yml`** (Tue 09:00 Argentina) — runs `src/enviar_resumen_telegram.py`: sends the weekly digest to `@geermaanv_bot` on Telegram AND, via `Code.gs`'s `enviarResumenSemanalDirectorio()` trigger, to every email in the Directorio (opt-in was captured at signup).
 
