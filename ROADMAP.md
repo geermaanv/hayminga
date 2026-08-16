@@ -686,6 +686,81 @@ vieja se hubiera leído como "top falló", que es justo lo contrario.
 estable y que los eventos siguen entrando. Si `/recent` empieza a fallar o
 a devolver de menos, el primer movimiento es volver a prender `USAR_TOP`.
 
+## Etapa 9.7 — País vacío en posts extranjeros + reporte de hashtags candidatos (15/08/2026)
+
+Sesión de foco: "mejorar el proceso de importación" — detectar posts de
+otros países, encontrar hashtags nuevos. Dos entregas, ninguna gasta
+HikerAPI/Gemini/Claude (solo lectura de Sheets, que es gratis).
+
+### Fix: país vacío no descartaba eventos extranjeros
+
+Gap #1 de `ESTADO.md`, causa raíz confirmada leyendo el código: el filtro
+de `hiker_pipeline.py` (`if data.get("pais") and data["pais"] != "Argentina"`)
+solo dispara si el modelo puso un país explícito. Si lo dejó **vacío**
+(pasa seguido con posts en español de otro país — mismo problema no
+confiable que ya existía con idioma), el evento no se descartaba: quedaba
+en `?pendientes` para rechazo manual, para siempre, cada vez que apareciera
+algo así.
+
+Se agregó `_pais_desde_texto()` en `processor.py`, llamada desde
+`validate_event_data()` solo cuando la provincia no matcheó Y el país sigue
+vacío después de eso (si ya hay provincia argentina confirmada o un país
+explícito, la heurística ni se ejecuta — no hay forma de que le gane a una
+ubicación real ya confirmada).
+
+**Dos riesgos de falso positivo encontrados escribiendo los tests
+adversariales, y corregidos antes de commitear**:
+1. Ciudades de una sola palabra (Madrid, Barcelona, Montevideo, Bogotá...)
+   son justo el tipo de nombre que usan las cuadras porteñas (convención
+   real de nomenclatura urbana en CABA) — se sacaron de la lista, solo
+   quedan frases de varias palabras ("ciudad de mexico", "santiago de
+   chile") o siglas sin otro significado ("cdmx").
+2. Más grave: **Perú, Chile, México y Venezuela son calles reales de San
+   Telmo/Monserrat** — un evento en "Perú 1234" no puede tratarse como si
+   fuera de Perú. Se agregó una guarda: si la palabra matcheada está
+   seguida de un número (patrón de dirección), no cuenta como país.
+
+Filosofía del diseño: costo de falso positivo (descartar un evento real
+argentino) >> costo de falso negativo (uno extranjero más quedando en
+pendientes). Lista de países/ciudades deliberadamente angosta.
+
+6 tests nuevos en `test_import_pipeline.py`, incluido el caso real que
+motivó esto (CDMX con país vacío) y los dos adversariales de arriba.
+
+### Reporte de hashtags candidatos (sin auto-agregar)
+
+`candidatos_hashtags.py`: lee `Hashtags_Post` de eventos **confirmados**
+(la única señal de que un hashtag es temático y no ruido de un post que ni
+terminó siendo evento), cuenta cuáles no están en `config.json` y no son
+ruido genérico (`bioconstruccion`, `sustentable`, etc.), y exige que
+aparezca en 2+ eventos distintos — mismo criterio que
+`MIN_SUGERENCIAS_PARA_AGREGAR` en `descubrir_candidatos()`.
+
+**Deliberadamente no auto-agrega**, a diferencia de cuentas: mezclar temas
+mal sale caro. Prueba de que el criterio funciona — correlo contra el Sheet
+real (solo lectura, gratis) y el propio filtro encontró **exactamente** el
+cluster de hongos que ya se había rechazado a mano (`fungi`, `fungo`,
+`girgolas`, `hongos`, `micelio`, `cultivodehongos` — ver Etapa "Descubrimiento
+de posts realmente recientes"). Si hubiera auto-agregado, habría repetido
+el mismo error.
+
+**Resultado real de la corrida (15/08/2026), curado a mano para la próxima
+revisión** — de los 23 candidatos que arrojó el reporte:
+
+- **Buenos candidatos, on-topic** (revisar y sumar): `earthship`,
+  `cubiertaverde`, `arquitecturaregenerativa`, `arquitecturasostenible`,
+  `diseñoregenerativo`, `vidasustentable`, `cultivosustentable`
+- **Genéricos, riesgo de traer ruido** (dudar antes de sumar):
+  `agroecologia`, `naturaleza`, `comunidad`, `autogestion`
+- **Nombres propios de lugar/evento, no hashtags temáticos reutilizables**
+  (no sumar): `sanmarcossierras`, `cordobaalternativa`, `taypichin`,
+  `formacionesmatria`, `techovivo`
+- **Cluster ya rechazado, confirma que el filtro funciona** (no sumar):
+  `fungi`, `fungo`, `girgolas`, `hongos`, `micelio`, `cultivodehongos`
+
+7 tests nuevos, mockeando el Sheet — no toca `config.json` real ni escribe
+nada.
+
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:

@@ -321,6 +321,72 @@ def _es_argentina(value: str | None) -> bool:
     return _normalizar_texto(value) in {"argentina", "ar"}
 
 
+# Heurística de reemplazo para cuando el modelo deja `pais` vacío en vez de
+# marcarlo explícitamente — mismo problema que ya se resolvió para idioma
+# con _parece_ingles(): la IA no es confiable marcando país si el flyer no
+# lo dice explícito, y un `pais` vacío no activa el filtro de
+# hiker_pipeline.py que descarta lo no-argentino (ese filtro solo dispara
+# si `pais` está seteado Y es distinto de Argentina). El síntoma real: un
+# evento de México con `pais` vacío pasó el filtro y quedó en
+# `?pendientes` para rechazo manual (caso real, ver ESTADO.md).
+#
+# Lista angosta a propósito: países completos (bajo riesgo de falso
+# positivo — nadie escribe "México" en la dirección de un evento
+# argentino) y solo ciudades muy inequívocas (nunca nombres genéricos
+# tipo "Santiago" solo, que también es apellido/nombre de barrio en
+# Argentina). El costo de un falso positivo (descartar un evento real de
+# Argentina) es peor que el de un falso negativo (uno extranjero más
+# quedando en pendientes) — por eso se prefiere quedarse corto.
+_PAISES_NO_ARGENTINA = {
+    "mexico": "México", "colombia": "Colombia", "peru": "Perú",
+    "chile": "Chile", "espana": "España", "uruguay": "Uruguay",
+    "paraguay": "Paraguay", "ecuador": "Ecuador", "venezuela": "Venezuela",
+    "bolivia": "Bolivia", "guatemala": "Guatemala", "costa rica": "Costa Rica",
+    "panama": "Panamá",
+}
+
+# Deliberadamente SIN ciudades de un solo nombre (Madrid, Barcelona,
+# Montevideo, Bogotá...): son justo los nombres que las cuadras argentinas
+# usan para calles (convención real de nomenclatura urbana — hay "Barcelona"
+# y "Montevideo" como calles en CABA). Un match de una sola palabra ahí
+# generaría falsos positivos reales, no hipotéticos. Solo quedan frases de
+# varias palabras o siglas que no tienen otro significado plausible en una
+# dirección argentina.
+_CIUDADES_NO_ARGENTINA = {
+    "cdmx": "México", "ciudad de mexico": "México",
+    "santiago de chile": "Chile",
+}
+
+
+def _pais_desde_texto(*textos: str | None) -> str:
+    """Busca señales de país/ciudad no-argentina en texto ya extraído
+    (dirección, organizador). Solo se usa cuando la normalización de
+    provincia ya falló — si `provincia` matcheó una provincia argentina,
+    esta función ni se llama, así que no hay forma de que le gane a una
+    ubicación argentina real ya confirmada.
+
+    Ojo con `dirección`: Perú, Chile, México, Venezuela, Bolivia son calles
+    reales del microcentro porteño (San Telmo/Monserrat) — un evento real
+    en "Perú 1234" no puede tratarse igual que un evento en "Oaxaca, Perú".
+    Por eso, si la palabra matcheada está seguida de un número (patrón
+    típico de dirección "Calle 1234"), se descarta el match: es más
+    probable que sea el nombre de una calle que el de un país."""
+    texto = _normalizar_texto(" ".join(t for t in textos if t))
+    if not texto:
+        return ""
+
+    def _es_direccion_con_numero(palabra: str) -> bool:
+        return bool(re.search(rf"\b{re.escape(palabra)}\b\s*\d", texto))
+
+    for pais, nombre in _PAISES_NO_ARGENTINA.items():
+        if re.search(rf"\b{re.escape(pais)}\b", texto) and not _es_direccion_con_numero(pais):
+            return nombre
+    for ciudad, nombre in _CIUDADES_NO_ARGENTINA.items():
+        if ciudad in texto:
+            return nombre
+    return ""
+
+
 SOURCE_STOPWORDS = {
     "taller", "curso", "evento", "encuentro", "jornada", "minga",
     "bioconstruccion", "construccion", "natural", "naturales",
@@ -432,6 +498,16 @@ def validate_event_data(data: dict, today: date | None = None) -> dict:
 
     if _es_argentina(result.get("pais")):
         result["pais"] = "Argentina"
+
+    # Provincia no matcheó Argentina y el modelo no dijo país: última
+    # chance antes de dejarlo en pendientes para siempre. No pisa un país
+    # ya seteado (aunque sea "Argentina" recién puesto arriba).
+    if not provincia and not result.get("pais"):
+        pais_detectado = _pais_desde_texto(
+            result.get("direccion"), result.get("organizador"),
+        )
+        if pais_detectado:
+            result["pais"] = pais_detectado
 
     fecha_inicio = date.fromisoformat(fecha_inicio_iso) if periodo else None
     fecha_fin = None

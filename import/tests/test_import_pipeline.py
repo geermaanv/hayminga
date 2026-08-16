@@ -173,6 +173,76 @@ class ProcessorTests(unittest.TestCase):
         self.assertEqual(event["pais"], "Argentina")
         self.assertEqual(event["fecha_inicio_iso"], "2026-07-27")
 
+    def test_validate_event_detects_foreign_country_when_model_left_it_empty(self):
+        # Caso real: un evento en CDMX con `pais` vacío (el modelo no lo
+        # infirió) pasaba el filtro de hiker_pipeline.py que solo descarta
+        # cuando `pais` está explícitamente seteado y no es Argentina.
+        event = processor.validate_event_data(
+            {
+                "nombre": "Taller de bioconstrucción",
+                "fecha_inicio": "27/07/2026",
+                "provincia": None,
+                "direccion": "Barrio de Coyoacán, Ciudad de México",
+                "pais": None,
+                "confianza": "alta",
+            },
+            today=date(2026, 7, 20),
+        )
+
+        self.assertEqual(event["pais"], "México")
+        self.assertFalse(event["activo"])
+
+    def test_validate_event_detects_country_name_in_direccion(self):
+        event = processor.validate_event_data(
+            {"nombre": "Curso", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": "Finca rural, Colombia", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertEqual(event["pais"], "Colombia")
+
+    def test_validate_event_does_not_flag_argentina_events_as_foreign(self):
+        # El caso que más importa no romper: un evento real de Argentina no
+        # debe quedar marcado como extranjero por una coincidencia de texto.
+        # Santiago del Estero es justamente el caso adversarial (contiene
+        # "Santiago", una de las ciudades ambiguas que la heurística evita
+        # a propósito por esto mismo).
+        event = processor.validate_event_data(
+            {
+                "nombre": "Minga de adobe",
+                "fecha_inicio": "15/08/2026",
+                "provincia": "Santiago del Estero",
+                "direccion": "Ruta 9, Santiago del Estero",
+                "pais": None,
+                "confianza": "alta",
+            },
+            today=date(2026, 7, 20),
+        )
+        self.assertEqual(event["pais"], "Argentina")
+        self.assertEqual(event["provincia"], "Santiago del Estero")
+
+    def test_validate_event_does_not_override_explicit_pais(self):
+        # Si el modelo ya dijo Argentina (aunque la provincia no matcheara,
+        # ej. un typo), la heurística de texto no debe pisarlo.
+        event = processor.validate_event_data(
+            {"nombre": "Evento", "fecha_inicio": "10/08/2026",
+             "provincia": "Buenos Aires (typo raro)", "direccion": "Chile 890",
+             "pais": "Argentina"},
+            today=date(2026, 7, 20),
+        )
+        self.assertEqual(event["pais"], "Argentina")
+
+    def test_validate_event_does_not_flag_street_address_as_foreign_country(self):
+        # Perú, Chile, México, Venezuela son calles reales del microcentro
+        # porteño (San Telmo/Monserrat) — un evento en "Perú 1234" no puede
+        # tratarse como si fuera de Perú. La guarda: si la palabra va
+        # seguida de un número (patrón de dirección), no cuenta como país.
+        event = processor.validate_event_data(
+            {"nombre": "Feria de bioconstrucción", "fecha_inicio": "10/08/2026",
+             "provincia": None, "direccion": "Perú 1234, San Telmo", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(event.get("pais"))
+
     def test_validate_event_rejects_invalid_or_past_date(self):
         invalid = processor.validate_event_data(
             {"nombre": "Evento", "fecha_inicio": "32/13/2026", "pais": "Argentina"},
@@ -491,6 +561,95 @@ class NotificarRunTests(unittest.TestCase):
         })
         self.assertIn("top apagado", mensaje)
         self.assertNotIn("recent vs top", mensaje)
+
+
+class CandidatosHashtagsTests(unittest.TestCase):
+    """analizar() no debe llamar a HikerAPI/Gemini/Claude — solo lee la
+    hoja de Sheets (ya mockeada acá) y config.json local."""
+
+    def _fila(self, estado="confirmado", hashtags_post=""):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[16] = estado
+        fila[23] = hashtags_post
+        return fila
+
+    def _analizar_con(self, hashtags_config, filas):
+        from src import candidatos_hashtags
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                Path("config.json").write_text(json.dumps({"hashtags": hashtags_config}))
+                service = Mock()
+                service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+                    "values": filas
+                }
+                return candidatos_hashtags.analizar(service=service)
+            finally:
+                os.chdir(cwd)
+
+    def test_ignora_hashtags_ya_configurados(self):
+        candidatos = self._analizar_con(
+            hashtags_config=["bioconstruccion"],
+            filas=[
+                self._fila(hashtags_post="#bioconstruccion #tapial"),
+                self._fila(hashtags_post="#bioconstruccion #tapial"),
+            ],
+        )
+        self.assertEqual([c[0] for c in candidatos], ["tapial"])
+
+    def test_ignora_eventos_no_confirmados(self):
+        candidatos = self._analizar_con(
+            hashtags_config=[],
+            filas=[
+                self._fila(estado="pendiente_confirmacion", hashtags_post="#quincha #quincha"),
+                self._fila(estado="pendiente_confirmacion", hashtags_post="#quincha"),
+            ],
+        )
+        self.assertEqual(candidatos, [])
+
+    def test_requiere_minimo_de_eventos_distintos(self):
+        candidatos = self._analizar_con(
+            hashtags_config=[],
+            filas=[self._fila(hashtags_post="#adoberos")],  # un solo evento
+        )
+        self.assertEqual(candidatos, [])
+
+    def test_no_cuenta_dos_veces_el_mismo_hashtag_repetido_en_una_fila(self):
+        candidatos = self._analizar_con(
+            hashtags_config=[],
+            filas=[
+                self._fila(hashtags_post="#adoberos #adoberos #adoberos"),
+                self._fila(hashtags_post="#adoberos"),
+            ],
+        )
+        self.assertEqual(candidatos, [("adoberos", 2)])
+
+    def test_excluye_ruido_generico(self):
+        candidatos = self._analizar_con(
+            hashtags_config=[],
+            filas=[
+                self._fila(hashtags_post="#permacultura #superadobe"),
+                self._fila(hashtags_post="#permacultura #superadobe"),
+            ],
+        )
+        self.assertEqual([c[0] for c in candidatos], ["superadobe"])
+
+    def test_ordena_de_mas_a_menos_frecuente(self):
+        candidatos = self._analizar_con(
+            hashtags_config=[],
+            filas=[
+                self._fila(hashtags_post="#quincha"),
+                self._fila(hashtags_post="#quincha"),
+                self._fila(hashtags_post="#quincha #adobe"),
+                self._fila(hashtags_post="#adobe"),
+                self._fila(hashtags_post="#adobe"),
+                self._fila(hashtags_post="#adobe"),
+            ],
+        )
+        self.assertEqual(candidatos, [("adobe", 4), ("quincha", 3)])
 
 
 if __name__ == "__main__":

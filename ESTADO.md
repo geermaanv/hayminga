@@ -37,9 +37,11 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
 
 ## Gaps conocidos, sin resolver
 
-1. **País vacío en posts extranjeros** (ej. México confirmado en un caso
-   real) — el filtro de idioma no ayuda cuando el post está en español
-   pero de otro país. Sin heurística de reemplazo todavía.
+1. ~~País vacío en posts extranjeros~~ — **resuelto 15/08/2026** (Etapa
+   9.7 del ROADMAP): `_pais_desde_texto()` detecta país/ciudad no-argentina
+   en dirección/organizador cuando el modelo deja `pais` vacío, con
+   guardas contra falsos positivos (calles porteñas con nombre de país:
+   Perú, Chile, México, Venezuela son calles reales de San Telmo).
 2. **Duplicados del mismo evento con posts de Instagram distintos**: el
    dedup actual (shortcode exacto, o nombre+fecha+provincia) no agarra
    reposteos con texto/fecha ligeramente distintos del mismo organizador.
