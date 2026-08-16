@@ -603,6 +603,20 @@ def procesar_post(
     if data.get("activo") and confianza != "alta":
         data["activo"] = False
         data["estado"] = "pendiente_confirmacion"
+        # Métrica: ¿por qué entra a pendientes?
+        razon_pendiente = []
+        if confianza == "media":
+            razon_pendiente.append("confianza_media")
+        elif confianza == "baja":
+            razon_pendiente.append("confianza_baja")
+        if not data.get("nombre"):
+            razon_pendiente.append("sin_nombre")
+        if not (data.get("fecha_inicio_iso") or data.get("es_virtual")):
+            razon_pendiente.append("sin_fecha")
+        if not data.get("provincia") and not data.get("latitud"):
+            razon_pendiente.append("sin_ubicacion")
+        razon = ",".join(razon_pendiente) or "otra_razon"
+        print(f"[PENDIENTE] {data.get('nombre', 'SIN_NOMBRE')} — {razon} — {post['link']}")
 
     return data
 
