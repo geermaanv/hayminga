@@ -32,6 +32,7 @@ cp .env.example .env                              # secrets for local runs
 python -m src.hiker_pipeline                      # production pipeline
 python -m src.enviar_resumen_telegram             # weekly digest
 python -m src.curar_fuentes                       # curation pass
+python -m src.candidatos_hashtags                  # report-only: hashtag candidates from confirmed events (free, no paid APIs)
 python -m unittest discover -s tests -v           # tests (also in CI)
 python -m unittest tests.test_scraper -v          # single module
 python main.py                                    # legacy Google Images pipeline (do not use)
