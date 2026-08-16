@@ -1,31 +1,38 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working on hayminga.org.
 
-Read `ROADMAP.md` for the narrative history (why decisions were made, what's been tried and rejected). It's the source of truth for context that isn't in the code.
+**Before making changes, read:**
+- `PATRONES.md` — critical patterns & constraints that affect decisions
+- `ROADMAP.md` — narrative history: why decisions were made, what's been tried
 
-## Repo shape
+## Architecture
 
+**Repo shape:**
 - **Frontend** (`index.html`, `vendor/leaflet/`, `_headers`, `CNAME`): single static-page site on hayminga.org (GitHub Pages). Vanilla JS + Leaflet, no build. Reads events from a Google Sheet via GViz JSON at load time.
 - **Importer** (`import/`): Python pipeline that populates the Sheet. Runs on GitHub Actions cron.
-- **Apps Script** (`import/apps-script/Code.gs`): handles the web form (`+ Nuevo Evento`), the mail intake queue, the `?pendientes` review actions, and the weekly Directorio digest. **The file in the repo is a mirror** — changes only take effect after copying them into the project at script.google.com and cutting a new deployment (Implementar → Gestionar implementaciones → Nueva versión).
+- **Apps Script** (`import/apps-script/Code.gs`): web form, mail intake queue, `?pendientes` review, weekly digest. **This file is a mirror** — changes only sync after manual deployment at script.google.com (Implementar → Gestionar implementaciones → Nueva versión).
 
-Frontend ↔ importer are coupled only through the column layout in `src/sheets.py`. Always append new columns at the end; existing positions are load-bearing for both sides.
+**Frontend ↔ Importer coupling:** column layout in `src/sheets.py`. Always append new columns at the end; existing positions are load-bearing.
 
-## What actually runs in production
+## Operations
 
-Four workflows in `.github/workflows/`:
+**Four workflows in `.github/workflows/`:**
 
-- **`import-eventos.yml`** (~08:07 Argentina, once a day — was twice; there isn't enough new-event volume for two, and each run costs HikerAPI calls) — runs `python -m src.hiker_pipeline`. **`main.py` and `src/scraper.py` are legacy** (Google Images / SerpAPI); kept in-repo for reference but no workflow calls them.
-- **`email-intake.yml`** (every 3h) — runs `python -m src.email_intake`, the `HME`-tagged mail queue. Split out from `import-eventos.yml` (15/08/2026) so lowering that cron to 1x/day didn't push mail-submitted events out to 24h latency. Cheap to run often: `process_queue()` does one Sheets read and exits if the queue is empty, only calling Gemini/Claude when there's a real pending email. Shares the `import-eventos-production` concurrency group with `import-eventos.yml` on purpose — both call `append_events()` on the same Sheet, so they queue instead of racing.
-- **`curar-fuentes.yml`** (daily 09:00 Argentina, temporary cadence — becomes weekly once volume justifies it) — runs `src/curar_fuentes.py`: auto-removes hashtags/accounts with 50+ consecutive runs without a hit, and auto-adds new candidate accounts via Instagram's "sugeridas" endpoint (with `MIN_SUGERENCIAS_PARA_AGREGAR=2` gate to avoid the tangential-topic explosion — see roadmap).
-- **`enviar-resumen.yml`** (Tue 09:00 Argentina) — runs `src/enviar_resumen_telegram.py`: sends the weekly digest to `@geermaanv_bot` on Telegram AND, via `Code.gs`'s `enviarResumenSemanalDirectorio()` trigger, to every email in the Directorio (opt-in was captured at signup).
+| Workflow | Schedule | Does |
+|----------|----------|------|
+| `import-eventos.yml` | ~08:07 daily | `python -m src.hiker_pipeline` — discovers events from HikerAPI (hashtags + followed accounts) |
+| `email-intake.yml` | every 3h | `python -m src.email_intake` — processes mail queue (HME tag). Split out (15/08/2026) so 1x/day import didn't delay mail. Cheap: reads Sheet, exits if empty, only calls LLM on real mail. Shares concurrency group with import-eventos to queue safely. |
+| `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=2`) |
+| `enviar-resumen.yml` | Tue 09:00 | `src/enviar_resumen_telegram.py` — sends weekly digest to Telegram + Directorio email |
 
-Digest formatting rule: put `https://hayminga.org` **first** in the message body — WhatsApp builds its link preview from the first URL it sees, and if it's an Instagram post link the card covers the rest of the list.
+**Legacy code (not used):** `main.py` and `src/scraper.py` (Google Images / SerpAPI). Kept for reference.
 
-## Importer commands
+**Digest formatting rule:** put `https://hayminga.org` **first** — WhatsApp link preview uses first URL.
 
-All from `import/`:
+## Configuration & Commands
+
+**Importer commands** (all from `import/`):
 
 ```bash
 pip install -r requirements.txt
@@ -33,79 +40,62 @@ cp .env.example .env                              # secrets for local runs
 python -m src.hiker_pipeline                      # production pipeline
 python -m src.enviar_resumen_telegram             # weekly digest
 python -m src.curar_fuentes                       # curation pass
-python -m src.candidatos_hashtags                  # report-only: hashtag candidates from confirmed events (free, no paid APIs)
-python -m unittest discover -s tests -v           # tests (also in CI)
-python -m unittest tests.test_scraper -v          # single module
-python main.py                                    # legacy Google Images pipeline (do not use)
+python -m src.candidatos_hashtags                  # free: hashtag candidates from confirmed events
+python -m unittest discover -s tests -v           # tests (all external calls mocked)
+gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
 
-**`python -m src.hiker_pipeline`, `curar_fuentes`, and `enviar_resumen_telegram` all spend real money** (HikerAPI, and Claude when Gemini quota runs out) — never run them just to check a code change. The tests are the free way to validate logic: every external call (HikerAPI, Gemini, Claude, Sheets API, Telegram) is mocked in `tests/`, so `python -m unittest discover -s tests -v` exercises the real pipeline logic without touching any paid API. If you're validating a change to `hiker_pipeline.py`/`processor.py`/`sheets.py`, add or extend a test with a mocked response rather than doing a live run.
+**Cost:** `hiker_pipeline`, `curar_fuentes`, and `enviar_resumen_telegram` spend real money (HikerAPI, Gemini/Claude). Validate code changes via tests instead (all external calls are mocked).
 
-Trigger a manual production run:
+**Active configuration flags:**
 
-```bash
-gh workflow run import-eventos.yml -R geermaanv/hayminga
-```
+- **`REVISION_MANUAL = true`** (in `processor.py` AND `Code.gs`) — everything lands as `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`. Flip both to `false` to enable auto-publish (`confianza=alta` only).
+- **`HIKERAPI_KEY`** — required for production. Local: `.env`. CI: GitHub Actions secret.
+- **`GEMINI_MIN_INTERVAL_SECONDS`** — rate pacing. Default 4.5s (free tier: 15/min). Production: 0.5s (billing enabled).
 
-## Pipeline architecture (`src/hiker_pipeline.py`)
+## Pipeline: event discovery & extraction
 
-Discovery: **HikerAPI**, two channels — hashtags (`config.json.hashtags`, ~30-40 curated) and followed accounts (`config.json.cuentas_seguidas`, 74+). Hashtags use `hashtag/medias/top` (the `recent` endpoint returns empty in practice). Accounts use `/v1/user/medias` — a real cronological timeline, less biased toward high-volume countries than the global `top` ranking.
+**Discovery:** HikerAPI, two channels — hashtags (`config.json.hashtags`, ~30-40 curated) and followed accounts (`config.json.cuentas_seguidas`, 74+).
 
-Pre-AI filters (cheap, run before any Gemini/Claude call to save quota and cost):
+**Pre-AI filters (cheap, run before LLM):**
+- Dedup by Instagram shortcode (`/p/`, `/reel/`, `/reels/` → same post)
+- Blacklist (`config.json.cuentas_excluidas`)
+- Post age > 180 days (dropped from 270; see PATRONES.md)
+- Language: `_parece_ingles()` on caption (regex, reliable; LLM output unreliable on ambiguous flyers)
 
-- Dedup by Instagram shortcode (see `sheets.py.instagram_shortcode()` — same post can appear as `/p/`, `/reel/`, or `/reels/`).
-- Blacklist (`config.json.cuentas_excluidas`) — username-level exclusion.
-- Post age: drop anything older than **180 days** by `taken_at_ts` (was 270; lowered after finding a 252-day post slipping through).
-- Language: `_parece_ingles()` counts common ES vs EN words in the caption — the LLM's `pais`/`idioma` output is unreliable when the flyer is ambiguous, so this filter runs first. The LLM's `idioma` field stays as a secondary layer.
+**Extraction strategy:**
+1. Gemini text-only on caption (cheap, filters non-events)
+2. If ambiguous/event: Gemini + image (recovers more fields)
+3. Fallback to Claude if Gemini quota hit (capped by `MAX_CLAUDE_CALLS_PER_RUN`, Claude is paid)
+4. Timeout: `genai.Client` must set `timeout=30_000` (real incident: 44min hang)
 
-Extraction (Gemini Vision primary, Claude fallback):
+**Post-extraction validation:**
+- Drop already-happened events (fecha_fin/inicio < today)
+- Drop non-Argentina
+- Drop non-Spanish (redundant with pre-AI filter, for defense in depth)
 
-1. First pass: text-only on the caption (cheap way to reject non-events).
-2. If it's a real event: send the image too (with caption as context — usually recovers more fields).
-3. Provider fallback: Claude picks up when Gemini reports quota exhausted, capped by `MAX_CLAUDE_CALLS_PER_RUN` (Claude is paid).
-4. Gemini pacing: `GEMINI_MIN_INTERVAL_SECONDS` env var (default 4.5s for free tier; production runs at 0.5s because billing is enabled on the `haymingaorg` project).
-5. `genai.Client` **must** set `http_options=types.HttpOptions(timeout=30_000)` — without it a hung call blocks the whole run indefinitely (real incident: 44 min silent hang). The workflow also sets `PYTHONUNBUFFERED=1` so `print()` logs survive cancellation.
-6. Post-extraction filters: drop events already in the past (compare `fecha_fin`/`fecha_inicio`), drop non-Argentina, drop non-Spanish.
+**Write:** Dedup by `(nombre, fecha, provincia)`. Ambiguous match → `pendiente_confirmacion` with note linking to existing event (manual merge, no silent loss). `Activo` computed deterministically; never from LLM.
 
-Write (`sheets.py.append_events`):
+**Curation:** `FuentesStats` sheet tracks hits/misses per source. `curar_fuentes.py` auto-removes stale sources (50+ dry runs), auto-adds new candidates from Instagram.
 
-- Dedup by `(nombre, fecha, provincia)`. Ambiguous match (same event, different source post) → **inserts anyway but into `pendiente_confirmacion`** with an automatic note pointing at the existing Id, so the two can be merged manually rather than one silently lost.
-- `Activo` computed here deterministically (Argentina + not-yet-ended). **Never set `Activo` from LLM output.**
+## Data model
 
-Curation stats: each run appends to the `FuentesStats` sheet (`Tipo, Nombre, IntentosSinHit, UltimoHit`). `curar_fuentes.py` reads that and does auto-removal by pushing commits to `config.json` (needs `permissions: contents: write`). Auto-add of new candidates uses a separate `CuentasConsultadas` sheet to avoid re-querying "sugeridas" for the same account within 30 days, and a `CuentasIds` sheet caches `user_id` lookups (cost control — see roadmap for the $4-in-a-few-days incident).
+**Event state:** Two orthogonal fields per row:
+- `Activo` (true/false) — controls visibility on site
+- `Estado` — curation state: `confirmado`, `pendiente_confirmacion` (review queue), `descartado` (blacklisted, but dedup still tracks it)
+  - Older values (`pendiente`, `revision_fuente`) collapsed into `pendiente_confirmacion` — don't reintroduce.
 
-## Currently active flags & switches
+**Review queue** (`hayminga.org/?pendientes`): Manual actions via `Code.gs`.
+- `confirmar_evento` — activates row, reopens form for edits
+- `descartar_evento` — sets `Estado=descartado`
+- `notificarPendientes()` — alerts `germanv@gmail.com`
 
-- **`REVISION_MANUAL = true`** in `import/src/processor.py` AND `import/apps-script/Code.gs`. While this is true, **nothing auto-publishes** — everything (HikerAPI, mail intake, web form) lands as `Activo=false` / `Estado=pendiente_confirmacion` and waits for manual confirmation at `hayminga.org/?pendientes`. To restore auto-publish, flip both files back to `false`. (For HikerAPI specifically, the intended behavior once the flag is off is: `confianza=alta` publishes directly, `media`/`baja` still goes to review.)
-- **`HIKERAPI_KEY`** — required for the production pipeline. Local: put it in `.env`. CI: GitHub Actions secret.
+**Intake channels:**
+- **Web form** (`+ Nuevo Evento`): Posts to `doPost`, writes directly to Eventos (no AI). Goes to review queue while `REVISION_MANUAL=true`.
+- **Mail intake** (tag `HME` in subject): Apps Script queues to `Cola_Manual`, pipeline processes with `extract_event_data` (email body = caption). Pulls image via `og:image` if only link sent. Separate from HikerAPI — runs from same `email-intake.yml` cron.
 
-## The `Estado` model
+## Cross-cutting rules
 
-Two orthogonal fields on each event row:
+**Every user-facing message** (Telegram digest, Directorio email, form confirmations, WhatsApp) must include CTA: share via WhatsApp, send by mail, or tag `#hayminga` on Instagram.
 
-- `Activo` (true/false) — the on/off switch that controls visibility on the site.
-- `Estado` — curation state, one of: `confirmado`, `pendiente_confirmacion` (shows up in the `?pendientes` review queue), `descartado` (removed from circulation without deleting the row, so the shortcode-dedup still recognizes it if the pipeline finds it again).
-
-Older values `pendiente` and `revision_fuente` were collapsed into `pendiente_confirmacion`. Don't reintroduce them.
-
-## Review queue (`hayminga.org/?pendientes`)
-
-Three actions, all backed by `Code.gs`: `confirmar_evento` (activates a row by Id and reopens the "Publicá tu evento" form pre-filled for edits), `descartar_evento` (sets `Activo=false` / `Estado=descartado`), and Skip. `notificarPendientes()` sends a mail to `germanv@gmail.com` when new pendings appear.
-
-## Other stable intake channels
-
-- **Web form** (`+ Nuevo Evento` modal in `index.html`): posts to Apps Script `doPost`, which writes straight to `Eventos` (no AI). While `REVISION_MANUAL=true`, still goes to review.
-- **Mail intake** (`email_intake.py`, tag `HME` in subject): Apps Script queues to `Cola_Manual`, the pipeline processes with the same `extract_event_data` (email body plays the caption's role). If the sender only sends a link, the pipeline pulls the image via `og:image`. This runs from the same `import-eventos.yml` workflow but is not replaced by HikerAPI — it's a separate capability.
-
-## Outbound-message rule
-
-Every message that reaches end users (Telegram digest, Directorio mail, form confirmations, WhatsApp copy) must include the reminder for how to contribute events: share by WhatsApp, send by mail, or tag `#hayminga` on Instagram. This is a standing product rule.
-
-## Gotchas worth remembering
-
-- Google Sheet formula injection: any cell whose value starts with `+`, `=`, or `-` gets interpreted as a formula unless the cell is pre-formatted as plain text. Sanitize on write.
-- Apps Script `doPost` writing booleans natively breaks GViz parsing — always write `"true"`/`"false"` as strings.
-- GViz header detection is unreliable when a column is 100% text — always request with `&headers=1`.
-- Latitud/Longitud columns must have a consistent numeric format across all rows or GViz returns `null` for some cells and the event falls back to province centroid.
-- Every event row needs an `Id` — the `?pendientes` confirm fetch uses `no-cors` and swallows errors silently if `Id` is missing.
-- HikerAPI images arrive as webp but `_download_image` names them `.jpg`. Claude rejects the call if the declared `media_type` doesn't match the actual bytes — detect format from magic bytes, not filename.
+**See PATRONES.md** for critical patterns: data integrity (image expiry, Sheet parsing), filtering (date interaction, language detection), operations (incremental saves, timeout handling), and architecture constraints (column coupling, Apps Script mirroring).
