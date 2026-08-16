@@ -761,6 +761,65 @@ revisión** — de los 23 candidatos que arrojó el reporte:
 7 tests nuevos, mockeando el Sheet — no toca `config.json` real ni escribe
 nada.
 
+## Etapa 9.8 — Duplicados por repost con texto distinto (15/08/2026, noche)
+
+Gap #2 de `ESTADO.md`, siguiente en prioridad después del país. El caso
+DeBarro (Etapa 9.5) ya está resuelto — pero solo porque era literalmente
+el mismo posteo de Instagram cargado dos veces (mismo shortcode). El gap
+que queda abierto es distinto: **el mismo evento real promocionado en dos
+posteos DISTINTOS** (shortcode distinto, texto/fecha ligeramente
+distinto), que `event_dedupe_key()` no agarra porque exige nombre
+normalizado idéntico.
+
+La recomendación de `ESTADO.md` era comparar por `username` de origen +
+ventana de fecha. Al ir a implementarlo: **el username de la cuenta de
+Instagram que originó el post nunca se persiste** — `post["username"]`
+existe en memoria en `hiker_pipeline.py` (se usa solo para el filtro de
+`cuentas_excluidas`) pero no se guarda en ninguna columna del Sheet.
+Agregar esa columna es straightforward pero es un cambio de schema, y
+`CLAUDE.md` es explícito sobre que los cambios de columna requieren
+cuidado (posiciones existentes son load-bearing). Se prefirió no tocar
+schema a la 1 de la mañana sin poder probarlo contra el Sheet real de
+punta a punta.
+
+Se implementó una señal equivalente sin cambiar schema:
+`find_probable_duplicate()` en `sheets.py` — nombre parecido (tokens
+compartidos, excluyendo vocabulario genérico del rubro como "taller",
+"curso", "bioconstrucción") + misma provincia + fecha dentro de ±10 días.
+Corre solo cuando la clave exacta NO matcheó (es un chequeo adicional, no
+un reemplazo), y nunca descarta — el mismo comportamiento no-destructivo
+que ya existía para el match ambiguo exacto: inserta igual, pero
+`Activo=false` / `Estado=pendiente_confirmacion`, con una nota automática
+en la Descripción apuntando al Id del evento existente.
+
+**Límite conocido y aceptado, no un bug** (encontrado con el mismo
+ejercicio adversarial que se usó para el filtro de país): dos eventos
+DISTINTOS en el mismo lugar conocido (ej. San Marcos Sierras — recurrente
+en el Sheet real, ver Etapa 9.7) pueden compartir tokens del nombre del
+lugar y disparar un falso positivo. Se acepta a propósito porque acá el
+costo de errar es bajo: nunca se pierde un evento, solo se manda a
+revisión, y aprobar dos eventos reales en `?pendientes` es un click cada
+uno. Si genera ruido en la práctica, la primera palanca es subir
+`_RATIO_MINIMO_NOMBRE` (hoy 0.6) antes de complicar el algoritmo.
+
+También se extendió `load_processed_events()` para llevar `provincia` y
+`fecha_inicio_iso` (antes solo devolvía la clave combinada), y
+`append_events()` ahora agrega cada evento procesado a la lista de
+`existentes` en memoria a medida que corre — así dos reposts del mismo
+evento descubiertos en la MISMA corrida también se agarran entre sí, no
+solo contra lo que ya estaba en el Sheet de corridas anteriores.
+
+**Pendiente real, no resuelto esta noche**: si esta heurística no alcanza
+en la práctica (o si se vuelve a necesitar comparar por cuenta de
+origen), el paso siguiente es agregar la columna `Username_Origen` al
+final de `COLUMNS` en `sheets.py` (respetando la regla de "nuevas columnas
+van al final") y usarla como señal adicional, más fuerte que el
+nombre-parecido.
+
+7 tests nuevos, incluido el adversarial de San Marcos Sierras documentado
+como límite aceptado, y dos tests de integración contra `append_events`
+con el servicio de Sheets mockeado.
+
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:

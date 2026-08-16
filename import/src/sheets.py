@@ -340,10 +340,83 @@ def load_processed_events(service) -> list[dict]:
                 "shortcode": instagram_shortcode(row[10]),
                 "id": row[14],
                 "nombre": row[1],
+                "provincia": row[7],
+                "fecha_inicio_iso": row[4],
             })
         return out
     except Exception:
         return []
+
+
+# Palabras genéricas del rubro que no sirven como evidencia de que dos
+# eventos son "el mismo" (duplicado de _source_tokens/SOURCE_STOPWORDS en
+# processor.py — no se importa de ahí para no crear un import circular,
+# processor.py ya importa de acá). "Taller de Bioconstrucción Natural" y
+# "Taller de Bioconstrucción con Adobe" comparten 2 de estas palabras sin
+# ser el mismo evento — con esta lista afuera, no alcanzan el piso mínimo.
+_STOPWORDS_NOMBRE = {
+    "taller", "curso", "evento", "encuentro", "jornada", "minga",
+    "bioconstruccion", "construccion", "natural", "naturales",
+    "arquitectura", "bioarquitectura", "argentina", "presencial",
+    "virtual", "para", "sobre", "desde", "hasta", "como", "esta",
+    "este", "estos", "estas", "con", "del", "los", "las", "una",
+}
+
+_VENTANA_DIAS_REPOST = 10  # ± días para considerar "misma fecha" entre dos posteos
+_MIN_TOKENS_COMPARTIDOS = 2
+_RATIO_MINIMO_NOMBRE = 0.6
+
+
+def _tokens_nombre(value: str | None) -> set[str]:
+    texto = _normalize_key_part(value)
+    return {t for t in texto.split() if len(t) >= 4 and t not in _STOPWORDS_NOMBRE}
+
+
+def _fechas_cercanas(a: str | None, b: str | None) -> bool:
+    if not a or not b:
+        return False
+    try:
+        fecha_a = date.fromisoformat(str(a)[:10])
+        fecha_b = date.fromisoformat(str(b)[:10])
+    except ValueError:
+        return False
+    return abs((fecha_a - fecha_b).days) <= _VENTANA_DIAS_REPOST
+
+
+def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
+    """El mismo evento real, promocionado en dos posteos de Instagram
+    distintos con texto/fecha ligeramente distinto (mismo patrón que el
+    caso DeBarro de la Etapa 9.5, que sí se resolvió porque era literalmente
+    el mismo posteo con otro nombre — esto es el gap #2 que quedó abierto:
+    dos posteos DISTINTOS del mismo evento real). `event_dedupe_key` exige
+    coincidencia exacta de nombre normalizado y no lo agarra si el texto
+    varía.
+
+    Señal barata sin depender del username de origen (no se persiste hoy —
+    ver ROADMAP.md): nombre parecido (tokens compartidos sin contar
+    palabras genéricas del rubro) + misma provincia + fecha cercana.
+    Deliberadamente conservador y NO destructivo — igual que el match
+    exacto ambiguo, solo sirve para decidir si mandar a revisión manual,
+    nunca para descartar un evento."""
+    provincia_evento = _normalize_key_part(event.get("provincia"))
+    fecha_evento = event.get("fecha_inicio_iso") or event.get("fecha_inicio")
+    tokens_evento = _tokens_nombre(event.get("nombre"))
+    if not tokens_evento or not provincia_evento or not fecha_evento:
+        return None
+
+    for existente in existentes:
+        if _normalize_key_part(existente.get("provincia")) != provincia_evento:
+            continue
+        if not _fechas_cercanas(fecha_evento, existente.get("fecha_inicio_iso")):
+            continue
+        tokens_existente = _tokens_nombre(existente.get("nombre"))
+        if not tokens_existente:
+            continue
+        compartidos = tokens_evento & tokens_existente
+        ratio = len(compartidos) / min(len(tokens_evento), len(tokens_existente))
+        if len(compartidos) >= _MIN_TOKENS_COMPARTIDOS and ratio >= _RATIO_MINIMO_NOMBRE:
+            return existente
+    return None
 
 
 def event_to_row(event: dict) -> list:
@@ -413,6 +486,23 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
             event["descripcion"] = nota + (event.get("descripcion") or "")
             event["activo"] = False
             event["estado"] = "pendiente_confirmacion"
+        else:
+            # No matcheó la clave exacta, pero puede ser el mismo evento
+            # real en un posteo distinto con texto ligeramente diferente
+            # (gap #2 de ESTADO.md — ver find_probable_duplicate).
+            probable = find_probable_duplicate(event, existentes)
+            if probable:
+                print(f"[sheets] Posible duplicado (nombre parecido, misma provincia, "
+                      f"fecha cercana), pasa a revisión: '{nombre}'")
+                nota = (
+                    f"⚠️ Podría ser un repost del evento existente "
+                    f"'{probable.get('nombre') or '?'}' (id {probable.get('id') or '?'}) — "
+                    "nombre parecido, misma provincia, fecha cercana, pero posteo de origen "
+                    "distinto y no coincide exacto. Revisar y fusionar si corresponde.\n\n"
+                )
+                event["descripcion"] = nota + (event.get("descripcion") or "")
+                event["activo"] = False
+                event["estado"] = "pendiente_confirmacion"
 
         event.setdefault("id", generate_id())
         rows.append(event_to_row(event))
@@ -420,6 +510,14 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
         if shortcode:
             shortcodes[shortcode] = {"nombre": nombre, "id": event["id"]}
         inserted_keys.add(key)
+        # Para que dos reposts del mismo evento descubiertos en la MISMA
+        # corrida también se agarren entre sí (no solo contra lo que ya
+        # estaba en el Sheet de corridas anteriores).
+        existentes.append({
+            "key": key, "shortcode": shortcode, "id": event["id"], "nombre": nombre,
+            "provincia": event.get("provincia") or "",
+            "fecha_inicio_iso": event.get("fecha_inicio_iso") or event.get("fecha_inicio") or "",
+        })
 
     if not rows:
         print("[sheets] Sin filas nuevas para insertar")

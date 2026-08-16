@@ -378,6 +378,141 @@ class SheetsTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    def test_find_probable_duplicate_detects_repost_with_different_wording(self):
+        # Caso real que motiva esto: mismo curso, dos posteos de Instagram
+        # distintos, título reformulado en cada uno.
+        existentes = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Formación Práctica en Arquitectura Biológica",
+                "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "id": "abc123",
+            "nombre": "Formación Práctica en Arquitectura Biológica",
+            "provincia": "Córdoba",
+            "fecha_inicio_iso": "2026-09-05",
+        }]
+        nuevo = {
+            "nombre": "Formación en Arquitectura Biológica y Bioconstrucción",
+            "fecha_inicio_iso": "2026-09-08",
+            "provincia": "Córdoba",
+        }
+
+        probable = sheets.find_probable_duplicate(nuevo, existentes)
+
+        self.assertIsNotNone(probable)
+        self.assertEqual(probable["id"], "abc123")
+
+    def test_find_probable_duplicate_requires_same_provincia(self):
+        existentes = [{
+            "key": "x", "id": "1", "nombre": "Taller Intensivo de Superadobe",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        nuevo = {
+            "nombre": "Taller Intensivo de Superadobe",
+            "fecha_inicio_iso": "2026-09-06",
+            "provincia": "Mendoza",
+        }
+
+        self.assertIsNone(sheets.find_probable_duplicate(nuevo, existentes))
+
+    def test_find_probable_duplicate_requires_date_within_window(self):
+        # Mismo nombre/provincia pero separados por meses: más probable que
+        # sea una edición anual repetida que un repost del mismo evento.
+        existentes = [{
+            "key": "x", "id": "1", "nombre": "Encuentro de Bioconstructores",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-03-05",
+        }]
+        nuevo = {
+            "nombre": "Encuentro de Bioconstructores",
+            "fecha_inicio_iso": "2026-09-05",
+            "provincia": "Córdoba",
+        }
+
+        self.assertIsNone(sheets.find_probable_duplicate(nuevo, existentes))
+
+    def test_find_probable_duplicate_ignores_generic_shared_words(self):
+        # Dos talleres reales, distintos, que solo comparten vocabulario
+        # genérico del rubro no deben flaggearse como duplicados.
+        existentes = [{
+            "key": "x", "id": "1", "nombre": "Taller de Bioconstrucción Natural",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        nuevo = {
+            "nombre": "Taller de Bioconstrucción con Adobe",
+            "fecha_inicio_iso": "2026-09-07",
+            "provincia": "Córdoba",
+        }
+
+        self.assertIsNone(sheets.find_probable_duplicate(nuevo, existentes))
+
+    def test_find_probable_duplicate_known_limitation_shared_venue_name(self):
+        # Límite conocido y ACEPTADO, no un bug: dos eventos DISTINTOS en el
+        # mismo lugar conocido (San Marcos Sierras, recurrente en el Sheet
+        # real — ver Etapa 9.7) pueden compartir tokens del nombre del lugar
+        # y activar un falso positivo. Se acepta a propósito porque el costo
+        # de errar acá es bajo: nunca se descarta un evento, solo se manda a
+        # revisión — Germán aprueba los dos reales en un click en
+        # ?pendientes. Si esto genera ruido en la práctica, subir
+        # _RATIO_MINIMO_NOMBRE o excluir nombres de lugar conocidos de los
+        # tokens contados.
+        existentes = [{
+            "key": "x", "id": "1",
+            "nombre": "Curso de Permacultura y Diseño en San Marcos Sierras",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        nuevo = {
+            "nombre": "Taller de Bioconstrucción y Permacultura en San Marcos Sierras",
+            "fecha_inicio_iso": "2026-09-08",
+            "provincia": "Córdoba",
+        }
+
+        self.assertIsNotNone(sheets.find_probable_duplicate(nuevo, existentes))
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events")
+    @patch("src.sheets.get_service")
+    def test_append_events_flags_probable_duplicate_for_review(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        load_processed_events.return_value = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Formación Práctica en Arquitectura Biológica",
+                "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "shortcode": "AAA111", "id": "abc123",
+            "nombre": "Formación Práctica en Arquitectura Biológica",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Formación en Arquitectura Biológica y Bioconstrucción",
+            "fecha_inicio_iso": "2026-09-08", "provincia": "Córdoba",
+            "activo": True, "link_promocional": "https://www.instagram.com/p/BBB222/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "false")  # Activo
+        self.assertEqual(fila_escrita[16], "pendiente_confirmacion")  # Estado
+        self.assertIn("abc123", fila_escrita[8])  # Descripción menciona el id existente
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events", return_value=[])
+    @patch("src.sheets.get_service")
+    def test_append_events_does_not_flag_unrelated_events(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Taller de Cerámica con Barro",
+            "fecha_inicio_iso": "2026-09-08", "provincia": "Salta",
+            "activo": True, "link_promocional": "https://www.instagram.com/p/CCC333/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "true")  # Activo sin tocar
+
 
 class EmailIntakeTests(unittest.TestCase):
     @patch("src.email_intake.mark_row")

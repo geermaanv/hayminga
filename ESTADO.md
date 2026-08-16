@@ -42,12 +42,13 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
    en dirección/organizador cuando el modelo deja `pais` vacío, con
    guardas contra falsos positivos (calles porteñas con nombre de país:
    Perú, Chile, México, Venezuela son calles reales de San Telmo).
-2. **Duplicados del mismo evento con posts de Instagram distintos**: el
-   dedup actual (shortcode exacto, o nombre+fecha+provincia) no agarra
-   reposteos con texto/fecha ligeramente distintos del mismo organizador.
-   El caso DeBarro (Etapa 9.5) fue el primero detectado; probablemente no
-   el único. Pendiente: fuzzy matching o comparar por organizador/cuenta
-   de origen en vez de solo por los campos extraídos.
+2. ~~Duplicados del mismo evento con posts de Instagram distintos~~ —
+   **mitigado 15/08/2026** (Etapa 9.8 del ROADMAP): `find_probable_duplicate()`
+   agarra nombre parecido + misma provincia + fecha cercana, y manda a
+   revisión (nunca descarta). No usa cuenta de origen porque ese dato no
+   se persiste hoy (ver ROADMAP para el plan de agregar la columna si hace
+   falta). Límite aceptado: eventos distintos en el mismo lugar conocido
+   pueden generar un falso positivo — costo bajo, se aprueban a mano.
 3. **`SSLEOFError` intermitente en la Google Sheets API**: causó la
    pérdida de una corrida completa (ago 2026) antes de envolver la sección
    de cuentas seguidas en try/except. El fix actual es defensivo (loguear
