@@ -2,9 +2,10 @@
 
 Guidance for Claude Code when working on hayminga.org.
 
-**Before making changes, read:**
-- `PATRONES.md` — critical patterns & constraints that affect decisions
-- `ROADMAP.md` — narrative history: why decisions were made, what's been tried
+**Before making changes, read (in order):**
+1. `ESTRATEGIA.md` — goal, phases, why each decision matters
+2. `PATRONES.md` — critical patterns & constraints that affect code
+3. `ROADMAP.md` — narrative history: what's been tried & learned
 
 ## Architecture
 
