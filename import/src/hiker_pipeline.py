@@ -429,10 +429,22 @@ def extraer_evento(post: dict, image_url: str | None) -> dict | None:
             return None
     data = _parse_json(raw)
 
+    # Métrica: ¿se resolvió solo con texto o necesitó imagen?
     if data is not None and not data.get("es_evento", True):
+        print(f"[METRICA] DESCARTADO_SOLO_TEXTO: {post['link']}")
         return data
 
+    tiene_datos_basicos = (
+        data and
+        data.get("nombre") and
+        (data.get("fecha_inicio_iso") or data.get("es_virtual"))
+    )
+    if tiene_datos_basicos:
+        print(f"[METRICA] RESUELTO_SOLO_TEXTO: {post['link']} — {data.get('nombre')}")
+        # Pero sigue adelante igual (medir si imagen mejora)
+
     if image_url:
+        print(f"[METRICA] INTENTA_CON_IMAGEN: {post['link']}")
         IMAGES_DIR.mkdir(exist_ok=True)
         image_filename = post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg"
         image_path = IMAGES_DIR / image_filename
@@ -448,6 +460,11 @@ def extraer_evento(post: dict, image_url: str | None) -> dict | None:
                     return data
             data2 = _parse_json(raw)
             if data2 is not None:
+                # Métrica: ¿la imagen mejoró la extracción?
+                nombre_antes = data.get("nombre") if data else None
+                nombre_despues = data2.get("nombre")
+                if nombre_despues and nombre_despues != nombre_antes:
+                    print(f"[METRICA] IMAGEN_MEJORÓ: {post['link']} — {nombre_antes} → {nombre_despues}")
                 data = data2
 
     return data
