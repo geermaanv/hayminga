@@ -34,9 +34,13 @@ CUENTAS_CONSULTADAS_HEADERS = ["Username", "FechaConsulta"]
 
 # Cache de user_id de Instagram por username — evita gastar una llamada
 # extra a /v1/user/by/username en cada corrida para cuentas que ya
-# resolvimos antes (HikerAPI es pago por request).
+# resolvimos antes (HikerAPI es pago por request). PaisTelefono se agregó
+# después (16/08/2026): la misma respuesta que resuelve el user_id trae
+# public_phone_country_code — señal de país gratis (no agrega llamadas),
+# cacheada acá para no perderla en corridas donde la cuenta ya está en
+# caché y no se vuelve a resolver.
 CUENTAS_IDS_SHEET_NAME = "CuentasIds"
-CUENTAS_IDS_HEADERS = ["Username", "UserId"]
+CUENTAS_IDS_HEADERS = ["Username", "UserId", "PaisTelefono"]
 
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
@@ -273,15 +277,35 @@ def cargar_cuentas_ids(service) -> dict[str, int]:
     return out
 
 
-def guardar_cuentas_ids(service, nuevos: dict[str, int]):
+def cargar_cuentas_pais(service) -> dict[str, str]:
+    """País detectado por `public_phone_country_code` del perfil, cacheado
+    junto al user_id para no perderlo en corridas donde la cuenta ya está
+    resuelta y no se vuelve a consultar. Cobertura parcial (no todas las
+    cuentas tienen el teléfono público cargado) — solo trae las que sí."""
+    get_or_create_sheet_with_headers(service, CUENTAS_IDS_SHEET_NAME, CUENTAS_IDS_HEADERS)
+    result = _con_reintentos(lambda: (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:C")
+        .execute()
+    ))
+    out = {}
+    for row in result.get("values", []):
+        row = (row + [""] * 3)[:3]
+        if row[0] and row[2]:
+            out[row[0]] = row[2]
+    return out
+
+
+def guardar_cuentas_ids(service, nuevos: dict[str, int], pais_por_cuenta: dict[str, str] | None = None):
     if not nuevos:
         return
+    pais_por_cuenta = pais_por_cuenta or {}
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
         range=f"{CUENTAS_IDS_SHEET_NAME}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [[u, str(pk)] for u, pk in nuevos.items()]},
+        body={"values": [[u, str(pk), pais_por_cuenta.get(u, "")] for u, pk in nuevos.items()]},
     ).execute()
 
 

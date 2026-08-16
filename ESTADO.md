@@ -37,11 +37,16 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
 
 ## Gaps conocidos, sin resolver
 
-1. ~~País vacío en posts extranjeros~~ — **resuelto 15/08/2026** (Etapa
-   9.7 del ROADMAP): `_pais_desde_texto()` detecta país/ciudad no-argentina
-   en dirección/organizador cuando el modelo deja `pais` vacío, con
-   guardas contra falsos positivos (calles porteñas con nombre de país:
-   Perú, Chile, México, Venezuela son calles reales de San Telmo).
+1. ~~País vacío en posts extranjeros~~ — **resuelto 15-16/08/2026**
+   (Etapas 9.7/9.10 del ROADMAP). Cuatro señales en cascada, cada una solo
+   corre si la anterior no encontró nada: (1) `_pais_desde_texto()` en
+   dirección/organizador, con guardas contra falsos positivos (calles
+   porteñas con nombre de país: Perú, Chile, México, Venezuela son calles
+   reales de San Telmo); (2) `_pais_desde_telefono()` en el contacto del
+   flyer, por prefijo internacional explícito; (3) `public_phone_country_code`
+   del perfil de Instagram de la cuenta (gratis, viene en la misma
+   respuesta que ya se pedía para el `user_id`, confirmado que no depende
+   de ser cuenta "Business").
 2. ~~Duplicados del mismo evento con posts de Instagram distintos~~ —
    **mitigado 15/08/2026** (Etapa 9.8 del ROADMAP): `find_probable_duplicate()`
    agarra nombre parecido + misma provincia + fecha cercana, y manda a

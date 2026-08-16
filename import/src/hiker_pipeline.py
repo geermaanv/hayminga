@@ -39,11 +39,11 @@ import anthropic
 
 from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
-    validate_event_data,
+    validate_event_data, _pais_desde_telefono,
 )
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
-    cargar_cuentas_ids, guardar_cuentas_ids,
+    cargar_cuentas_ids, cargar_cuentas_pais, guardar_cuentas_ids,
     SPREADSHEET_ID, SHEET_NAME,
 )
 
@@ -161,6 +161,25 @@ def resolver_user_id(username: str) -> int | None:
     )
     resp.raise_for_status()
     return resp.json().get("pk")
+
+
+def resolver_user_id_y_pais(username: str) -> tuple[int | None, str]:
+    """Igual que resolver_user_id, pero además saca la señal de país que
+    ya trae la misma respuesta: public_phone_country_code. No agrega
+    ninguna llamada — es un solo request, antes se tiraba el resto del
+    perfil después de sacar el pk. Confirmado con datos reales (16/08/2026):
+    NO depende de ser cuenta "Business" — 2 de 4 cuentas propias lo tenían
+    poblado con is_business=false. Cobertura parcial, pero gratis."""
+    resp = _hiker_get(
+        "https://api.hikerapi.com/v1/user/by/username",
+        params={"username": username},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    codigo = (data.get("public_phone_country_code") or "").strip()
+    pais = _pais_desde_telefono("+" + codigo) if codigo else ""
+    return data.get("pk"), pais
 
 
 def fetch_user_posts(username: str, amount: int = 12, user_id: int | None = None) -> list[dict]:
@@ -469,7 +488,10 @@ def _parece_ingles(texto: str) -> bool:
     return en >= 3 and en > es
 
 
-def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = frozenset()) -> dict | None:
+def procesar_post(
+    post: dict, existing_links: set, cuentas_excluidas: set = frozenset(),
+    pais_cuenta: str = "",
+) -> dict | None:
     if post.get("username") and post["username"] in cuentas_excluidas:
         return None
 
@@ -513,6 +535,13 @@ def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = froz
     # de los que buscamos nosotros).
     data["hashtags_post"] = " ".join(sorted(set(re.findall(r"#\w+", post.get("caption") or ""))))
     data = validate_event_data(data)
+
+    # Última señal de país, más débil que las anteriores a propósito: es
+    # del perfil de la cuenta (aplica a TODOS sus posts), no de este evento
+    # puntual — si el flyer o el contacto de este post ya dijeron algo,
+    # eso gana. Solo entra si validate_event_data no encontró nada.
+    if not data.get("pais") and pais_cuenta:
+        data["pais"] = pais_cuenta
 
     # Un posteo puede ser reciente (pasa el filtro de antigüedad de arriba,
     # que mira cuándo se PUBLICÓ el post) pero anunciar un evento que ya
@@ -640,6 +669,7 @@ def run() -> int:
     # que es más confiable para encontrar eventos argentinos genuinos.
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
     ids_nuevos = {}
+    pais_nuevos = {}
     error_cuentas = ""
     try:
         # Todo este bloque va en un try/except: un fallo transitorio acá
@@ -647,13 +677,18 @@ def run() -> int:
         # los eventos ya encontrados por hashtag arriba — antes el script
         # moría entero y nunca llegaba a append_events().
         ids_cacheados = cargar_cuentas_ids(service)
+        pais_cacheado = cargar_cuentas_pais(service)
         for username in cuentas_seguidas:
+            pais_cuenta = pais_cacheado.get(username, "")
             try:
                 user_id = ids_cacheados.get(username)
                 if user_id is None:
-                    user_id = resolver_user_id(username)
+                    user_id, pais_resuelto = resolver_user_id_y_pais(username)
                     if user_id:
                         ids_nuevos[username] = user_id
+                    if pais_resuelto:
+                        pais_nuevos[username] = pais_resuelto
+                        pais_cuenta = pais_resuelto
                 posts = fetch_user_posts(username, user_id=user_id)
             except Exception as e:
                 print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
@@ -676,7 +711,7 @@ def run() -> int:
             eventos_cuenta = []
             for post in posts:
                 try:
-                    evento = procesar_post(post, existing_links, cuentas_excluidas)
+                    evento = procesar_post(post, existing_links, cuentas_excluidas, pais_cuenta)
                 except Exception as e:
                     print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                     continue
@@ -727,7 +762,7 @@ def run() -> int:
         print(f"[hiker_pipeline] error actualizando FuentesStats — {e}")
 
     try:
-        guardar_cuentas_ids(service, ids_nuevos)
+        guardar_cuentas_ids(service, ids_nuevos, pais_nuevos)
     except Exception as e:
         print(f"[hiker_pipeline] error guardando CuentasIds — {e}")
 

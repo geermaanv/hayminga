@@ -408,6 +408,109 @@ class ProcessorTests(unittest.TestCase):
         self.assertFalse(event["activo"])
 
 
+class CuentasPaisTests(unittest.TestCase):
+    """PaisTelefono en CuentasIds: señal de país del perfil de Instagram
+    (public_phone_country_code), cacheada junto al user_id."""
+
+    @patch("src.sheets.get_or_create_sheet_with_headers")
+    def test_cargar_cuentas_pais_ignora_filas_sin_pais(self, get_or_create):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [
+                ["cuenta_ar", "111", ""],
+                ["cuenta_mx", "222", "México"],
+                ["cuenta_sin_pais"],
+            ]
+        }
+        out = sheets.cargar_cuentas_pais(service)
+        self.assertEqual(out, {"cuenta_mx": "México"})
+
+    def test_guardar_cuentas_ids_incluye_pais_cuando_se_pasa(self):
+        service = Mock()
+        sheets.guardar_cuentas_ids(service, {"cuenta_mx": 222}, {"cuenta_mx": "México"})
+        body = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]
+        self.assertEqual(body["values"], [["cuenta_mx", "222", "México"]])
+
+    def test_guardar_cuentas_ids_sin_pais_deja_columna_vacia(self):
+        service = Mock()
+        sheets.guardar_cuentas_ids(service, {"cuenta_ar": 111})
+        body = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]
+        self.assertEqual(body["values"], [["cuenta_ar", "111", ""]])
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
+    def test_resolver_user_id_y_pais_detecta_pais_no_argentina(self, get):
+        from src import hiker_pipeline
+
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "pk": 999, "public_phone_country_code": "52",
+        })
+
+        user_id, pais = hiker_pipeline.resolver_user_id_y_pais("cuenta_mx")
+
+        self.assertEqual(user_id, 999)
+        self.assertEqual(pais, "México")
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
+    def test_resolver_user_id_y_pais_no_marca_argentina(self, get):
+        from src import hiker_pipeline
+
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "pk": 111, "public_phone_country_code": "54",
+        })
+
+        user_id, pais = hiker_pipeline.resolver_user_id_y_pais("cuenta_ar")
+
+        self.assertEqual(user_id, 111)
+        self.assertEqual(pais, "")
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_procesar_post_usa_pais_de_cuenta_como_ultimo_recurso(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Bioconstrucción",
+            "fecha_inicio": "10/12/2026", "provincia": None,
+            "direccion": None, "contacto": None, "pais": None,
+            "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/AAA111/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de bioconstrucción con barro", "username": "cuenta_mx"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="México")
+
+        self.assertIsNone(evento)  # se descarta por no-argentino, pero no explota
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_procesar_post_no_pisa_pais_ya_detectado_por_el_flyer(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Bioconstrucción",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": None,
+            "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/BBB222/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de bioconstrucción con barro en Córdoba", "username": "cuenta_mx"}
+
+        # pais_cuenta dice México, pero la provincia del flyer (Córdoba,
+        # Argentina) ya resolvió el país — la cuenta no debe pisarlo.
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="México")
+
+        self.assertIsNotNone(evento)
+        self.assertEqual(evento["pais"], "Argentina")
+
+
 class SheetsTests(unittest.TestCase):
     def test_dedupe_key_allows_same_title_on_different_dates(self):
         first = sheets.event_dedupe_key(

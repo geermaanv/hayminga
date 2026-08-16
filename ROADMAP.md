@@ -891,6 +891,31 @@ consulta.
 4 tests nuevos (detección México/+52, Perú/00, no-falso-positivo con
 +549 argentino, y número local sin prefijo no dispara nada).
 
+**Cuarta señal, misma noche**: el perfil de Instagram de la cuenta (no
+del post puntual) trae `public_phone_country_code` en la misma respuesta
+de `/v1/user/by/username` que ya se pedía para el `user_id` — antes se
+tiraba el resto de la respuesta. Confirmado con 3 llamadas de prueba
+reales (autorizadas, no parte de una corrida completa): el campo **no
+depende de ser cuenta "Business"** — 2 de 3 cuentas propias lo tenían
+poblado con `is_business=false`. `resolver_user_id_y_pais()` no agrega
+ninguna llamada extra, es la misma que ya se pagaba.
+
+Señal más débil a propósito: aplica a TODOS los posts de esa cuenta, no a
+este evento puntual, así que solo entra como último recurso si
+`validate_event_data()` no encontró nada (ni explícito, ni provincia, ni
+texto de dirección/organizador, ni teléfono del contacto del flyer). Se
+cachea junto al `user_id` en la hoja `CuentasIds` (columna nueva
+`PaisTelefono`, agregada al final — header agregado a mano en el Sheet
+real) para no perder la señal en corridas donde la cuenta ya está en
+caché y no se vuelve a resolver.
+
+6 tests nuevos: caching (`cargar_cuentas_pais`, `guardar_cuentas_ids` con
+y sin país), detección/no-detección en `resolver_user_id_y_pais`, y que
+`procesar_post` use la señal de cuenta como último recurso sin pisar un
+país ya resuelto por el flyer.
+
+## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
+
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:
 
 - `confirmar_evento` en `Code.gs`: actualiza una fila existente por Id y
