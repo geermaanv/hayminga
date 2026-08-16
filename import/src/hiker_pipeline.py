@@ -560,15 +560,20 @@ def run() -> int:
 
     eventos_totales_insertados = [0]  # lista para poder mutar desde dentro de los loops
     fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
-    # Atribución recent vs top: sumar /recent duplicó las llamadas a HikerAPI
-    # por hashtag y el tiempo de la sección, pero los logs no registraban de
-    # qué endpoint venía cada post, así que no había forma de saber si aportó
-    # algún evento que /top no hubiera traído igual. Contar es gratis (no
-    # agrega llamadas); con una semana de datos se decide si /recent se queda.
+    # `top` apagado (15/08/2026): la medición por endpoint dio 0 eventos
+    # aportados por /top en 3 corridas contra 8 de /recent, y el solapamiento
+    # entre ambos resultó mínimo — /top traía ~630 posts por corrida que el
+    # dedup ya descartaba por conocidos. Son 42 llamadas pagas por corrida
+    # para nada. Se apaga con un flag y NO se borra fetch_hashtag_posts():
+    # sigue siendo la red de seguridad si el endpoint v2 de /recent se cae o
+    # cambia (ya se vieron 404s). Revisar ~22/08 — ver ROADMAP.md Etapa 9.6.
+    USAR_TOP = False
+
     atribucion = {"posts_recent": 0, "posts_top": 0, "solo_en_recent": 0, "eventos_solo_recent": 0}
     for hashtag in hashtags:
         posts = []
         shortcodes_recent = set()
+        shortcodes_top = set()
         try:
             posts_recent = fetch_hashtag_posts_recent(hashtag)
             shortcodes_recent = {instagram_shortcode(p["link"]) for p in posts_recent}
@@ -576,15 +581,17 @@ def run() -> int:
             posts.extend(posts_recent)
         except Exception as e:
             print(f"[hiker_pipeline] #{hashtag} (recent): error consultando HikerAPI — {e}")
-        try:
-            posts_top = fetch_hashtag_posts(hashtag)
-            atribucion["posts_top"] += len(posts_top)
-            shortcodes_top = {instagram_shortcode(p["link"]) for p in posts_top}
-            atribucion["solo_en_recent"] += len(shortcodes_recent - shortcodes_top)
-            posts.extend(posts_top)
-        except Exception as e:
-            print(f"[hiker_pipeline] #{hashtag} (top): error consultando HikerAPI — {e}")
-            shortcodes_top = set()
+        if USAR_TOP:
+            try:
+                posts_top = fetch_hashtag_posts(hashtag)
+                atribucion["posts_top"] += len(posts_top)
+                shortcodes_top = {instagram_shortcode(p["link"]) for p in posts_top}
+                atribucion["solo_en_recent"] += len(shortcodes_recent - shortcodes_top)
+                posts.extend(posts_top)
+            except Exception as e:
+                print(f"[hiker_pipeline] #{hashtag} (top): error consultando HikerAPI — {e}")
+        else:
+            atribucion["solo_en_recent"] += len(shortcodes_recent)
         if not posts:
             continue
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
@@ -680,9 +687,14 @@ def run() -> int:
 
     inserted = eventos_totales_insertados[0]
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s) en total")
-    print(f"[hiker_pipeline] atribución hashtags — recent: {atribucion['posts_recent']} post(s), "
-          f"top: {atribucion['posts_top']} post(s), solo en recent: {atribucion['solo_en_recent']}, "
-          f"eventos que solo recent trajo: {atribucion['eventos_solo_recent']}")
+    atribucion["top_activo"] = USAR_TOP
+    if USAR_TOP:
+        print(f"[hiker_pipeline] atribución hashtags — recent: {atribucion['posts_recent']} post(s), "
+              f"top: {atribucion['posts_top']} post(s), solo en recent: {atribucion['solo_en_recent']}, "
+              f"eventos que solo recent trajo: {atribucion['eventos_solo_recent']}")
+    else:
+        print(f"[hiker_pipeline] hashtags — recent: {atribucion['posts_recent']} post(s) "
+              f"(top apagado, ver ROADMAP.md Etapa 9.6)")
 
     # Resumen para el paso de notificación del workflow (corre con if: always(),
     # así que si el pipeline se muere antes de esta línea el archivo no existe

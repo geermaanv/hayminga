@@ -667,11 +667,24 @@ hasta 24h en procesarse en vez de 12. Si algún día molesta, la solución no
 es volver a dos corridas completas sino separar `email_intake` a su propio
 workflow — es gratis (no llama a HikerAPI).
 
-**Próximo paso (revisar ~22/08/2026)**: si tras una semana `top` sigue en
-0 eventos, bajarlo a una corrida por día en vez de dos (mitad del costo,
-red de seguridad intacta) antes de evaluar sacarlo del todo. La medición
-sigue llegando sola en el mensaje de Telegram; cuando se decida, se saca
-esa línea de `notificar_run.py`.
+### `top` apagado (15/08/2026)
+
+Decisión del usuario con los datos de arriba: se apaga `/top`. Son 42
+llamadas pagas por corrida que en 3 corridas no produjeron un solo evento,
+mientras `/recent` aportó los 8.
+
+Se apagó con un flag (`USAR_TOP = False` en `hiker_pipeline.run()`) y **no
+se borró `fetch_hashtag_posts()`** — sigue siendo la red de seguridad si el
+endpoint v2 de `/recent` se cae o cambia (ya se vieron 404s). Volver a
+prenderlo es cambiar una línea.
+
+El mensaje de Telegram deja de reportar la comparación y pasa a informar el
+volumen de `/recent` a secas: con `top` en 0 por estar apagado, la línea
+vieja se hubiera leído como "top falló", que es justo lo contrario.
+
+**Revisar ~22/08/2026**: confirmar que el volumen de `/recent` se mantiene
+estable y que los eventos siguen entrando. Si `/recent` empieza a fallar o
+a devolver de menos, el primer movimiento es volver a prender `USAR_TOP`.
 
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 

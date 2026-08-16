@@ -68,15 +68,22 @@ def armar_mensaje(estado_job: str) -> str:
     except Exception as e:
         lineas.append(f"No se pudieron contar pendientes/publicados: {e}")
 
-    # Medición por única vez: sirve para decidir si /recent se queda.
+    # Con /top apagado (15/08/2026) la comparación ya no existe: todos los
+    # posts vienen de /recent. Se informa el volumen a secas, que sigue
+    # sirviendo para notar si /recent se cae o devuelve de menos.
     atribucion = (resumen or {}).get("atribucion") or {}
     if atribucion:
-        lineas.append(
-            f"recent vs top — recent: {atribucion.get('posts_recent', 0)} posts, "
-            f"top: {atribucion.get('posts_top', 0)} posts, "
-            f"solo en recent: {atribucion.get('solo_en_recent', 0)}, "
-            f"eventos que aportó solo recent: {atribucion.get('eventos_solo_recent', 0)}"
-        )
+        if atribucion.get("top_activo"):
+            lineas.append(
+                f"recent vs top — recent: {atribucion.get('posts_recent', 0)} posts, "
+                f"top: {atribucion.get('posts_top', 0)} posts, "
+                f"solo en recent: {atribucion.get('solo_en_recent', 0)}, "
+                f"eventos que aportó solo recent: {atribucion.get('eventos_solo_recent', 0)}"
+            )
+        else:
+            lineas.append(
+                f"Posts por hashtag (recent): {atribucion.get('posts_recent', 0)} — top apagado"
+            )
 
     return "\n".join(lineas)
 

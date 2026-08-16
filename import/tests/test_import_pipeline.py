@@ -476,10 +476,21 @@ class NotificarRunTests(unittest.TestCase):
     def test_incluye_atribucion_recent_vs_top(self):
         mensaje = self._mensaje(resumen={
             "eventos_insertados": 1,
-            "atribucion": {"posts_recent": 700, "posts_top": 450,
+            "atribucion": {"posts_recent": 700, "posts_top": 450, "top_activo": True,
                            "solo_en_recent": 300, "eventos_solo_recent": 0},
         })
         self.assertIn("eventos que aportó solo recent: 0", mensaje)
+
+    def test_con_top_apagado_no_reporta_comparacion(self):
+        # Ya no hay contra qué comparar: informar "top: 0 posts" se leería
+        # como que top falló, cuando en realidad está apagado a propósito.
+        mensaje = self._mensaje(resumen={
+            "eventos_insertados": 1,
+            "atribucion": {"posts_recent": 850, "posts_top": 0, "top_activo": False,
+                           "solo_en_recent": 850, "eventos_solo_recent": 1},
+        })
+        self.assertIn("top apagado", mensaje)
+        self.assertNotIn("recent vs top", mensaje)
 
 
 if __name__ == "__main__":
