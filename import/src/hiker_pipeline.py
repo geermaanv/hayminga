@@ -39,7 +39,7 @@ import anthropic
 
 from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
-    validate_event_data, _pais_desde_telefono,
+    validate_event_data, _pais_desde_texto, _pais_desde_telefono,
 )
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
@@ -414,7 +414,7 @@ def _parse_json(raw: str) -> dict | None:
         return None
 
 
-def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
+def extraer_evento(post: dict, image_url: str | None) -> dict | None:
     """Primera pasada solo con texto, nada más que para filtrar gratis lo
     que claramente no es un evento. Si SÍ es evento (o el texto no fue
     concluyente), se manda la imagen también — ya recibe el caption como
@@ -430,21 +430,25 @@ def extraer_evento(post: dict, image_path: Path | None) -> dict | None:
     data = _parse_json(raw)
 
     if data is not None and not data.get("es_evento", True):
-        return data  # el texto ya alcanzó para descartarlo, no gastar la imagen
+        return data
 
-    if image_path:
-        image_bytes = image_path.read_bytes()
-        media_type = _detectar_media_type(image_bytes)
-        try:
-            raw = _call_gemini_image(image_bytes, media_type, _prompt_imagen(post))
-        except genai_errors.ClientError:
+    if image_url:
+        IMAGES_DIR.mkdir(exist_ok=True)
+        image_filename = post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg"
+        image_path = IMAGES_DIR / image_filename
+        if _download_image(image_url, image_path):
+            image_bytes = image_path.read_bytes()
+            media_type = _detectar_media_type(image_bytes)
             try:
-                raw = _llamar_claude_con_limite(_call_claude_image, image_bytes, media_type, _prompt_imagen(post))
-            except _ClaudeLimitExceeded:
-                return data
-        data2 = _parse_json(raw)
-        if data2 is not None:
-            data = data2
+                raw = _call_gemini_image(image_bytes, media_type, _prompt_imagen(post))
+            except genai_errors.ClientError:
+                try:
+                    raw = _llamar_claude_con_limite(_call_claude_image, image_bytes, media_type, _prompt_imagen(post))
+                except _ClaudeLimitExceeded:
+                    return data
+            data2 = _parse_json(raw)
+            if data2 is not None:
+                data = data2
 
     return data
 
@@ -488,6 +492,18 @@ def _parece_ingles(texto: str) -> bool:
     return en >= 3 and en > es
 
 
+def _detectar_pais_temprana(post: dict) -> str:
+    """Detecta país desde datos disponibles SIN IA ni descarga de imagen.
+    Solo busca en caption + location_address. pais_cuenta es un fallback
+    muy débil que se aplica al final (en procesar_post, después de validate_event_data).
+    Retorna país detectado o string vacío."""
+    pais = _pais_desde_texto(
+        post.get("caption", ""),
+        post.get("location_address", ""),
+    )
+    return pais
+
+
 def procesar_post(
     post: dict, existing_links: set, cuentas_excluidas: set = frozenset(),
     pais_cuenta: str = "",
@@ -512,17 +528,19 @@ def procesar_post(
     if _parece_ingles(post.get("caption")):
         return None
 
-    IMAGES_DIR.mkdir(exist_ok=True)
-    image_path = IMAGES_DIR / (post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg")
-    if not _download_image(post["image_url"], image_path):
-        image_path = None
+    pais_detectado = _detectar_pais_temprana(post)
+    if pais_detectado and pais_detectado != "Argentina":
+        return None
 
-    data = extraer_evento(post, image_path)
+    data = extraer_evento(post, post["image_url"])
     if not data or not data.get("es_evento", True):
         return None
 
     data["imagen_url"] = post["image_url"]
-    if image_path:
+
+    image_filename = post["link"].rstrip("/").rsplit("/", 1)[-1] + ".jpg"
+    image_path = IMAGES_DIR / image_filename
+    if image_path.exists():
         image_bytes_subida = image_path.read_bytes()
         drive_url = subir_imagen_a_drive(image_bytes_subida, _detectar_media_type(image_bytes_subida))
         if drive_url:
@@ -555,12 +573,6 @@ def procesar_post(
     # búsqueda); lo que no es de Argentina se descarta acá, no tiene
     # sentido ocupar una fila del Sheet con algo que nunca va a publicarse.
     if data.get("pais") and data["pais"] != "Argentina":
-        return None
-
-    # Hashtags en español también traen resultados de cuentas que postean
-    # en inglés (comunidad internacional de bioconstrucción/permacultura);
-    # hayminga es un sitio en español, no tiene sentido publicarlos.
-    if data.get("idioma") == "en":
         return None
 
     # Ubicación real etiquetada por quien publicó > geocoding de texto
