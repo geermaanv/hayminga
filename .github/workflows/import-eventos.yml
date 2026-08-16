@@ -57,15 +57,9 @@ jobs:
           APPS_SCRIPT_SHARED_SECRET: ${{ secrets.APPS_SCRIPT_SHARED_SECRET }}
         run: python -m src.hiker_pipeline
 
-      - name: Procesar cola de carga manual (mail)
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MAX_CLAUDE_CALLS_PER_RUN: "1"
-          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
-        run: python -m src.email_intake
+      # La cola de mail (email_intake) se separó a su propio workflow
+      # (email-intake.yml, 15/08/2026) — corre cada 3h en vez de depender
+      # de este cron diario. Ver el comentario en ese archivo.
 
       # if: always() a propósito — el caso que más importa avisar es
       # justamente el de la corrida que falla o se cancela por timeout.

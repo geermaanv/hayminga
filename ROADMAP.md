@@ -667,6 +667,14 @@ hasta 24h en procesarse en vez de 12. Si algún día molesta, la solución no
 es volver a dos corridas completas sino separar `email_intake` a su propio
 workflow — es gratis (no llama a HikerAPI).
 
+**Resuelto la misma noche**: se separó a `email-intake.yml`, cron propio
+cada 3h. `process_queue()` sale con una sola lectura barata a Sheets si la
+cola está vacía, así que correrlo seguido no repite el problema de costo
+que motivó bajar el cron principal — solo gasta Gemini/Claude cuando hay
+un mail real esperando. Comparte el `concurrency.group` con
+`import-eventos.yml` a propósito: los dos llaman `append_events()` sobre
+el mismo Sheet, así que se encolan en vez de arriesgarse a pisarse.
+
 ### `top` apagado (15/08/2026)
 
 Decisión del usuario con los datos de arriba: se apaga `/top`. Son 42

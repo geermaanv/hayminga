@@ -1,0 +1,64 @@
+name: Procesar cola de carga manual (mail)
+
+# Separado de import-eventos.yml (15/08/2026): al bajar ese cron a 1
+# corrida diaria (ver ROADMAP.md, Etapa 9.6 "top apagado" / cron 1x/día),
+# un evento mandado por mail con el tag HME quedó esperando hasta 24h en
+# vez de las ~12h que tenía antes. Este workflow no gasta nada si la cola
+# está vacía: process_queue() en email_intake.py hace una sola lectura
+# barata a Sheets y sale si no hay pendientes — solo llama a Gemini/Claude
+# cuando hay un mail real esperando. Por eso puede correr más seguido sin
+# repetir el problema de costo que bajó el cron del import principal.
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"  # cada 3 horas, minuto 23 para no pisar la hora en punto
+  workflow_dispatch: {}
+
+# Comparte el grupo de concurrencia con import-eventos.yml a propósito:
+# ambos llaman a append_events() sobre el mismo Sheet, y correr los dos al
+# mismo tiempo podría hacer que se pisen (cada uno lee "qué ya existe"
+# antes de que el otro termine de escribir). Se encolan en vez de correr
+# en paralelo — cancel-in-progress: false para no perder trabajo a mitad
+# de camino si llegan a superponerse.
+concurrency:
+  group: import-eventos-production
+  cancel-in-progress: false
+
+jobs:
+  email-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PYTHONUNBUFFERED: "1"
+
+    defaults:
+      run:
+        working-directory: import
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: import/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Procesar cola de carga manual (mail)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MAX_CLAUDE_CALLS_PER_RUN: "1"
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
+        run: python -m src.email_intake

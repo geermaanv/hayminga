@@ -14,9 +14,10 @@ Frontend ↔ importer are coupled only through the column layout in `src/sheets.
 
 ## What actually runs in production
 
-Three workflows in `.github/workflows/`:
+Four workflows in `.github/workflows/`:
 
 - **`import-eventos.yml`** (~08:07 Argentina, once a day — was twice; there isn't enough new-event volume for two, and each run costs HikerAPI calls) — runs `python -m src.hiker_pipeline`. **`main.py` and `src/scraper.py` are legacy** (Google Images / SerpAPI); kept in-repo for reference but no workflow calls them.
+- **`email-intake.yml`** (every 3h) — runs `python -m src.email_intake`, the `HME`-tagged mail queue. Split out from `import-eventos.yml` (15/08/2026) so lowering that cron to 1x/day didn't push mail-submitted events out to 24h latency. Cheap to run often: `process_queue()` does one Sheets read and exits if the queue is empty, only calling Gemini/Claude when there's a real pending email. Shares the `import-eventos-production` concurrency group with `import-eventos.yml` on purpose — both call `append_events()` on the same Sheet, so they queue instead of racing.
 - **`curar-fuentes.yml`** (daily 09:00 Argentina, temporary cadence — becomes weekly once volume justifies it) — runs `src/curar_fuentes.py`: auto-removes hashtags/accounts with 50+ consecutive runs without a hit, and auto-adds new candidate accounts via Instagram's "sugeridas" endpoint (with `MIN_SUGERENCIAS_PARA_AGREGAR=2` gate to avoid the tangential-topic explosion — see roadmap).
 - **`enviar-resumen.yml`** (Tue 09:00 Argentina) — runs `src/enviar_resumen_telegram.py`: sends the weekly digest to `@geermaanv_bot` on Telegram AND, via `Code.gs`'s `enviarResumenSemanalDirectorio()` trigger, to every email in the Directorio (opt-in was captured at signup).
 
