@@ -18,7 +18,13 @@ concurrency:
 jobs:
   import-events:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Subido de 45 a 60 (16/08/2026): la corrida del 16/08 se cortó por
+    # timeout con HikerAPI teniendo un día degradado (18 errores 500/502/
+    # timeout en la sección de cuentas seguidas) — no es algo que podamos
+    # arreglar de nuestro lado, pero cortar la cola de cuentas por un mal
+    # día ajeno es peor que darle más margen. El guardado incremental ya
+    # protege contra perder todo si igual llega a pasar.
+    timeout-minutes: 60
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       PYTHONUNBUFFERED: "1"
