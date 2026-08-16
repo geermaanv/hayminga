@@ -404,6 +404,20 @@ def validate_event_data(data: dict, today: date | None = None) -> dict:
 
     fecha_inicio_iso, periodo = parse_fecha(result.get("fecha_inicio"))
     fecha_fin_iso, _ = parse_fecha(result.get("fecha_fin"))
+
+    # Evento virtual sin fecha concreta (inscripción continua, "empezá
+    # cuando quieras", etc.): en vez de quedar sin fecha_inicio (lo que
+    # lo deja afuera para siempre), se ancla a la fecha de esta corrida —
+    # decisión explícita del usuario, sabiendo que no es la fecha real
+    # del curso, es solo para que tenga algo ordenable y no se pierda.
+    if result.get("es_virtual") and not fecha_inicio_iso:
+        fecha_inicio_iso = today.isoformat()
+        periodo = today.strftime("%Y-%m")
+        # No es un año inferido (adivinado) — es una fecha elegida a
+        # propósito, así que no debe bloquear `activo` como sí bloquea
+        # una fecha que el modelo dedujo sin estar seguro.
+        result["anio_confirmado"] = True
+
     result["fecha_inicio_iso"] = fecha_inicio_iso
     result["fecha_fin_iso"] = fecha_fin_iso
     result["periodo"] = periodo

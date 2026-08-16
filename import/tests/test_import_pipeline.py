@@ -214,6 +214,23 @@ class ProcessorTests(unittest.TestCase):
 
         self.assertTrue(event["activo"])
 
+    def test_virtual_event_without_date_gets_import_date(self):
+        event = processor.validate_event_data(
+            {
+                "nombre": "Curso online de inscripción continua",
+                "fecha_inicio": None,
+                "fecha_fin": None,
+                "es_virtual": True,
+                "pais": "Argentina",
+                "anio_confirmado": False,
+            },
+            today=date(2026, 8, 15),
+        )
+
+        self.assertEqual(event["fecha_inicio_iso"], "2026-08-15")
+        self.assertEqual(event["periodo"], "2026-08")
+        self.assertTrue(event["activo"])
+
     @patch("src.processor._get_raw_json")
     def test_supplied_email_body_is_included_in_initial_prompt(self, get_raw_json):
         get_raw_json.return_value = (

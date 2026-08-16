@@ -26,6 +26,20 @@ fallo ahí ahora se loguea y sigue, sin perder lo ya encontrado.
   y el de antigüedad del posteo todavía no llegaba a los 270 días.
 - Sumadas a `cuentas_excluidas`: `academia_echeverria`, `ceramicakecheu`.
 
+## ✅ Fecha de eventos virtuales sin fecha concreta (ago 2026)
+
+Los cursos online de inscripción continua ("empezá cuando quieras")
+no tienen una fecha_inicio real — antes quedaban sin fecha, así que
+`validate_event_data` nunca los marcaba `activo` (requiere
+fecha_inicio) y el usuario los estaba completando a mano con el 1° del
+mes al revisar `?pendientes`. Decisión explícita: si es virtual y no
+hay fecha, `validate_event_data` la ancla a **la fecha de la corrida
+del import** (no el 1° del mes) — se sabe que no es la fecha real del
+curso, es solo para que tenga algo ordenable y no quede afuera para
+siempre. Se fuerza `anio_confirmado=True` en ese caso puntual (no es un
+año inferido/adivinado que deba bloquear `activo`, es una fecha elegida
+a propósito).
+
 ## ✅ Fix: imágenes rotas — links de Instagram vencen (ago 2026)
 
 Encontrado revisando el sitio: **22 de 37 eventos activos (59%) con la
