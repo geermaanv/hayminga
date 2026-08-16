@@ -63,6 +63,20 @@ def _hiker_key() -> str:
     return key
 
 
+# Costo de HikerAPI por corrida: se sabía informalmente (ver ROADMAP.md,
+# "Control de costo de HikerAPI" — el susto de los $4 en pocos días) pero
+# nunca quedó un número real en los logs de cada corrida. Contador simple,
+# incrementado en el único punto por el que pasan todas las llamadas
+# pagas (_hiker_get) — no cuenta _download_image, que baja la imagen ya
+# resuelta y no es una llamada a la API de HikerAPI.
+_llamadas_hikerapi = [0]
+
+
+def _hiker_get(url: str, **kwargs):
+    _llamadas_hikerapi[0] += 1
+    return requests.get(url, headers={"x-access-key": _hiker_key()}, **kwargs)
+
+
 def _item_a_post(item: dict) -> dict | None:
     code = item.get("code")
     image_url = item.get("thumbnail_url") or ""
@@ -107,10 +121,9 @@ def fetch_hashtag_posts_recent(hashtag: str, amount: int = 30) -> list[dict]:
     Instagram está más restringida ahí), pero v2 sí funciona y trae
     contenido genuinamente reciente (confirmado: posts de 1-3 días) —
     a diferencia de /top que mezcla popularidad histórica con lo nuevo."""
-    resp = requests.get(
+    resp = _hiker_get(
         "https://api.hikerapi.com/v2/hashtag/medias/recent",
         params={"name": hashtag, "amount": amount},
-        headers={"x-access-key": _hiker_key()},
         timeout=30,
     )
     resp.raise_for_status()
@@ -129,10 +142,9 @@ def fetch_hashtag_posts_recent(hashtag: str, amount: int = 30) -> list[dict]:
 def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
     # hashtag/medias/recent devuelve siempre [] (esa pestaña de Instagram
     # está más restringida); hashtag/medias/top sí trae datos reales.
-    resp = requests.get(
+    resp = _hiker_get(
         "https://api.hikerapi.com/v1/hashtag/medias/top",
         params={"name": hashtag, "amount": amount},
-        headers={"x-access-key": _hiker_key()},
         timeout=30,
     )
     resp.raise_for_status()
@@ -142,10 +154,9 @@ def fetch_hashtag_posts(hashtag: str, amount: int = 30) -> list[dict]:
 
 
 def resolver_user_id(username: str) -> int | None:
-    resp = requests.get(
+    resp = _hiker_get(
         "https://api.hikerapi.com/v1/user/by/username",
         params={"username": username},
-        headers={"x-access-key": _hiker_key()},
         timeout=20,
     )
     resp.raise_for_status()
@@ -164,10 +175,9 @@ def fetch_user_posts(username: str, amount: int = 12, user_id: int | None = None
         user_id = resolver_user_id(username)
     if not user_id:
         return []
-    resp = requests.get(
+    resp = _hiker_get(
         "https://api.hikerapi.com/v1/user/medias",
         params={"user_id": user_id, "amount": amount},
-        headers={"x-access-key": _hiker_key()},
         timeout=30,
     )
     resp.raise_for_status()
@@ -540,6 +550,7 @@ def procesar_post(post: dict, existing_links: set, cuentas_excluidas: set = froz
 
 
 def run() -> int:
+    _llamadas_hikerapi[0] = 0  # por si run() se llama más de una vez en el mismo proceso (tests)
     config = json.loads(Path("config.json").read_text())
     hashtags = config.get("hashtags") or []
     if not hashtags:
@@ -687,6 +698,7 @@ def run() -> int:
 
     inserted = eventos_totales_insertados[0]
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s) en total")
+    print(f"[hiker_pipeline] {_llamadas_hikerapi[0]} llamada(s) a HikerAPI en esta corrida")
     atribucion["top_activo"] = USAR_TOP
     if USAR_TOP:
         print(f"[hiker_pipeline] atribución hashtags — recent: {atribucion['posts_recent']} post(s), "
@@ -704,6 +716,7 @@ def run() -> int:
             "eventos_insertados": inserted,
             "error_cuentas_seguidas": error_cuentas,
             "atribucion": atribucion,
+            "llamadas_hikerapi": _llamadas_hikerapi[0],
         }))
     except Exception as e:
         print(f"[hiker_pipeline] error escribiendo run_summary.json — {e}")

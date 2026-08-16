@@ -76,11 +76,10 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
    evento con menos metadata. Una primera versión barata: comparar
    `username` de origen (ya se tiene, viene de HikerAPI) + ventana de fecha
    cercana, antes de meterse con fuzzy matching de texto.
-3. **Instrumentar el costo de HikerAPI por corrida** (ya se loguea el
-   conteo de llamadas informalmente en el roadmap, pero no hay un número
-   por corrida visible en los logs de Actions) — así una expansión futura
-   de `cuentas_seguidas` no repite el susto de los $4 en pocos días sin que
-   nadie lo note hasta la factura.
+3. ~~Instrumentar el costo de HikerAPI por corrida~~ — **resuelto
+   15/08/2026** (Etapa 9.9 del ROADMAP): `_hiker_get()` centraliza y cuenta
+   cada llamada paga; el número sale en el log de cada corrida y en el
+   aviso de Telegram.
 4. **Repensar `hashtag/medias/top` en corridas repetidas** — ahora con
    datos que lo respaldan (ver "Resultado de la medición" en `ROADMAP.md`,
    Etapa 9.6): en 3 corridas `top` aportó **0 eventos** y `recent` aportó

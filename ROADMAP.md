@@ -828,6 +828,30 @@ nombre-parecido.
 como límite aceptado, y dos tests de integración contra `append_events`
 con el servicio de Sheets mockeado.
 
+## Etapa 9.9 — Instrumentar el costo de HikerAPI por corrida (15/08/2026, noche)
+
+Recomendación #3 de `ESTADO.md`. El costo de HikerAPI se conocía de forma
+informal (el susto de los $4 en pocos días, calculado a mano ese día) pero
+ninguna corrida real dejaba un número — para notar una expansión de
+`cuentas_seguidas` disparando el costo había que hacer la cuenta a mano de
+nuevo, no había señal automática.
+
+`_hiker_get()` en `hiker_pipeline.py` centraliza las 4 llamadas a
+endpoints de HikerAPI que existían sueltas (`fetch_hashtag_posts_recent`,
+`fetch_hashtag_posts`, `resolver_user_id`, `fetch_user_posts`) detrás de
+un wrapper que cuenta cada una — refactor de forma, mismo comportamiento,
+mismos headers. **No cuenta** `_download_image()`: esa baja los bytes de
+una URL ya resuelta (el `thumbnail_url`/imagen firmada), no es una llamada
+a la API de HikerAPI, no tiene costo de ese tipo.
+
+El número queda en el log de cada corrida (`N llamada(s) a HikerAPI en
+esta corrida`), en `run_summary.json`, y en el aviso de Telegram. Contador
+a nivel de módulo, se resetea al arrancar `run()` por si se llama más de
+una vez en el mismo proceso (tests).
+
+2 tests nuevos: que cuenta cada llamada, y que NO cuenta la descarga de
+imagen.
+
 ## Etapa 9 — Paso de revisión manual (agosto 2026, EN CURSO)
 
 Ver el flag `REVISION_MANUAL` arriba. Se agregó:

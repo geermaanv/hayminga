@@ -657,6 +657,12 @@ class NotificarRunTests(unittest.TestCase):
         self.assertIn("Publicados (activos): 42", mensaje)
         self.assertIn("?pendientes", mensaje)
 
+    def test_incluye_llamadas_a_hikerapi(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 1, "llamadas_hikerapi": 187},
+        )
+        self.assertIn("Llamadas a HikerAPI: 187", mensaje)
+
     def test_reporta_caida_de_cuentas_seguidas(self):
         mensaje = self._mensaje(
             resumen={"eventos_insertados": 0, "error_cuentas_seguidas": "EOF occurred in violation of protocol"},
@@ -696,6 +702,38 @@ class NotificarRunTests(unittest.TestCase):
         })
         self.assertIn("top apagado", mensaje)
         self.assertNotIn("recent vs top", mensaje)
+
+
+class HikerApiCostTests(unittest.TestCase):
+    """Costo de HikerAPI por corrida — recomendación #3 de ESTADO.md, sin
+    número real en los logs hasta ahora. _hiker_get() es el único punto por
+    el que pasan las llamadas pagas."""
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
+    def test_hiker_get_cuenta_cada_llamada(self, get):
+        from src import hiker_pipeline
+
+        hiker_pipeline._llamadas_hikerapi[0] = 0
+        hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/algo")
+        hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/otra")
+
+        self.assertEqual(hiker_pipeline._llamadas_hikerapi[0], 2)
+        self.assertEqual(get.call_count, 2)
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
+    def test_hiker_get_no_cuenta_la_descarga_de_imagen(self, get):
+        # _download_image usa requests.get directo (no _hiker_get) porque
+        # baja bytes de una URL ya resuelta, no es una llamada a la API.
+        from src import hiker_pipeline
+
+        hiker_pipeline._llamadas_hikerapi[0] = 0
+        get.return_value = Mock(status_code=200, content=b"x" * 2000)
+        with tempfile.TemporaryDirectory() as tmp:
+            hiker_pipeline._download_image("https://cdn.example.com/img.jpg", Path(tmp) / "x.jpg")
+
+        self.assertEqual(hiker_pipeline._llamadas_hikerapi[0], 0)
 
 
 class CandidatosHashtagsTests(unittest.TestCase):

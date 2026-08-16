@@ -51,6 +51,8 @@ def armar_mensaje(estado_job: str) -> str:
 
     if resumen:
         lineas.append(f"Eventos nuevos guardados: {resumen.get('eventos_insertados', 0)}")
+        if "llamadas_hikerapi" in resumen:
+            lineas.append(f"Llamadas a HikerAPI: {resumen['llamadas_hikerapi']}")
         error_cuentas = resumen.get("error_cuentas_seguidas") or ""
         if error_cuentas:
             lineas.append(f"Sección cuentas seguidas CAYÓ: {error_cuentas[:120]}")
