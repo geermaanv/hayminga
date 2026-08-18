@@ -969,5 +969,80 @@ class CandidatosHashtagsTests(unittest.TestCase):
         self.assertEqual(candidatos, [("adobe", 4), ("quincha", 3)])
 
 
+class CandidatosTecnicasTests(unittest.TestCase):
+    """Igual que CandidatosHashtagsTests: solo lee la hoja (mockeada acá),
+    no toca HikerAPI ni ningún proveedor de IA."""
+
+    def _fila(self, nombre="", descripcion="", estado="confirmado"):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[1] = nombre
+        fila[8] = descripcion
+        fila[16] = estado
+        return fila
+
+    def _analizar_con(self, filas):
+        from src import candidatos_tecnicas
+
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": filas
+        }
+        return candidatos_tecnicas.analizar(service=service)
+
+    def test_solo_cuenta_eventos_confirmados(self):
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="Taller de quincha"),
+            self._fila(nombre="Taller de quincha", estado="descartado"),
+            self._fila(nombre="Taller de quincha", estado="pendiente_confirmacion"),
+        ])
+        self.assertEqual(candidatos, [("quincha", 1)])
+
+    def test_no_cuenta_dos_veces_la_misma_tecnica_en_un_evento(self):
+        # nombre y descripción mencionan lo mismo: es UN evento, no dos.
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="Taller de quincha",
+                       descripcion="Aprendemos quincha con técnica de quincha liviana"),
+        ])
+        self.assertEqual(candidatos, [("quincha", 1)])
+
+    def test_agrupa_sinonimos_bajo_la_tecnica_canonica(self):
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="Curso de cubiertas vivas"),
+            self._fila(nombre="Taller de techo verde"),
+        ])
+        self.assertEqual(candidatos, [("techo verde", 2)])
+
+    def test_no_descarta_tecnicas_de_un_solo_evento(self):
+        """A diferencia de candidatos_hashtags (donde frecuencia 1 = ruido),
+        una técnica que aparece una vez es real, solo tiene poca oferta.
+        Filtrarla borraría del vocabulario justo lo más específico."""
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="Curso de superadobe"),
+        ])
+        self.assertEqual(candidatos, [("superadobe", 1)])
+
+    def test_ignora_el_nombre_del_rubro_como_si_fuera_tecnica(self):
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="Taller de Bioconstrucción",
+                       descripcion="Introducción a la bioarquitectura"),
+        ])
+        self.assertEqual(candidatos, [])
+
+    def test_matchea_tipografia_fancy_de_instagram(self):
+        # Los títulos gritados del feed vienen en unicode matemático.
+        candidatos, _ = self._analizar_con([
+            self._fila(nombre="𝗧𝗔𝗟𝗟𝗘𝗥 𝗗𝗘 𝗤𝗨𝗜𝗡𝗖𝗛𝗔"),
+        ])
+        self.assertEqual(candidatos, [("quincha", 1)])
+
+    def test_reporta_eventos_sin_tecnica_para_descubrir_vocabulario(self):
+        _, sin_clasificar = self._analizar_con([
+            self._fila(nombre="Taller de quincha"),
+            self._fila(nombre="Geometrías Orgánicas en Techos"),
+        ])
+        self.assertEqual(sin_clasificar, ["Geometrías Orgánicas en Techos"])
+
+
 if __name__ == "__main__":
     unittest.main()
