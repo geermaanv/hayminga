@@ -81,7 +81,16 @@ var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
 
 var DIRECTORIO_SHEET_NAME = 'Directorio';
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp'];
+// Tecnicas y AnioDesde se agregaron al final a proposito (misma regla que
+// la hoja Eventos): las posiciones existentes son load-bearing para el
+// frontend, que lee por GViz.
+//
+// Tecnicas guarda pares "tecnica:relacion/relacion" separados por ";" —
+// ej: "quincha:hago/enseno; revoques:hago; adobe:estudio/propia".
+// Relaciones posibles: hago (para terceros), enseno, estudio, propia
+// (lo hizo en obra propia). Formato de texto plano a proposito: se lee a
+// ojo desde la Sheet y no necesita escaping como seria con JSON.
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -126,7 +135,14 @@ function crearPersonaDirectorio_(data) {
   }
   var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
   var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
-  var intereses = Array.isArray(data.intereses) ? data.intereses.join(', ') : (data.intereses || '');
+  // Separador ";" y no ",": los valores de interes tienen comas adentro
+  // ("Organizar mingas, talleres o eventos") y con coma el front los
+  // partia al medio al renderizar los chips.
+  var intereses = Array.isArray(data.intereses) ? data.intereses.join('; ') : (data.intereses || '');
+  // El anio llega como texto libre desde el form; se guarda solo si es un
+  // anio plausible, asi un "hace 10 años" mal tipeado no ensucia la columna.
+  var anio = String(data.anioDesde || '').trim();
+  if (!/^(19|20)\d{2}$/.test(anio)) anio = '';
   appendRowComoTexto_(sheet, [
     id,
     String(data.nombre).trim(),
@@ -135,6 +151,8 @@ function crearPersonaDirectorio_(data) {
     data.descripcion || '',
     String(data.email).trim(),
     data.whatsapp || '',
+    String(data.tecnicas || '').trim(),
+    anio,
   ]);
 
   return id;
@@ -275,6 +293,20 @@ function getOrCreateSheetWithHeaders_(nombre, headers) {
   if (!sheet) {
     sheet = ss.insertSheet(nombre);
     sheet.appendRow(headers);
+    return sheet;
+  }
+
+  // La hoja ya existe: puede tener MENOS columnas que headers si se sumaron
+  // columnas nuevas al final despues de crearla (paso al agregar Tecnicas y
+  // AnioDesde al Directorio). Sin esto los datos se escriben igual pero sin
+  // encabezado, y GViz no puede nombrar la columna — el frontend lee
+  // undefined y falla en silencio. Mismo manejo que get_or_create_sheet_with_headers
+  // en src/sheets.py, que ya resolvia esto del lado de Python.
+  var ancho = sheet.getLastColumn();
+  var actuales = ancho ? sheet.getRange(1, 1, 1, ancho).getValues()[0] : [];
+  if (actuales.length < headers.length) {
+    var faltantes = headers.slice(actuales.length);
+    sheet.getRange(1, actuales.length + 1, 1, faltantes.length).setValues([faltantes]);
   }
   return sheet;
 }
