@@ -243,19 +243,33 @@ footer a{color:var(--tierra);text-decoration:none;}
 .directorio-intereses{display:flex;flex-direction:column;gap:0.4rem;font-size:0.88rem;color:var(--texto);}
 .directorio-intereses label{display:flex;align-items:center;gap:0.5rem;}
 .campo-ayuda{font-size:0.74rem;color:var(--texto-suave);margin:-0.15rem 0 0.45rem;line-height:1.35;}
+/* Caja de carga: las técnicas se van acumulando como tags acá arriba, así
+   se ve de un vistazo lo que llevás puesto sin tener que recorrer los
+   bloques de abajo. */
+.tecnica-caja{border:1px solid var(--paja-oscuro);border-radius:var(--radio);padding:0.5rem;background:var(--blanco);}
+.tecnicas-tags{display:flex;flex-wrap:wrap;gap:0.3rem;}
+.tecnicas-tags:not(:empty){margin-bottom:0.5rem;}
+.tecnica-tag{display:inline-flex;align-items:center;gap:0.3rem;background:var(--paja);color:var(--tierra-oscuro);border-radius:20px;padding:0.25rem 0.35rem 0.25rem 0.7rem;font-size:0.82rem;font-weight:600;}
+.tecnica-tag button{border:none;background:none;color:var(--tierra-oscuro);opacity:0.55;cursor:pointer;font-size:0.85rem;line-height:1;padding:0 0.15rem;}
+.tecnica-tag button:hover{opacity:1;}
+
 /* Cada técnica es una cajita: sin esto las pastillas quedaban flotando
-   debajo del input, sin nada que indicara que le pertenecen. */
+   sin nada que indicara a cuál pertenecen. */
 .tecnica-fila{background:var(--blanco);border:1px solid var(--paja-oscuro);border-radius:var(--radio);padding:0.6rem;margin-bottom:0.5rem;}
-.tecnica-fila-top{display:flex;align-items:center;gap:0.4rem;}
-.tecnica-fila input[type=text]{flex:1;min-width:0;}
-.tecnica-pregunta{font-size:0.72rem;color:var(--texto-suave);margin:0.5rem 0 0.3rem;}
+.tecnica-pregunta{font-size:0.82rem;color:var(--texto-suave);margin:0 0 0.4rem;}
+.tecnica-pregunta b{color:var(--texto);}
 .tecnica-rels{display:flex;flex-wrap:wrap;gap:0.3rem;}
 /* Las pastillas antes se veían igual que las etiquetas de solo lectura de
    las tarjetas (.card-tipo), así que nadie entendía que se tocaban. Ahora
    tienen sombra, y al marcarse aparece un ✓ — la señal más clara de que
    son un control y no un rótulo. */
-.rel-chip{display:inline-flex;align-items:center;gap:0.25rem;padding:0.3rem 0.6rem;border:1px solid var(--paja-oscuro);border-radius:20px;background:var(--fondo);color:var(--texto);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px var(--sombra);}
-.rel-chip::before{content:'';display:inline-block;width:0.85em;text-align:center;}
+/* Compactas para que las cuatro entren en una línea en mobile: con dos
+   líneas por bloque, cinco técnicas eran ~1100px de scroll. La altura del
+   área tocable se mantiene con el padding vertical. */
+.rel-chip{display:inline-flex;align-items:center;justify-content:center;gap:0.15rem;min-height:36px;padding:0.4rem 0.5rem;border:1px solid var(--paja-oscuro);border-radius:20px;background:var(--fondo);color:var(--texto);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px var(--sombra);}
+/* Sin reservar el ancho del ✓ en las no marcadas: esos ~40px eran justo lo
+   que empujaba las cuatro a una segunda línea. La pastilla se ensancha al
+   marcarse, y ese movimiento se lee como confirmación del toque. */
 .rel-chip:hover{border-color:var(--verde);color:var(--verde);}
 .rel-chip.on{background:var(--verde);border-color:var(--verde);color:#fff;box-shadow:none;}
 .rel-chip.on::before{content:'✓';}
@@ -604,10 +618,13 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         <div class="full">
           <label class="campo-label">Tus técnicas (opcional, hasta 5)</label>
           <p class="campo-ayuda">Escribí una y apretá Enter, o tocá alguna de abajo. Podés poner lo que quieras.</p>
-          <div class="tecnica-alta">
-            <input type="text" id="tecnica-input" list="tecnicas-sugeridas" placeholder="ej: quincha, techo verde..."
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTecnicaDesdeInput();}">
-            <button type="button" class="btn-sumar-tecnica" onclick="agregarTecnicaDesdeInput()">Agregar</button>
+          <div class="tecnica-caja">
+            <div id="tecnicas-tags" class="tecnicas-tags"></div>
+            <div class="tecnica-alta">
+              <input type="text" id="tecnica-input" list="tecnicas-sugeridas" placeholder="ej: quincha, techo verde..."
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTecnicaDesdeInput();}">
+              <button type="button" class="btn-sumar-tecnica" onclick="agregarTecnicaDesdeInput()">Agregar</button>
+            </div>
           </div>
           <datalist id="tecnicas-sugeridas"></datalist>
           <div id="tecnicas-sugeridos" class="tecnicas-sugeridos"></div>
@@ -1689,11 +1706,15 @@ var MAX_CHIPS_SUGERIDOS = 8;
 // Etiquetas cortas en el formulario para que las cuatro entren en una línea
 // hasta en mobile; las de la tarjeta pueden ser distintas porque ahí se leen
 // después del nombre de la técnica ("quincha · hace, enseña").
+// En el formulario van sin el "la": la pregunta de arriba ("¿Qué hacés con
+// quincha?") ya da el sujeto, así se leen como respuestas y entran las
+// cuatro en una línea en mobile. Las de la tarjeta son otras porque ahí se
+// leen después del nombre ("quincha · hace, enseña").
 var RELACIONES = [
-  { cod: 'hago',    form: 'la hago',      card: 'hace' },
-  { cod: 'enseno',  form: 'la enseño',    card: 'enseña' },
-  { cod: 'estudio', form: 'la estudio',   card: 'estudia' },
-  { cod: 'propia',  form: 'en mi casa',   card: 'obra propia' }
+  { cod: 'hago',    form: 'hago',       card: 'hace' },
+  { cod: 'enseno',  form: 'enseño',     card: 'enseña' },
+  { cod: 'estudio', form: 'estudio',    card: 'estudia' },
+  { cod: 'propia',  form: 'en mi casa', card: 'obra propia' }
 ];
 var MAX_TECNICAS = 5;
 
@@ -1798,15 +1819,21 @@ function agregarTecnica(nombre) {
   });
   if (repetida) return false;
 
+  // Tag arriba, en la caja de carga: es el resumen de lo que llevás puesto.
+  var tag = document.createElement('span');
+  tag.className = 'tecnica-tag';
+  tag.setAttribute('data-tecnica', nombre);
+  tag.innerHTML = esc(nombre)
+    + '<button type="button" title="Quitar" onclick="quitarTecnica(\'' + esc(nombre).replace(/'/g, "\\'") + '\')">✕</button>';
+  document.getElementById('tecnicas-tags').appendChild(tag);
+
+  // Bloque abajo, con la pregunta y las pastillas. No repite el nombre: ya
+  // está en el tag de arriba y en la propia pregunta.
   var bloque = document.createElement('div');
   bloque.className = 'tecnica-fila';
   bloque.setAttribute('data-tecnica', nombre);
   bloque.innerHTML =
-    '<div class="tecnica-fila-top">'
-    +   '<span class="tecnica-nombre-txt">' + esc(nombre) + '</span>'
-    +   '<button type="button" class="btn-quitar-tecnica" title="Quitar" onclick="quitarTecnica(this)">✕</button>'
-    + '</div>'
-    + '<p class="tecnica-pregunta">¿Qué hacés con ' + esc(nombre) + '?</p>'
+    '<p class="tecnica-pregunta">¿Qué hacés con <b>' + esc(nombre) + '</b>?</p>'
     + '<div class="tecnica-rels">'
     + RELACIONES.map(function(r) {
         return '<button type="button" class="rel-chip" data-cod="' + r.cod + '" '
@@ -1818,8 +1845,11 @@ function agregarTecnica(nombre) {
   return true;
 }
 
-function quitarTecnica(btn) {
-  btn.closest('.tecnica-fila').remove();
+function quitarTecnica(nombre) {
+  ['#tecnicas-tags', '#directorio-tecnicas'].forEach(function(sel) {
+    var el = document.querySelector(sel + ' [data-tecnica="' + nombre + '"]');
+    if (el) el.remove();
+  });
   actualizarAltaTecnica();
 }
 
@@ -1831,7 +1861,10 @@ function actualizarAltaTecnica() {
   var input = document.getElementById('tecnica-input');
   var alta = document.querySelector('.tecnica-alta');
   var sug = document.getElementById('tecnicas-sugeridos');
-  if (input) input.disabled = lleno;
+  if (input) {
+    input.disabled = lleno;
+    input.placeholder = lleno ? 'Llegaste a 5' : (cont.children.length ? 'agregá otra...' : 'ej: quincha, techo verde...');
+  }
   if (alta) alta.style.opacity = lleno ? '0.45' : '';
   if (sug) sug.style.display = lleno ? 'none' : '';
   // Las ya elegidas no se ofrecen de nuevo
@@ -2008,6 +2041,7 @@ function enviarDirectorio(e) {
       document.getElementById('form-directorio').reset();
       // reset() no toca los bloques de técnica (son divs creados a mano)
       document.getElementById('directorio-tecnicas').innerHTML = '';
+      document.getElementById('tecnicas-tags').innerHTML = '';
       document.getElementById('tecnica-input').value = '';
       actualizarAltaTecnica();
       btn.disabled = false;
