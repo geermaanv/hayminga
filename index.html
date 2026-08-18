@@ -243,15 +243,30 @@ footer a{color:var(--tierra);text-decoration:none;}
 .directorio-intereses{display:flex;flex-direction:column;gap:0.4rem;font-size:0.88rem;color:var(--texto);}
 .directorio-intereses label{display:flex;align-items:center;gap:0.5rem;}
 .campo-ayuda{font-size:0.74rem;color:var(--texto-suave);margin:-0.15rem 0 0.45rem;line-height:1.35;}
-.tecnica-fila{display:flex;flex-wrap:wrap;align-items:center;gap:0.3rem;padding-bottom:0.55rem;margin-bottom:0.55rem;border-bottom:1px dashed var(--paja-oscuro);}
-.tecnica-fila:last-child{border-bottom:none;}
-.tecnica-fila input[type=text]{flex:1 1 8rem;min-width:0;}
-.tecnica-rels{display:flex;flex-wrap:wrap;gap:0.25rem;flex-basis:100%;}
-.rel-chip{padding:0.22rem 0.55rem;border:1px solid var(--paja-oscuro);border-radius:20px;background:var(--blanco);color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.72rem;cursor:pointer;white-space:nowrap;}
-.rel-chip.on{background:var(--verde);border-color:var(--verde);color:#fff;}
+/* Cada técnica es una cajita: sin esto las pastillas quedaban flotando
+   debajo del input, sin nada que indicara que le pertenecen. */
+.tecnica-fila{background:var(--blanco);border:1px solid var(--paja-oscuro);border-radius:var(--radio);padding:0.6rem;margin-bottom:0.5rem;}
+.tecnica-fila-top{display:flex;align-items:center;gap:0.4rem;}
+.tecnica-fila input[type=text]{flex:1;min-width:0;}
+.tecnica-pregunta{font-size:0.72rem;color:var(--texto-suave);margin:0.5rem 0 0.3rem;}
+.tecnica-rels{display:flex;flex-wrap:wrap;gap:0.3rem;}
+/* Las pastillas antes se veían igual que las etiquetas de solo lectura de
+   las tarjetas (.card-tipo), así que nadie entendía que se tocaban. Ahora
+   tienen sombra, y al marcarse aparece un ✓ — la señal más clara de que
+   son un control y no un rótulo. */
+.rel-chip{display:inline-flex;align-items:center;gap:0.25rem;padding:0.3rem 0.6rem;border:1px solid var(--paja-oscuro);border-radius:20px;background:var(--fondo);color:var(--texto);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px var(--sombra);}
+.rel-chip::before{content:'';display:inline-block;width:0.85em;text-align:center;}
+.rel-chip:hover{border-color:var(--verde);color:var(--verde);}
+.rel-chip.on{background:var(--verde);border-color:var(--verde);color:#fff;box-shadow:none;}
+.rel-chip.on::before{content:'✓';}
 .btn-quitar-tecnica{border:none;background:none;color:var(--texto-suave);font-size:1rem;line-height:1;cursor:pointer;padding:0 0.2rem;}
-.btn-agregar-tecnica{border:1px dashed var(--paja-oscuro);background:none;color:var(--verde);font-family:'DM Sans',sans-serif;font-size:0.78rem;font-weight:600;padding:0.3rem 0.7rem;border-radius:20px;cursor:pointer;}
-.btn-agregar-tecnica[disabled]{opacity:0.4;cursor:default;}
+.tecnica-alta{display:flex;gap:0.4rem;align-items:center;}
+.tecnica-alta input{flex:1;min-width:0;}
+.btn-sumar-tecnica{flex-shrink:0;border:1px solid var(--verde);background:var(--verde);color:#fff;font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:600;padding:0.45rem 0.8rem;border-radius:20px;cursor:pointer;}
+.tecnicas-sugeridos{display:flex;flex-wrap:wrap;gap:0.25rem;margin:0.45rem 0 0.6rem;}
+.sug-chip{border:1px dashed var(--paja-oscuro);background:none;color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.72rem;padding:0.22rem 0.55rem;border-radius:20px;cursor:pointer;}
+.sug-chip:hover{border-style:solid;border-color:var(--verde);color:var(--verde);}
+.tecnica-nombre-txt{flex:1;font-weight:600;font-size:0.92rem;color:var(--texto);}
 .persona-tecnica{font-size:0.8rem;color:var(--texto);}
 .persona-tecnica b{font-weight:600;}
 .persona-tecnica span{color:var(--texto-suave);}
@@ -588,10 +603,15 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 
         <div class="full">
           <label class="campo-label">Tus técnicas (opcional, hasta 5)</label>
-          <p class="campo-ayuda">Escribí la técnica y marcá tu relación con ella. Podés poner lo que quieras, no solo las sugerencias.</p>
-          <div id="directorio-tecnicas"></div>
+          <p class="campo-ayuda">Escribí una y apretá Enter, o tocá alguna de abajo. Podés poner lo que quieras.</p>
+          <div class="tecnica-alta">
+            <input type="text" id="tecnica-input" list="tecnicas-sugeridas" placeholder="ej: quincha, techo verde..."
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTecnicaDesdeInput();}">
+            <button type="button" class="btn-sumar-tecnica" onclick="agregarTecnicaDesdeInput()">Agregar</button>
+          </div>
           <datalist id="tecnicas-sugeridas"></datalist>
-          <button type="button" class="btn-agregar-tecnica" id="btn-agregar-tecnica" onclick="agregarFilaTecnica()">+ Agregar otra</button>
+          <div id="tecnicas-sugeridos" class="tecnicas-sugeridos"></div>
+          <div id="directorio-tecnicas"></div>
         </div>
 
         <div class="full">
@@ -1650,22 +1670,30 @@ var INTERESES_CATEGORIAS = [
 // teórica. El campo NO está cerrado a esto: son sugerencias, se puede
 // escribir cualquier cosa. Los ejemplos existen sobre todo para enseñar la
 // granularidad esperada (ni "bioconstrucción" ni "revoque de barro con crin").
+// Las primeras MAX_CHIPS_SUGERIDOS se muestran como chips clickeables; el
+// resto vive solo en el autocompletado. Van ordenadas para que esas primeras
+// cubran familias distintas (muros, terminaciones, techos, agua, energía,
+// diseño): el objetivo del chip no es listar todo sino mostrar el nivel de
+// detalle esperado. En mobile, 16 chips ocupaban seis renglones.
 var TECNICAS_SUGERIDAS = [
-  'quincha', 'adobe', 'tierra cruda', 'superadobe', 'earthship',
-  'revoques y terminaciones', 'pinturas naturales', 'techo verde',
-  'estructuras de madera', 'bambú', 'estufas y hornos', 'diseño bioclimático',
-  'tratamiento de aguas', 'captación de lluvia', 'permacultura',
-  'agroecología y huerta'
+  'quincha', 'adobe', 'revoques y terminaciones', 'techo verde',
+  'estufas y hornos', 'tratamiento de aguas', 'estructuras de madera', 'permacultura',
+  'tierra cruda', 'superadobe', 'earthship', 'pinturas naturales',
+  'bambú', 'diseño bioclimático', 'captación de lluvia', 'agroecología y huerta'
 ];
+var MAX_CHIPS_SUGERIDOS = 8;
 
 // Relación con cada técnica. Multi-select a propósito: el que mejor hace
 // quincha suele ser también el que la enseña. Es la versión conductual del
 // "nivel de experiencia" — afirmaciones chequeables en vez de autoevaluación.
+// Etiquetas cortas en el formulario para que las cuatro entren en una línea
+// hasta en mobile; las de la tarjeta pueden ser distintas porque ahí se leen
+// después del nombre de la técnica ("quincha · hace, enseña").
 var RELACIONES = [
-  { cod: 'hago',    form: 'la hago para otros', card: 'hace' },
-  { cod: 'enseno',  form: 'la enseño',          card: 'enseña' },
-  { cod: 'estudio', form: 'la estudio',         card: 'estudia' },
-  { cod: 'propia',  form: 'en obra propia',     card: 'obra propia' }
+  { cod: 'hago',    form: 'la hago',      card: 'hace' },
+  { cod: 'enseno',  form: 'la enseño',    card: 'enseña' },
+  { cod: 'estudio', form: 'la estudio',   card: 'estudia' },
+  { cod: 'propia',  form: 'en mi casa',   card: 'obra propia' }
 ];
 var MAX_TECNICAS = 5;
 
@@ -1732,57 +1760,99 @@ function scrollAMensaje(msg) {
 function poblarTecnicasSugeridas() {
   var dl = document.getElementById('tecnicas-sugeridas');
   if (dl) dl.innerHTML = TECNICAS_SUGERIDAS.map(function(t) { return '<option value="' + t + '">'; }).join('');
-  agregarFilaTecnica();
+  // Sugerencias visibles y clickeables, no solo escondidas en el autocomplete:
+  // los ejemplos son lo que enseña la granularidad esperada. Sin verlos, uno
+  // escribe "bioconstrucción" (demasiado amplio) y otro "revoque de barro con
+  // crin de caballo" (demasiado fino).
+  var sug = document.getElementById('tecnicas-sugeridos');
+  if (sug) {
+    sug.innerHTML = TECNICAS_SUGERIDAS.slice(0, MAX_CHIPS_SUGERIDOS).map(function(t) {
+      return '<button type="button" class="sug-chip" data-tec="' + esc(t) + '">' + esc(t) + '</button>';
+    }).join('');
+    sug.addEventListener('click', function(ev) {
+      var b = ev.target.closest('.sug-chip');
+      if (b) agregarTecnica(b.getAttribute('data-tec'));
+    });
+  }
 }
 
-function agregarFilaTecnica() {
+function normalizarNombreTecnica(nombre) {
+  // ni ":" ni ";" pueden ir en el nombre: son los separadores del formato
+  return (nombre || '').trim().toLowerCase().replace(/[;:]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function agregarTecnicaDesdeInput() {
+  var input = document.getElementById('tecnica-input');
+  if (agregarTecnica(input.value)) input.value = '';
+}
+
+// Cada técnica se escribe una por una y se convierte en su propio bloque.
+// La pregunta nombra la técnica ("¿Qué hacés con quincha?") en vez de ser
+// genérica: así es una pregunta concreta que cualquiera contesta al toque.
+function agregarTecnica(nombre) {
   var cont = document.getElementById('directorio-tecnicas');
-  if (!cont || cont.children.length >= MAX_TECNICAS) return;
-  var fila = document.createElement('div');
-  fila.className = 'tecnica-fila';
-  // Orden: input + ✕ en la primera línea, chips de relación en la segunda
-  // (.tecnica-rels tiene flex-basis:100%). En mobile, con la ✕ al final del
-  // DOM quedaba huérfana en una tercera línea sin quedar claro qué borraba.
-  fila.innerHTML =
-    '<input type="text" class="tecnica-nombre" list="tecnicas-sugeridas" placeholder="ej: quincha, techo verde...">'
-    + '<button type="button" class="btn-quitar-tecnica" title="Quitar" onclick="quitarFilaTecnica(this)">✕</button>'
+  nombre = normalizarNombreTecnica(nombre);
+  if (!cont || !nombre || cont.children.length >= MAX_TECNICAS) return false;
+  var repetida = Array.prototype.some.call(cont.children, function(b) {
+    return b.getAttribute('data-tecnica') === nombre;
+  });
+  if (repetida) return false;
+
+  var bloque = document.createElement('div');
+  bloque.className = 'tecnica-fila';
+  bloque.setAttribute('data-tecnica', nombre);
+  bloque.innerHTML =
+    '<div class="tecnica-fila-top">'
+    +   '<span class="tecnica-nombre-txt">' + esc(nombre) + '</span>'
+    +   '<button type="button" class="btn-quitar-tecnica" title="Quitar" onclick="quitarTecnica(this)">✕</button>'
+    + '</div>'
+    + '<p class="tecnica-pregunta">¿Qué hacés con ' + esc(nombre) + '?</p>'
     + '<div class="tecnica-rels">'
     + RELACIONES.map(function(r) {
         return '<button type="button" class="rel-chip" data-cod="' + r.cod + '" '
           + 'onclick="this.classList.toggle(\'on\')">' + r.form + '</button>';
       }).join('')
     + '</div>';
-  cont.appendChild(fila);
-  actualizarBotonAgregarTecnica();
+  cont.appendChild(bloque);
+  actualizarAltaTecnica();
+  return true;
 }
 
-function quitarFilaTecnica(btn) {
-  var cont = document.getElementById('directorio-tecnicas');
-  btn.parentNode.remove();
-  if (cont && !cont.children.length) agregarFilaTecnica();
-  actualizarBotonAgregarTecnica();
+function quitarTecnica(btn) {
+  btn.closest('.tecnica-fila').remove();
+  actualizarAltaTecnica();
 }
 
-function actualizarBotonAgregarTecnica() {
+// Al llegar al tope se bloquea el alta y se ocultan las sugerencias, para
+// que no queden chips que no hacen nada al tocarlos.
+function actualizarAltaTecnica() {
   var cont = document.getElementById('directorio-tecnicas');
-  var btn = document.getElementById('btn-agregar-tecnica');
-  if (cont && btn) btn.disabled = cont.children.length >= MAX_TECNICAS;
+  var lleno = cont.children.length >= MAX_TECNICAS;
+  var input = document.getElementById('tecnica-input');
+  var alta = document.querySelector('.tecnica-alta');
+  var sug = document.getElementById('tecnicas-sugeridos');
+  if (input) input.disabled = lleno;
+  if (alta) alta.style.opacity = lleno ? '0.45' : '';
+  if (sug) sug.style.display = lleno ? 'none' : '';
+  // Las ya elegidas no se ofrecen de nuevo
+  if (sug) {
+    Array.prototype.forEach.call(sug.querySelectorAll('.sug-chip'), function(b) {
+      b.style.display = cont.querySelector('[data-tecnica="' + b.getAttribute('data-tec') + '"]') ? 'none' : '';
+    });
+  }
 }
 
 // Serializa a "quincha:hago/enseno; revoques:hago" — texto plano a
-// propósito, se lee a ojo desde la Sheet. Las filas sin nombre de técnica
-// se ignoran; una técnica sin ninguna relación marcada se guarda igual
-// (decir "sé de quincha" ya es información aunque no aclare en qué rol).
+// propósito, se lee a ojo desde la Sheet. Una técnica sin ninguna relación
+// marcada se guarda igual: decir "sé de quincha" ya es información aunque
+// no aclare en qué rol.
 function serializarTecnicas() {
-  var filas = document.querySelectorAll('#directorio-tecnicas .tecnica-fila');
+  var bloques = document.querySelectorAll('#directorio-tecnicas .tecnica-fila');
   var partes = [];
-  Array.prototype.forEach.call(filas, function(fila) {
-    var nombre = fila.querySelector('.tecnica-nombre').value.trim().toLowerCase();
+  Array.prototype.forEach.call(bloques, function(bloque) {
+    var nombre = bloque.getAttribute('data-tecnica');
     if (!nombre) return;
-    // ni ":" ni ";" pueden ir en el nombre: son los separadores del formato
-    nombre = nombre.replace(/[;:]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!nombre) return;
-    var rels = Array.prototype.slice.call(fila.querySelectorAll('.rel-chip.on'))
+    var rels = Array.prototype.slice.call(bloque.querySelectorAll('.rel-chip.on'))
       .map(function(c) { return c.getAttribute('data-cod'); });
     partes.push(rels.length ? nombre + ':' + rels.join('/') : nombre);
   });
@@ -1936,9 +2006,10 @@ function enviarDirectorio(e) {
       scrollAMensaje(msg);
       if (typeof gtag === 'function') gtag('event', 'persona_publicada');
       document.getElementById('form-directorio').reset();
-      // reset() no toca las filas de técnica (son divs creados a mano)
+      // reset() no toca los bloques de técnica (son divs creados a mano)
       document.getElementById('directorio-tecnicas').innerHTML = '';
-      agregarFilaTecnica();
+      document.getElementById('tecnica-input').value = '';
+      actualizarAltaTecnica();
       btn.disabled = false;
       // recarga en el momento (no solo la próxima vez que se abra la vista),
       // así se ve reflejado sin tener que ir a Eventos y volver
