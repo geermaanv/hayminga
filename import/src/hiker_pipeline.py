@@ -563,6 +563,7 @@ def procesar_post(
         if drive_url:
             data["imagen_url"] = drive_url
     data["link_promocional"] = post["link"]
+    data["username"] = post.get("username") or ""
     data["fuente"] = "hikerapi_hashtag"
     data["fecha_descubrimiento"] = datetime.now(timezone.utc).isoformat()
     # Para más adelante: juntar hashtags de eventos activos y ver cuáles

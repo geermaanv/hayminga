@@ -1044,5 +1044,40 @@ class CandidatosTecnicasTests(unittest.TestCase):
         self.assertEqual(sin_clasificar, ["Geometrías Orgánicas en Techos"])
 
 
+class UsernameColumnTests(unittest.TestCase):
+    """El username de la cuenta de origen ya venía en la respuesta de HikerAPI
+    y solo vivía en memoria (filtro de cuentas_excluidas). Persistirlo no cuesta
+    ninguna llamada extra y es lo que permite contactar al organizador."""
+
+    def test_event_to_row_guarda_el_username_normalizado(self):
+        fila = sheets.event_to_row({"nombre": "Taller", "username": "@ElAbrazal"})
+        self.assertEqual(len(fila), len(sheets.COLUMNS))
+        self.assertEqual(fila[-1], "elabrazal")
+
+    def test_event_to_row_sin_username_deja_la_celda_vacia(self):
+        # Los eventos que entran por mail o formulario no tienen cuenta de origen.
+        fila = sheets.event_to_row({"nombre": "Taller"})
+        self.assertEqual(fila[-1], "")
+
+    def test_username_es_la_ultima_columna(self):
+        # Va al final a propósito: mover posiciones existentes rompe al
+        # frontend, que lee por GViz (ver PATRONES.md).
+        self.assertEqual(sheets.COLUMNS[-1], "Username")
+
+    def test_procesar_post_propaga_el_username_del_post(self):
+        from src import hiker_pipeline
+        post = {
+            "link": "https://www.instagram.com/p/ABC123/",
+            "image_url": "https://x/i.jpg", "caption": "taller de barro en Cordoba",
+            "taken_at_ts": None, "username": "elabrazal",
+        }
+        with patch.object(hiker_pipeline, "extraer_evento",
+                          return_value={"es_evento": True, "nombre": "Taller",
+                                        "provincia": "Córdoba", "confianza": "alta"}), \
+             patch.object(hiker_pipeline, "subir_imagen_a_drive", return_value=None):
+            evento = hiker_pipeline.procesar_post(post, set())
+        self.assertEqual(evento["username"], "elabrazal")
+
+
 if __name__ == "__main__":
     unittest.main()

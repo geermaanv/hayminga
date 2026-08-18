@@ -52,6 +52,13 @@ COLUMNS = [
     "Id", "Contacto", "Estado", "Pais",
     "Confianza", "Fuente", "Fecha_Descubrimiento",
     "Latitud", "Longitud", "Hashtags_Post",
+    # Username de la cuenta de Instagram que originó el post. Ya venía en la
+    # respuesta de HikerAPI y se usaba solo en memoria para el filtro de
+    # cuentas_excluidas; guardarlo no cuesta ninguna llamada extra. Sirve
+    # para contactar al organizador (invitarlo al Directorio, pedirle que
+    # cargue sus eventos) y es la señal que le faltaba a find_probable_duplicate
+    # para detectar reposts del mismo evento por la misma cuenta.
+    "Username",
 ]
 
 
@@ -470,6 +477,7 @@ def event_to_row(event: dict) -> list:
         event.get("latitud") or "",
         event.get("longitud") or "",
         event.get("hashtags_post") or "",
+        (event.get("username") or "").lstrip("@").lower(),
     ]
 
 
