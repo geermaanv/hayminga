@@ -8,7 +8,7 @@ on:
     # medidas que encontró eventos, y deja el día por delante para revisar
     # ?pendientes. El minuto 7 (y no 0) es a propósito: los cron en punto
     # son los más congestionados en Actions y se retrasan más.
-    - cron: "7 11 * * *"  # ~08:07 hora Argentina
+    - cron: "7 10 * * *"  # ~07:07 hora Argentina
   workflow_dispatch: {}
 
 concurrency:
