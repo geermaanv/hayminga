@@ -1523,6 +1523,7 @@ function enviarEvento(e) {
     msg.style.display = 'block';
     msg.style.color = ok ? 'var(--verde)' : '#c0392b';
     msg.textContent = texto;
+    scrollAMensaje(msg);
   }
 
   var enRevision = !!eventoEnRevision;
@@ -1702,6 +1703,33 @@ function esc(valor) {
   return String(valor == null ? '' : valor)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// El cartel de resultado vive al final del formulario, y los formularios
+// son largos (el de evento siempre, el de directorio desde que sumó el
+// bloque de técnicas). Sin esto queda fuera de la vista: quien envía no ve
+// ni el "listo" ni el error, y parece que no pasó nada.
+function scrollAMensaje(msg) {
+  if (!msg) return;
+  // scrollIntoView() no alcanza: el que scrollea es el .evento-form-inner del
+  // modal (overflow-y:auto) mientras el body queda en overflow:hidden, y en
+  // mobile no lo movía. Se busca el ancestro que scrollea de verdad y se lo
+  // corre a mano lo justo para que el cartel entre en pantalla.
+  var cont = msg.parentElement;
+  while (cont && cont !== document.body) {
+    if (cont.scrollHeight > cont.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(cont).overflowY)) break;
+    cont = cont.parentElement;
+  }
+  if (!cont || cont === document.body) {
+    if (msg.scrollIntoView) msg.scrollIntoView({ block: 'center' });
+    return;
+  }
+  var falta = msg.getBoundingClientRect().bottom - cont.getBoundingClientRect().bottom + 24;
+  if (falta <= 0) return;
+  // Asignación directa y no scrollTo({behavior:'smooth'}): el scroll suave
+  // no se aplicaba y el cartel quedaba fuera de pantalla igual. Para un
+  // cartel de confirmación, que aparezca al toque es mejor que animado.
+  cont.scrollTop = cont.scrollTop + falta;
 }
 
 function poblarTecnicasSugeridas() {
@@ -1912,6 +1940,7 @@ function enviarDirectorio(e) {
     .then(function() {
       msg.style.display = 'block'; msg.style.color = 'var(--verde)';
       msg.textContent = '¡Listo! Ya estás en el directorio 🌿';
+      scrollAMensaje(msg);
       if (typeof gtag === 'function') gtag('event', 'persona_publicada');
       document.getElementById('form-directorio').reset();
       // reset() no toca las filas de técnica (son divs creados a mano)
@@ -1926,6 +1955,7 @@ function enviarDirectorio(e) {
     .catch(function() {
       msg.style.display = 'block'; msg.style.color = '#c0392b';
       msg.textContent = 'Algo salió mal, intentá de nuevo.';
+      scrollAMensaje(msg);
       btn.disabled = false;
     });
 }
@@ -1964,6 +1994,7 @@ function enviarSolicitudContacto(e) {
     .then(function() {
       msg.style.display = 'block'; msg.style.color = '#1a3d1a'; msg.style.background = '#a8e6a0';
       msg.textContent = '¡Listo! Si acepta, les avisamos a los dos por mail.';
+      scrollAMensaje(msg);
       if (typeof gtag === 'function') gtag('event', 'solicitar_contacto');
       document.getElementById('form-contacto').reset();
       btn.disabled = false;
@@ -1972,6 +2003,7 @@ function enviarSolicitudContacto(e) {
     .catch(function() {
       msg.style.display = 'block'; msg.style.color = '#5c1010'; msg.style.background = '#f5b7b1';
       msg.textContent = 'Algo salió mal, intentá de nuevo.';
+      scrollAMensaje(msg);
       btn.disabled = false;
     });
 }
