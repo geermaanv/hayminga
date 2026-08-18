@@ -277,7 +277,8 @@ footer a{color:var(--tierra);text-decoration:none;}
 .tecnica-alta{display:flex;gap:0.4rem;align-items:center;}
 .tecnica-alta input{flex:1;min-width:0;}
 .btn-sumar-tecnica{flex-shrink:0;border:1px solid var(--verde);background:var(--verde);color:#fff;font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:600;padding:0.45rem 0.8rem;border-radius:20px;cursor:pointer;}
-.tecnicas-sugeridos{display:flex;flex-wrap:wrap;gap:0.25rem;margin:0.45rem 0 0.6rem;}
+.tecnica-sug-label{font-size:0.72rem;color:var(--texto-suave);margin:0.6rem 0 0.35rem;}
+.tecnicas-sugeridos{display:flex;flex-wrap:wrap;gap:0.25rem;}
 .sug-chip{border:1px dashed var(--paja-oscuro);background:none;color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.72rem;padding:0.22rem 0.55rem;border-radius:20px;cursor:pointer;}
 .sug-chip:hover{border-style:solid;border-color:var(--verde);color:var(--verde);}
 .tecnica-nombre-txt{flex:1;font-weight:600;font-size:0.92rem;color:var(--texto);}
@@ -611,13 +612,13 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
           <select id="directorio-provincia" required><option value="">Elegí tu provincia...</option></select>
         </div>
         <div>
-          <label class="campo-label">En esto desde (opcional)</label>
+          <label class="campo-label">En bioconstrucción desde el año</label>
           <input type="text" id="directorio-anio" inputmode="numeric" maxlength="4" placeholder="ej: 2015">
         </div>
 
         <div class="full">
           <label class="campo-label">Tus técnicas (opcional, hasta 5)</label>
-          <p class="campo-ayuda">Escribí una y apretá Enter, o tocá alguna de abajo. Podés poner lo que quieras.</p>
+          <p class="campo-ayuda">Podés poner lo que quieras, no solo las sugerencias. Después contás qué hacés con cada una.</p>
           <div class="tecnica-caja">
             <div id="tecnicas-tags" class="tecnicas-tags"></div>
             <div class="tecnica-alta">
@@ -625,9 +626,10 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
                      onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTecnicaDesdeInput();}">
               <button type="button" class="btn-sumar-tecnica" onclick="agregarTecnicaDesdeInput()">Agregar</button>
             </div>
+            <p class="tecnica-sug-label">o tocá una de estas:</p>
+            <div id="tecnicas-sugeridos" class="tecnicas-sugeridos"></div>
           </div>
           <datalist id="tecnicas-sugeridas"></datalist>
-          <div id="tecnicas-sugeridos" class="tecnicas-sugeridos"></div>
           <div id="directorio-tecnicas"></div>
         </div>
 
@@ -1787,8 +1789,10 @@ function poblarTecnicasSugeridas() {
   // crin de caballo" (demasiado fino).
   var sug = document.getElementById('tecnicas-sugeridos');
   if (sug) {
+    // El "+" contra el "✕" de los tags ya agregados: el par se entiende sin
+    // explicación, y deja claro que estas todavía no están puestas.
     sug.innerHTML = TECNICAS_SUGERIDAS.slice(0, MAX_CHIPS_SUGERIDOS).map(function(t) {
-      return '<button type="button" class="sug-chip" data-tec="' + esc(t) + '">' + esc(t) + '</button>';
+      return '<button type="button" class="sug-chip" data-tec="' + esc(t) + '">+ ' + esc(t) + '</button>';
     }).join('');
     sug.addEventListener('click', function(ev) {
       var b = ev.target.closest('.sug-chip');
@@ -1866,13 +1870,21 @@ function actualizarAltaTecnica() {
     input.placeholder = lleno ? 'Llegaste a 5' : (cont.children.length ? 'agregá otra...' : 'ej: quincha, techo verde...');
   }
   if (alta) alta.style.opacity = lleno ? '0.45' : '';
-  if (sug) sug.style.display = lleno ? 'none' : '';
-  // Las ya elegidas no se ofrecen de nuevo
+
+  // Las ya elegidas no se ofrecen de nuevo. Si no queda ninguna para
+  // ofrecer (o ya se llegó al tope), se esconde también el "o tocá una de
+  // estas" para no dejar un título sin nada debajo.
+  var quedan = 0;
   if (sug) {
     Array.prototype.forEach.call(sug.querySelectorAll('.sug-chip'), function(b) {
-      b.style.display = cont.querySelector('[data-tecnica="' + b.getAttribute('data-tec') + '"]') ? 'none' : '';
+      var usada = !!cont.querySelector('[data-tecnica="' + b.getAttribute('data-tec') + '"]');
+      b.style.display = usada ? 'none' : '';
+      if (!usada) quedan++;
     });
+    sug.style.display = (lleno || !quedan) ? 'none' : '';
   }
+  var lbl = document.querySelector('.tecnica-sug-label');
+  if (lbl) lbl.style.display = (lleno || !quedan) ? 'none' : '';
 }
 
 // Serializa a "quincha:hago/enseno; revoques:hago" — texto plano a
