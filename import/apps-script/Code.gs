@@ -90,7 +90,10 @@ var DIRECTORIO_SHEET_NAME = 'Directorio';
 // Relaciones posibles: hago (para terceros), enseno, estudio, propia
 // (lo hizo en obra propia). Formato de texto plano a proposito: se lee a
 // ojo desde la Sheet y no necesita escaping como seria con JSON.
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde'];
+// RecibeNovedades se guarda como texto "true"/"false" y no como booleano
+// nativo: Apps Script escribiendo booleanos rompe el parseo de GViz del
+// frontend (ver PATRONES.md).
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -153,6 +156,10 @@ function crearPersonaDirectorio_(data) {
     data.whatsapp || '',
     String(data.tecnicas || '').trim(),
     anio,
+    // Default true si el campo no viene: contempla altas del formulario
+    // viejo o de cualquier cliente que todavia no mande el campo. Solo un
+    // "false" explicito da de baja.
+    data.recibeNovedades === false ? 'false' : 'true',
   ]);
 
   return id;
@@ -531,7 +538,11 @@ function enviarResumenSemanalDirectorio() {
 
   var dirSheet = ss.getSheetByName(DIRECTORIO_SHEET_NAME);
   if (!dirSheet || dirSheet.getLastRow() < 2) return;
-  var emails = dirSheet.getRange(2, 6, dirSheet.getLastRow() - 1, 1).getValues() // columna F = Email
+  // Columnas F..J = Email .. RecibeNovedades. Se respeta la baja: solo un
+  // "false" explicito excluye, asi las filas viejas (anteriores a que la
+  // columna existiera, con la celda vacia) siguen recibiendo como antes.
+  var emails = dirSheet.getRange(2, 6, dirSheet.getLastRow() - 1, 5).getValues()
+    .filter(function(r) { return String(r[4] || '').trim().toLowerCase() !== 'false'; })
     .map(function(r) { return String(r[0] || '').trim(); })
     .filter(function(e) { return e; });
   if (emails.length === 0) return;

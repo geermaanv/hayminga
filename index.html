@@ -608,8 +608,8 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         </div>
 
         <div class="full evento-check">
-          <input type="checkbox" id="directorio-autorizo" checked disabled>
-          <label for="directorio-autorizo">Autorizo a que me manden novedades y avisos de hayminga</label>
+          <input type="checkbox" id="directorio-autorizo" checked>
+          <label for="directorio-autorizo">Quiero recibir el resumen semanal de eventos por mail</label>
         </div>
       </div>
 
@@ -1933,6 +1933,7 @@ function enviarDirectorio(e) {
     intereses: intereses,
     tecnicas: serializarTecnicas(),
     anioDesde: document.getElementById('directorio-anio').value,
+    recibeNovedades: document.getElementById('directorio-autorizo').checked,
     descripcion: document.getElementById('directorio-descripcion').value
   };
   btn.disabled = true;
