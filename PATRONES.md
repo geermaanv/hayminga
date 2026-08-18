@@ -21,6 +21,17 @@ Patrones que afectan decisiones de código y arquitectura.
 - Latitud/Longitud: inconsistent format → GViz returns `null` → fallback a centroid.
 - Caption con 100% texto: header detection fails → use `&headers=1`.
 
+**Adding a column to an existing sheet needs the header backfilled explicitly.**
+- `getOrCreateSheetWithHeaders_` (Apps Script) originally wrote headers *only when creating* the sheet. Adding `Tecnicas`/`AnioDesde` to the existing `Directorio` wrote data into H/I with no header → GViz can't name the column → frontend reads `undefined`, silently.
+- Both the Python (`src/sheets.py`) and Apps Script versions now backfill missing headers. Keep them in sync.
+- Failure mode is invisible: the form says "¡Listo!" and the data is lost.
+
+**Delimiter choice: check the values first.**
+- `Intereses` was comma-separated until a value contained a comma ("Organizar mingas, talleres o eventos") and got split into two chips. Now `;`.
+- `Tecnicas` uses `;` between pairs and `/` between relations (`quincha:hago/enseno`). Plain text on purpose — legible from the Sheet and no escaping, unlike JSON. The form strips `;`/`:` from technique names on write.
+
+**A read immediately after a `batchUpdate` can be stale.** Verify a write with a separate later read, not the one in the same breath — it caused a false "I deleted the wrong rows" scare.
+
 ## Filtering & Validation
 
 **Date filters interact — both needed, not redundant.**
@@ -81,6 +92,12 @@ Never let account profile override explicit country signals in caption or flyer.
 - `import/src/processor.py` AND `import/apps-script/Code.gs`.
 - When true: everything lands as `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`.
 - When false: `confianza=alta` publishes directly, `media`/`baja` still goes to review.
+
+**The site does not rank people.** It shows what each person says about themselves and lets the searcher filter.
+- This came up three times in one session, disguised each time: a `matrícula` field, a per-technique "nivel de experiencia", and an `ofrece`/`en camino` badge computed on the card. All three felt reasonable when proposed; all three sorted people into classes.
+- Self-declared levels also mis-calibrate here: in a minga culture, declaring yourself "avanzado" is socially awkward, so the people who know most under-report.
+- What replaced them: behavioural, checkable claims (*la enseño*, *la hago para otros*, *en obra propia*, *la estudio*) that carry the same information without a verdict.
+- Rule of thumb: **filtering is an action of the person searching; labelling is a judgement about the other.** If a distinction is needed, put it in a filter above the grid, not as a stamp on the card.
 
 **Evento `Activo` computed deterministically, never from LLM.**
 - Requires: name + fecha_inicio + anio_confirmado + valid range + fecha >= today + pais == "Argentina".

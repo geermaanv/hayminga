@@ -107,7 +107,7 @@ Corre solo si clave exacta no matcheó, nunca descarta (inserta a revisión).
 
 **Rationale F1:** No cambiar schema sin poder probar. Señal equivalente sin fricción.
 
-### Hoy: Optimizaciones de importación (16 ago)
+### Optimizaciones de importación (17 ago)
 
 **Detección temprana de país** (`_detectar_pais_temprana()`): Detecta país en caption ANTES de descargar imagen. Si no-argentina → descarta sin desperdicio.
 
@@ -116,6 +116,50 @@ Corre solo si clave exacta no matcheó, nunca descarta (inserta a revisión).
 **Idioma único:** Usa `_parece_ingles()` (regex temprano) como fuente canónica; elimina filtro redundante de JSON de IA.
 
 **Rationale F1:** Bajar pendientes/corrida — automatizar más, detectar antes.
+
+### Instrumentación para decidir con datos (17 ago)
+
+No se tocó la lógica: solo se agregó lo necesario para responder preguntas que hasta ahora se contestaban a ojo.
+
+- **`[METRICA]` en `extraer_evento()`** — cuántos posts se resuelven solo con caption vs. cuántos necesitan la imagen, y en cuántos la imagen efectivamente cambió el resultado. Si la mayoría se resuelve sin imagen, la descarga es desperdicio; si no, está bien como está. `analizar_metricas.py` parsea el log.
+- **`[PENDIENTE]` en `procesar_post()`** — por qué cada evento cae a revisión (`confianza_baja`, `sin_fecha`, `sin_ubicacion`...). Hasta ahora se sabía cuántos había, no por qué.
+- **`analizar_pendientes.py`** — tasa de publicación (confirmados sobre revisados) y antigüedad promedio de la cola.
+
+Los KPI de ESTRATEGIA pasaron de números absolutos a ratios en la misma vuelta: "menos de 10 pendientes" no escala con el volumen, "menos del 12%" sí.
+
+### Vocabulario de técnicas desde los propios eventos (17 ago)
+
+Para armar el campo de técnicas del Directorio hacía falta una lista, y la tentación era inventarla. Salió de contar los 50 eventos confirmados (`candidatos_tecnicas.py`): permacultura 7, revoques 5, quincha 4, y una cola larga de 12 técnicas con un solo evento.
+
+Cuatro cosas que el conteo mostró y la intuición no:
+
+1. **Permacultura le gana a todo** y agroecología aparece 3 veces: el alcance real es hábitat sustentable, no solo bioconstrucción.
+2. **El criterio de `candidatos_hashtags` no se traslada.** Ahí frecuencia 1 = ruido; acá superadobe, earthship y yurta aparecen una vez y son técnicas reales con poca oferta. Filtrar por frecuencia borraría lo más específico. Hay un test que fija ese comportamiento para que nadie lo "corrija" copiando del hermano.
+3. **Terminaciones es el cluster más grande** (revoques + pinturas + estucos + pisos + cal) y no estaba en el radar. Es lo que se puede enseñar en una jornada, sin obra.
+4. **"Bioarquitectura" con 5 es ruido disfrazado** — es un enfoque, no una técnica. Mismo caso que "bioconstrucción".
+
+Segunda salida del script, tan útil como la primera: los eventos donde no detectó ninguna técnica. Leerlos es el mecanismo de descubrimiento — así apareció "geometrías orgánicas en techos".
+
+### Rediseño del Directorio (17-18 ago)
+
+**El punto de partida, medido:** 45 organizadores distintos en los eventos confirmados (unos 30 reales al deduplicar) y **2 personas en el Directorio**, que eran Germán y Maxi. O sea: cero usuarios. El cuello de botella no era el modelo de datos sino que no había nadie — pero como migrar 2 filas cuesta cero y migrar 200 cuesta caro, convenía cambiar el esquema justo ahora.
+
+**El problema del modelo viejo:** un solo campo `Intereses` mezclaba interés temático, rol y actividad, y no había forma de decir "sé hacer quincha".
+
+**El modelo nuevo, dos bloques:**
+
+- **Técnicas** (hasta 5), cada una con su relación: *la hago para otros / la enseño / la estudio / en obra propia*. Multi-select, porque el que mejor hace quincha suele ser el que la enseña.
+- **Qué te interesa**: interés en una **actividad** (construir mi casa, conseguir terreno, formar comunidad, organizar mingas, ofrecer mi espacio, difundir), no en un tema. Incluye al que recién llega —que no puede afirmar "organizo eventos" pero sí "me interesa"— y es la lista de reclutamiento para Fase 3.
+
+**El intereses-vs-servicios que motivó todo se disolvió:** no son dos vocabularios, es uno solo usado de dos lados. "La estudio" es simplemente otra relación con la misma técnica.
+
+**Tres intentos de rankear gente, los tres descartados:** campo de matrícula (polémico en un ambiente donde el saber se transmite en la práctica), "nivel de experiencia" por técnica (autodeclarado, y en cultura de minga los que más saben se subestiman), y un badge *ofrece / en camino* calculado en la tarjeta. El último se detectó recién al ver la tarjeta propia sellada "EN CAMINO". Quedó como regla en PATRONES: el sitio no clasifica personas.
+
+**Lo que se dejó afuera a propósito:** filtros finos por técnica y agrupación en buckets. Con dos personas, un filtro que siempre devuelve vacío es peor que no tenerlo. Los datos se guardan estructurados igual, así el filtro se agrega después sobre datos limpios.
+
+**Consentimiento de novedades:** era un checkbox `checked disabled` — parecía control y no respondía. Ahora es real, con columna `RecibeNovedades` que el resumen semanal respeta.
+
+**Bugs que solo aparecieron probando en el navegador**, ninguno visible leyendo el código: los encabezados nuevos no se creaban en una hoja ya existente (datos escritos sin nombre de columna, GViz devolviendo `undefined`, en silencio); los intereses con coma adentro se partían en dos chips; el cartel de confirmación quedaba fuera de pantalla al alargarse el formulario; y `scrollIntoView` no servía dentro del modal.
 
 ---
 

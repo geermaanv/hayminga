@@ -42,6 +42,7 @@ python -m src.hiker_pipeline                      # production pipeline
 python -m src.enviar_resumen_telegram             # weekly digest
 python -m src.curar_fuentes                       # curation pass
 python -m src.candidatos_hashtags                  # free: hashtag candidates from confirmed events
+python -m src.candidatos_tecnicas                  # free: technique vocabulary from confirmed events (Directorio suggestions)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
@@ -94,6 +95,16 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 **Intake channels:**
 - **Web form** (`+ Nuevo Evento`): Posts to `doPost`, writes directly to Eventos (no AI). Goes to review queue while `REVISION_MANUAL=true`.
 - **Mail intake** (tag `HME` in subject): Apps Script queues to `Cola_Manual`, pipeline processes with `extract_event_data` (email body = caption). Pulls image via `og:image` if only link sent. Separate from HikerAPI — runs from same `email-intake.yml` cron.
+
+**Directorio** (sheet `Directorio`, written only by `Code.gs`, read by the frontend via GViz):
+
+`Id, Nombre, Provincia, Intereses, Descripcion, Email, Whatsapp, Tecnicas, AnioDesde, RecibeNovedades`
+
+- `Tecnicas` — up to 5 pairs, `quincha:hago/enseno; revoques:hago`. Relations: `hago` (for others), `enseno`, `estudio`, `propia` (own build); multi-select per technique. Free text with ~16 suggestions from `candidatos_tecnicas.py` — deliberately **not** a closed list: in Fase 1 the form is the instrument for discovering vocabulary.
+- `Intereses` — `;`-separated (values contain commas). Interest in an **activity**, not a topic: "bioconstrucción" as an interest says nothing, everyone signing up has it.
+- `RecibeNovedades` — `"true"`/`"false"` as text. Only an explicit `"false"` opts out, so rows predating the column keep receiving.
+- Email and Whatsapp are never shown publicly — contact goes through the double opt-in flow.
+- The card shows no computed ranking of people; see PATRONES.md.
 
 ## Cross-cutting rules
 

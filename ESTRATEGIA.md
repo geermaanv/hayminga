@@ -187,6 +187,10 @@ La bioconstrucción es dispersa (eventos anunciados en Instagram, profesionales 
 - ⏳ Eventos activos: 30-40 (meta: 50+)
 - ❌ Sin imagen necesaria: TBD (medir próxima corrida)
 
+**Directorio (segundo pilar):** 0 personas reales. El modelo de datos quedó rediseñado (técnicas con relación + intereses por actividad), así que lo que falta no es producto sino gente. La lista de invitación existe y es concreta: **~30 organizadores** identificados en los eventos ya publicados. El contacto es tibio, no frío — sus eventos ya están en el sitio, así que el pedido es "¿querés perfil?" y no "¿quién sos?". Y el mismo contacto sirve después para pedirles que carguen sus eventos (Fase 3).
+
+Ojo con la secuencia: hasta que haya volumen, los filtros del Directorio no se muestran. Un filtro que siempre devuelve vacío es peor que no tenerlo.
+
 **Foco AHORA:**
 1. 🎯 **Mejorar % a pendientes** — reducir de 15% a <12%
    - Automatizar detección (país, idioma, fecha)
