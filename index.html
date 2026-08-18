@@ -255,9 +255,6 @@ footer a{color:var(--tierra);text-decoration:none;}
 .persona-tecnica{font-size:0.8rem;color:var(--texto);}
 .persona-tecnica b{font-weight:600;}
 .persona-tecnica span{color:var(--texto-suave);}
-.persona-badge{display:inline-block;padding:0.15rem 0.5rem;border-radius:20px;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
-.persona-badge.ofrece{background:var(--verde);color:#fff;}
-.persona-badge.busca{background:var(--paja-oscuro);color:var(--tierra-oscuro);}
 .btn-publicar.directorio-btn{background:var(--verde);}
 .btn-publicar.directorio-btn:hover{background:var(--verde-oscuro);}
 .directorio-form .btn-cancelar:hover{border-color:var(--verde);color:var(--verde);}
@@ -1860,15 +1857,12 @@ function renderDirectorio() {
   personas.forEach(function(p) {
     var tecnicas = parsearTecnicas(p['Tecnicas']);
 
-    // "Ofrece" si en alguna técnica hace o enseña; el resto busca. Es la
-    // distinción que más importa de un vistazo — al que necesita un
-    // quinchero no le sirve toparse con alguien que recién arranca.
-    var ofrece = tecnicas.some(function(t) {
-      return t.cods.indexOf('hago') !== -1 || t.cods.indexOf('enseno') !== -1;
-    });
-    var badge = tecnicas.length
-      ? '<span class="persona-badge ' + (ofrece ? 'ofrece">ofrece' : 'busca">en camino') + '</span>'
-      : '';
+    // Sin badge ofrece/en camino. Estampaba en la tarjeta la misma jerarquía
+    // que evitamos al sacar la matrícula: partía a la gente en dos clases
+    // arriba del nombre. Y era redundante — la línea de cada técnica ya dice
+    // "hace" o "estudia", contado por la persona y sin veredicto encima.
+    // Si algún día hace falta separar oferta de búsqueda, va como filtro
+    // arriba de la grilla, no como sello por persona.
 
     var tecnicasHtml = tecnicas.map(function(t) {
       var etiquetas = t.cods.map(function(cod) {
@@ -1894,9 +1888,7 @@ function renderDirectorio() {
     var meta = [p['Provincia'], anio ? 'desde ' + anio : ''].filter(Boolean).join(' · ');
 
     html += '<div class="persona-card">'
-      + '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">'
-      +   '<span class="persona-nombre">' + esc(p['Nombre']) + '</span>' + badge
-      + '</div>'
+      + '<div class="persona-nombre">' + esc(p['Nombre']) + '</div>'
       + (meta ? '<div class="persona-provincia">' + esc(meta) + '</div>' : '')
       + tecnicasHtml
       + interesesHtml
