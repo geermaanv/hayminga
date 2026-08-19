@@ -43,6 +43,8 @@ python -m src.enviar_resumen_telegram             # weekly digest
 python -m src.curar_fuentes                       # curation pass
 python -m src.candidatos_hashtags                  # free: hashtag candidates from confirmed events
 python -m src.candidatos_tecnicas                  # free: technique vocabulary from confirmed events (Directorio suggestions)
+python -m src.mensajes_organizadores               # free: DM drafts to invite event organizers to the Directorio
+python -m src.geocodificar                         # free: dry-run geocoding of rows without coordinates (--escribir to apply)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
@@ -70,6 +72,8 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 2. If ambiguous/event: Gemini + image (recovers more fields)
 3. Fallback to Claude if Gemini quota hit (capped by `MAX_CLAUDE_CALLS_PER_RUN`, Claude is paid)
 4. Timeout: `genai.Client` must set `timeout=30_000` (real incident: 44min hang)
+
+**Coordinates** (priority, top wins): location tagged on the post → geocoding of the extracted `direccion` via Nominatim (free) → nothing, and the frontend falls back to the province centroid. Most posts carry no tagged location, so without geocoding ~70% of events landed in the middle of their province.
 
 **Post-extraction validation:**
 - Drop already-happened events (fecha_fin/inicio < today)

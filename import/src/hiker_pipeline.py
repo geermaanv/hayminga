@@ -41,6 +41,7 @@ from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
     validate_event_data, _pais_desde_texto, _pais_desde_telefono,
 )
+from src.geocodificar import geocodificar_direccion
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
     cargar_cuentas_ids, cargar_cuentas_pais, guardar_cuentas_ids,
@@ -599,6 +600,14 @@ def procesar_post(
         data["longitud"] = post["lng"]
         if not data.get("direccion") and post.get("location_address"):
             data["direccion"] = post["location_address"]
+    elif data.get("direccion"):
+        # La mayoría de los posts no trae ubicación etiquetada (87 de 126 de
+        # los ya importados quedaron sin coordenadas y el mapa los manda al
+        # centroide de la provincia). Si el flyer dejó una dirección, se
+        # intenta resolverla — gratis, y devuelve None cuando no está seguro.
+        punto = geocodificar_direccion(data.get("direccion"), data.get("provincia"))
+        if punto:
+            data["latitud"], data["longitud"] = punto
 
     confianza = str(data.get("confianza") or "baja").lower()
     if data.get("activo") and confianza != "alta":

@@ -49,6 +49,10 @@ Patrones que afectan decisiones de código y arquitectura.
 - Dedup (shortcode), blacklist, age, language → run before download + extraction.
 - Real: 33 hashtags + 140 accounts = ~4,200 posts; 80-90% filtered free.
 
+**Geocoding: when unsure, return nothing.** No coordinates is an honest answer — the frontend falls back to the province centroid. A pin in the wrong place is worse, because it looks precise.
+- Reject results outside Argentina's bounding box, in a different province than the one stated, or whose `addresstype` is `state`/`country`. That last one bit for real: "El Hoyo, Comarca Andina, Chubut" resolved to the middle of Chubut, 400 km from the town — the province centroid dressed up as an address.
+- Flyers name the venue first ("Ecoescuela Tay Pichín, San Marcos Sierras, Córdoba") and Nominatim doesn't know venues, so the full query returns nothing. Retry with progressively shorter fragments, and try single fragments too — some middle fragments are regional nicknames ("Comarca Andina") that poison every query containing them. Town centre beats province centroid.
+
 **Country detection priority order:**
 1. Text/caption (free, `_pais_desde_texto()`)
 2. Phone prefix (free, `_pais_desde_telefono()`)

@@ -1131,5 +1131,70 @@ class DuplicadoPorCuentaTests(unittest.TestCase):
         self.assertIsNotNone(sheets.find_probable_duplicate(evento, existentes))
 
 
+class GeocodificarTests(unittest.TestCase):
+    """Sin red: se mockea la consulta a Nominatim. La regla que fijan estos
+    tests es 'ante la duda, None' — sin coordenadas el mapa cae al centroide
+    de la provincia, que es honesto; un pin en el lugar equivocado no."""
+
+    def _resultado(self, lat, lon, state="Córdoba", addresstype="town"):
+        return {"lat": str(lat), "lon": str(lon), "addresstype": addresstype,
+                "display_name": "x", "address": {"state": state}}
+
+    def _con_respuestas(self, respuestas):
+        from src import geocodificar
+        return patch.object(geocodificar, "_consultar_nominatim",
+                            side_effect=list(respuestas))
+
+    def test_direccion_virtual_no_consulta_nada(self):
+        from src import geocodificar
+        with patch.object(geocodificar, "_consultar_nominatim") as consulta:
+            self.assertIsNone(geocodificar.geocodificar_direccion(
+                "meet.google.com/ujb-zeog-ufe", ""))
+            consulta.assert_not_called()
+
+    def test_descarta_resultado_fuera_de_argentina(self):
+        from src import geocodificar
+        # Madrid: coordenadas válidas pero de otro continente.
+        with self._con_respuestas([[self._resultado(40.41, -3.70, state="Madrid")], [], []]):
+            self.assertIsNone(geocodificar.geocodificar_direccion("Belgrano 123", "Córdoba"))
+
+    def test_descarta_resultado_a_nivel_provincia(self):
+        """Caso real: 'El Hoyo, Comarca Andina, Chubut' resolvía al centro de
+        Chubut, a 400 km del pueblo. Eso no es una ubicación, es el centroide
+        que el frontend ya calcula solo — escribirlo finge una precisión que
+        no existe."""
+        from src import geocodificar
+        with self._con_respuestas([
+            [self._resultado(-45.58, -69.05, state="Chubut", addresstype="state")],
+            [], [],
+        ]):
+            self.assertIsNone(geocodificar.geocodificar_direccion("El Hoyo", "Chubut"))
+
+    def test_descarta_resultado_en_otra_provincia(self):
+        # Los topónimos repetidos son moneda corriente acá (San Martín,
+        # Belgrano, Rivadavia): sin este chequeo el pin se va a 1000 km.
+        from src import geocodificar
+        with self._con_respuestas([
+            [self._resultado(-34.60, -58.38, state="Buenos Aires")], [], [],
+        ]):
+            self.assertIsNone(geocodificar.geocodificar_direccion("San Martín", "Córdoba"))
+
+    def test_cae_a_tramos_mas_cortos_si_la_direccion_completa_no_resuelve(self):
+        """El flyer arranca con el nombre del salón, que Nominatim no conoce.
+        Sacando ese tramo queda la localidad, que sí resuelve."""
+        from src import geocodificar
+        with self._con_respuestas([[], [self._resultado(-30.78, -64.63)]]):
+            punto = geocodificar.geocodificar_direccion(
+                "Ecoescuela Tay Pichín, San Marcos Sierras", "Córdoba")
+        self.assertEqual(punto, (-30.78, -64.63))
+
+    def test_no_gasta_intentos_en_la_provincia_ni_el_pais(self):
+        from src import geocodificar
+        variantes = geocodificar._variantes("El Hoyo, Comarca Andina, Chubut, Argentina", "Chubut")
+        self.assertNotIn("Chubut", variantes)
+        self.assertNotIn("Argentina", variantes)
+        self.assertIn("El Hoyo", variantes)
+
+
 if __name__ == "__main__":
     unittest.main()
