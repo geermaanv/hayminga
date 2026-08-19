@@ -81,6 +81,9 @@ var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
 
 var DIRECTORIO_SHEET_NAME = 'Directorio';
+// El formulario dejo de pedir Tecnicas y AnioDesde (se simplifico a un
+// campo de texto libre), pero las columnas se conservan: vacias no molestan
+// y evitan una migracion si algun dia se vuelven a pedir.
 // Tecnicas y AnioDesde se agregaron al final a proposito (misma regla que
 // la hoja Eventos): las posiciones existentes son load-bearing para el
 // frontend, que lee por GViz.
@@ -93,7 +96,7 @@ var DIRECTORIO_SHEET_NAME = 'Directorio';
 // RecibeNovedades se guarda como texto "true"/"false" y no como booleano
 // nativo: Apps Script escribiendo booleanos rompe el parseo de GViz del
 // frontend (ver PATRONES.md).
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades'];
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades', 'OfreceServicios'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -133,8 +136,8 @@ function doPost(e) {
 // ---- Directorio: alta, solicitud de contacto y aceptación ----
 
 function crearPersonaDirectorio_(data) {
-  if (!data.nombre || !data.email) {
-    throw new Error('Faltan campos requeridos (nombre, email)');
+  if (!data.nombre || !data.email || !data.whatsapp) {
+    throw new Error('Faltan campos requeridos (nombre, email, whatsapp)');
   }
   var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
   var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
@@ -160,6 +163,7 @@ function crearPersonaDirectorio_(data) {
     // viejo o de cualquier cliente que todavia no mande el campo. Solo un
     // "false" explicito da de baja.
     data.recibeNovedades === false ? 'false' : 'true',
+    data.ofreceServicios === true ? 'true' : 'false',
   ]);
 
   return id;

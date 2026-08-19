@@ -240,51 +240,12 @@ footer a{color:var(--tierra);text-decoration:none;}
 .evento-form-alt a{color:var(--tierra-claro);}
 .directorio-form .campo-label .req{color:var(--verde);}
 .directorio-form .evento-grid input:focus,.directorio-form .evento-grid select:focus,.directorio-form .evento-grid textarea:focus{border-color:var(--verde);}
-.directorio-intereses{display:flex;flex-direction:column;gap:0.4rem;font-size:0.88rem;color:var(--texto);}
-.directorio-intereses label{display:flex;align-items:center;gap:0.5rem;}
 .campo-ayuda{font-size:0.74rem;color:var(--texto-suave);margin:-0.15rem 0 0.45rem;line-height:1.35;}
-/* Caja de carga: las técnicas se van acumulando como tags acá arriba, así
-   se ve de un vistazo lo que llevás puesto sin tener que recorrer los
-   bloques de abajo. */
-.tecnica-caja{border:1px solid var(--paja-oscuro);border-radius:var(--radio);padding:0.5rem;background:var(--blanco);}
-.tecnicas-tags{display:flex;flex-wrap:wrap;gap:0.3rem;}
-.tecnicas-tags:not(:empty){margin-bottom:0.5rem;}
-.tecnica-tag{display:inline-flex;align-items:center;gap:0.3rem;background:var(--paja);color:var(--tierra-oscuro);border-radius:20px;padding:0.25rem 0.35rem 0.25rem 0.7rem;font-size:0.82rem;font-weight:600;}
-.tecnica-tag button{border:none;background:none;color:var(--tierra-oscuro);opacity:0.55;cursor:pointer;font-size:0.85rem;line-height:1;padding:0 0.15rem;}
-.tecnica-tag button:hover{opacity:1;}
 
-/* Cada técnica es una cajita: sin esto las pastillas quedaban flotando
-   sin nada que indicara a cuál pertenecen. */
-.tecnica-fila{background:var(--blanco);border:1px solid var(--paja-oscuro);border-radius:var(--radio);padding:0.6rem;margin-bottom:0.5rem;}
-.tecnica-pregunta{font-size:0.82rem;color:var(--texto-suave);margin:0 0 0.4rem;}
-.tecnica-pregunta b{color:var(--texto);}
-.tecnica-rels{display:flex;flex-wrap:wrap;gap:0.3rem;}
 /* Las pastillas antes se veían igual que las etiquetas de solo lectura de
    las tarjetas (.card-tipo), así que nadie entendía que se tocaban. Ahora
    tienen sombra, y al marcarse aparece un ✓ — la señal más clara de que
    son un control y no un rótulo. */
-/* Compactas para que las cuatro entren en una línea en mobile: con dos
-   líneas por bloque, cinco técnicas eran ~1100px de scroll. La altura del
-   área tocable se mantiene con el padding vertical. */
-.rel-chip{display:inline-flex;align-items:center;justify-content:center;gap:0.15rem;min-height:36px;padding:0.4rem 0.5rem;border:1px solid var(--paja-oscuro);border-radius:20px;background:var(--fondo);color:var(--texto);font-family:'DM Sans',sans-serif;font-size:0.78rem;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px var(--sombra);}
-/* Sin reservar el ancho del ✓ en las no marcadas: esos ~40px eran justo lo
-   que empujaba las cuatro a una segunda línea. La pastilla se ensancha al
-   marcarse, y ese movimiento se lee como confirmación del toque. */
-.rel-chip:hover{border-color:var(--verde);color:var(--verde);}
-.rel-chip.on{background:var(--verde);border-color:var(--verde);color:#fff;box-shadow:none;}
-.rel-chip.on::before{content:'✓';}
-.btn-quitar-tecnica{border:none;background:none;color:var(--texto-suave);font-size:1rem;line-height:1;cursor:pointer;padding:0 0.2rem;}
-.tecnica-alta{display:flex;gap:0.4rem;align-items:center;}
-.tecnica-alta input{flex:1;min-width:0;}
-.btn-sumar-tecnica{flex-shrink:0;border:1px solid var(--verde);background:var(--verde);color:#fff;font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:600;padding:0.45rem 0.8rem;border-radius:20px;cursor:pointer;}
-.tecnica-sug-label{font-size:0.72rem;color:var(--texto-suave);margin:0.6rem 0 0.35rem;}
-.tecnicas-sugeridos{display:flex;flex-wrap:wrap;gap:0.25rem;}
-.sug-chip{border:1px dashed var(--paja-oscuro);background:none;color:var(--texto-suave);font-family:'DM Sans',sans-serif;font-size:0.72rem;padding:0.22rem 0.55rem;border-radius:20px;cursor:pointer;}
-.sug-chip:hover{border-style:solid;border-color:var(--verde);color:var(--verde);}
-.tecnica-nombre-txt{flex:1;font-weight:600;font-size:0.92rem;color:var(--texto);}
-.persona-tecnica{font-size:0.8rem;color:var(--texto);}
-.persona-tecnica b{font-weight:600;}
-.persona-tecnica span{color:var(--texto-suave);}
 .btn-publicar.directorio-btn{background:var(--verde);}
 .btn-publicar.directorio-btn:hover{background:var(--verde-oscuro);}
 .directorio-form .btn-cancelar:hover{border-color:var(--verde);color:var(--verde);}
@@ -323,7 +284,14 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 .persona-card{background:var(--blanco);border-radius:var(--radio);box-shadow:0 2px 8px var(--sombra);border:1px solid rgba(139,69,19,0.08);padding:1.1rem;display:flex;flex-direction:column;gap:0.5rem;}
 .persona-nombre{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:500;color:var(--texto);}
 .persona-provincia{font-size:0.78rem;color:var(--texto-suave);}
-.persona-desc{font-size:0.85rem;color:var(--texto);line-height:1.4;flex:1;}
+.persona-desc{font-size:0.85rem;color:var(--texto);line-height:1.45;flex:1;white-space:pre-wrap;}
+/* Con texto libre alguien escribe tres párrafos y esa tarjeta mide el triple
+   que las demás, rompiendo la grilla. Se recorta a 5 líneas y se expande al
+   tocarla. */
+.persona-desc.recortada{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;}
+.persona-disponible{font-size:0.78rem;color:var(--verde);font-weight:600;}
+.filtro-check{display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--texto-suave);white-space:nowrap;cursor:pointer;}
+#filtro-directorio-texto{flex:1;min-width:8rem;}
 .btn-contactar{align-self:flex-start;margin-top:0.4rem;padding:0.4rem 0.9rem;background:transparent;border:1.5px solid var(--tierra-claro);color:var(--tierra-claro);border-radius:20px;font-family:'DM Sans',sans-serif;font-size:0.82rem;font-weight:500;cursor:pointer;}
 .btn-contactar:hover{background:var(--tierra-claro);color:white;}
 </style>
@@ -458,9 +426,10 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 
 <div id="vista-directorio" style="display:none;">
   <div class="filtros-container" style="position:static;box-shadow:none;">
-    <div class="filtros-inner directorio-filtros" style="max-width:1100px;flex-direction:row;flex-wrap:nowrap;">
+    <div class="filtros-inner directorio-filtros" style="max-width:1100px;flex-direction:row;flex-wrap:wrap;">
+      <input type="search" id="filtro-directorio-texto" placeholder="Buscar..." oninput="renderDirectorio()">
       <select id="filtro-directorio-provincia" onchange="renderDirectorio()"><option value="">Todas las provincias</option></select>
-      <select id="filtro-directorio-interes" onchange="renderDirectorio()"><option value="">Todos los intereses</option></select>
+      <label class="filtro-check"><input type="checkbox" id="filtro-directorio-disponible" onchange="renderDirectorio()"> Solo disponibles para trabajos</label>
     </div>
   </div>
   <div class="conteo" id="conteo-directorio"></div>
@@ -603,44 +572,25 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
           <input type="email" id="directorio-email" required placeholder="no se muestra público">
         </div>
         <div>
-          <label class="campo-label">WhatsApp (opcional)</label>
-          <input type="text" id="directorio-whatsapp" placeholder="no se muestra público">
+          <label class="campo-label">WhatsApp <span class="req">*</span></label>
+          <input type="text" id="directorio-whatsapp" required placeholder="no se muestra público">
         </div>
 
-        <div>
+        <div class="full">
           <label class="campo-label">Provincia <span class="req">*</span></label>
           <select id="directorio-provincia" required><option value="">Elegí tu provincia...</option></select>
         </div>
-        <div>
-          <label class="campo-label">En bioconstrucción desde el año</label>
-          <input type="text" id="directorio-anio" inputmode="numeric" maxlength="4" placeholder="ej: 2015">
-        </div>
 
         <div class="full">
-          <label class="campo-label">Tus técnicas (opcional, hasta 5)</label>
-          <p class="campo-ayuda">Podés poner lo que quieras, no solo las sugerencias. Después contás qué hacés con cada una.</p>
-          <div class="tecnica-caja">
-            <div id="tecnicas-tags" class="tecnicas-tags"></div>
-            <div class="tecnica-alta">
-              <input type="text" id="tecnica-input" list="tecnicas-sugeridas" placeholder="ej: quincha, techo verde..."
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTecnicaDesdeInput();}">
-              <button type="button" class="btn-sumar-tecnica" onclick="agregarTecnicaDesdeInput()">Agregar</button>
-            </div>
-            <p class="tecnica-sug-label">o tocá una de estas:</p>
-            <div id="tecnicas-sugeridos" class="tecnicas-sugeridos"></div>
-          </div>
-          <datalist id="tecnicas-sugeridas"></datalist>
-          <div id="directorio-tecnicas"></div>
+          <label class="campo-label">Contanos de vos <span class="req">*</span></label>
+          <p class="campo-ayuda">Con qué trabajás, si enseñás, si estás aprendiendo, si estás construyendo tu casa, qué te interesa. Como quieras, sin formato.</p>
+          <textarea id="directorio-descripcion" rows="5" required
+            placeholder="ej: Hago quincha y revoques de barro hace 15 años en el Litoral. Doy talleres cuando me convocan y me interesa sumarme a mingas por la zona."></textarea>
         </div>
 
-        <div class="full">
-          <label class="campo-label">¿Qué te interesa? (elegí una o más)</label>
-          <div id="directorio-intereses" class="directorio-intereses"></div>
-        </div>
-
-        <div class="full">
-          <label class="campo-label">Contanos en tus palabras (opcional)</label>
-          <textarea id="directorio-descripcion" rows="2"></textarea>
+        <div class="full evento-check">
+          <input type="checkbox" id="directorio-disponible">
+          <label for="directorio-disponible">Estoy disponible para trabajos o consultas</label>
         </div>
 
         <div class="full evento-check">
@@ -1674,51 +1624,10 @@ var PROVINCIAS_ARGENTINA = [
   'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
 ];
 
-// Interés en una ACTIVIDAD, no en un tema. "Bioconstrucción" como interés
-// no sirve: si alguien se anota acá, obvio que le interesa. Van de lo más
-// personal a lo más comunitario.
-var INTERESES_CATEGORIAS = [
-  'Construir mi casa', 'Conseguir un terreno', 'Formar o sumarme a una comunidad',
-  'Organizar mingas, talleres o eventos', 'Sumarme a mingas de otros',
-  'Ofrecer mi espacio para actividades', 'Difundir y compartir'
-];
-
-// Sugerencias del campo técnica. Salieron de contar los eventos ya
-// confirmados (ver import/src/candidatos_tecnicas.py) — es vocabulario
-// validado por lo que la comunidad efectivamente enseña acá, no una lista
-// teórica. El campo NO está cerrado a esto: son sugerencias, se puede
-// escribir cualquier cosa. Los ejemplos existen sobre todo para enseñar la
-// granularidad esperada (ni "bioconstrucción" ni "revoque de barro con crin").
-// Las primeras MAX_CHIPS_SUGERIDOS se muestran como chips clickeables; el
-// resto vive solo en el autocompletado. Van ordenadas para que esas primeras
-// cubran familias distintas (muros, terminaciones, techos, agua, energía,
-// diseño): el objetivo del chip no es listar todo sino mostrar el nivel de
-// detalle esperado. En mobile, 16 chips ocupaban seis renglones.
-var TECNICAS_SUGERIDAS = [
-  'quincha', 'adobe', 'revoques y terminaciones', 'techo verde',
-  'estufas y hornos', 'tratamiento de aguas', 'estructuras de madera', 'permacultura',
-  'tierra cruda', 'superadobe', 'earthship', 'pinturas naturales',
-  'bambú', 'diseño bioclimático', 'captación de lluvia', 'agroecología y huerta'
-];
-var MAX_CHIPS_SUGERIDOS = 8;
 
 // Relación con cada técnica. Multi-select a propósito: el que mejor hace
 // quincha suele ser también el que la enseña. Es la versión conductual del
 // "nivel de experiencia" — afirmaciones chequeables en vez de autoevaluación.
-// Etiquetas cortas en el formulario para que las cuatro entren en una línea
-// hasta en mobile; las de la tarjeta pueden ser distintas porque ahí se leen
-// después del nombre de la técnica ("quincha · hace, enseña").
-// En el formulario van sin el "la": la pregunta de arriba ("¿Qué hacés con
-// quincha?") ya da el sujeto, así se leen como respuestas y entran las
-// cuatro en una línea en mobile. Las de la tarjeta son otras porque ahí se
-// leen después del nombre ("quincha · hace, enseña").
-var RELACIONES = [
-  { cod: 'hago',    form: 'hago',       card: 'hace' },
-  { cod: 'enseno',  form: 'enseño',     card: 'enseña' },
-  { cod: 'estudio', form: 'estudio',    card: 'estudia' },
-  { cod: 'propia',  form: 'en mi casa', card: 'obra propia' }
-];
-var MAX_TECNICAS = 5;
 
 function poblarProvinciasDirectorio() {
   var opciones = PROVINCIAS_ARGENTINA.map(function(p) { return '<option>' + p + '</option>'; }).join('');
@@ -1730,23 +1639,6 @@ function poblarProvinciasDirectorio() {
   if (selectEvento) selectEvento.innerHTML = '<option value="">Elegí...</option>' + opciones;
 }
 
-function poblarInteresesDirectorio() {
-  var cont = document.getElementById('directorio-intereses');
-  if (cont) {
-    cont.innerHTML = INTERESES_CATEGORIAS.map(function(i, idx) {
-      return '<label style="display:flex;align-items:center;gap:0.4rem;">'
-        + '<input type="checkbox" class="directorio-interes-check" value="' + i + '" id="interes-' + idx + '">' + i + '</label>';
-    }).join('');
-  }
-  var selectFiltro = document.getElementById('filtro-directorio-interes');
-  if (selectFiltro) {
-    selectFiltro.innerHTML = '<option value="">Todos los intereses</option>'
-      + INTERESES_CATEGORIAS.map(function(i) { return '<option>' + i + '</option>'; }).join('');
-  }
-}
-
-// El directorio es texto que carga cualquiera desde el formulario público,
-// y se interpola en HTML — sin esto, un nombre con "<script>" se ejecuta.
 function esc(valor) {
   return String(valor == null ? '' : valor)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1778,140 +1670,6 @@ function scrollAMensaje(msg) {
   // no se aplicaba y el cartel quedaba fuera de pantalla igual. Para un
   // cartel de confirmación, que aparezca al toque es mejor que animado.
   cont.scrollTop = cont.scrollTop + falta;
-}
-
-function poblarTecnicasSugeridas() {
-  var dl = document.getElementById('tecnicas-sugeridas');
-  if (dl) dl.innerHTML = TECNICAS_SUGERIDAS.map(function(t) { return '<option value="' + t + '">'; }).join('');
-  // Sugerencias visibles y clickeables, no solo escondidas en el autocomplete:
-  // los ejemplos son lo que enseña la granularidad esperada. Sin verlos, uno
-  // escribe "bioconstrucción" (demasiado amplio) y otro "revoque de barro con
-  // crin de caballo" (demasiado fino).
-  var sug = document.getElementById('tecnicas-sugeridos');
-  if (sug) {
-    // El "+" contra el "✕" de los tags ya agregados: el par se entiende sin
-    // explicación, y deja claro que estas todavía no están puestas.
-    sug.innerHTML = TECNICAS_SUGERIDAS.slice(0, MAX_CHIPS_SUGERIDOS).map(function(t) {
-      return '<button type="button" class="sug-chip" data-tec="' + esc(t) + '">+ ' + esc(t) + '</button>';
-    }).join('');
-    sug.addEventListener('click', function(ev) {
-      var b = ev.target.closest('.sug-chip');
-      if (b) agregarTecnica(b.getAttribute('data-tec'));
-    });
-  }
-}
-
-function normalizarNombreTecnica(nombre) {
-  // ni ":" ni ";" pueden ir en el nombre: son los separadores del formato
-  return (nombre || '').trim().toLowerCase().replace(/[;:]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function agregarTecnicaDesdeInput() {
-  var input = document.getElementById('tecnica-input');
-  if (agregarTecnica(input.value)) input.value = '';
-}
-
-// Cada técnica se escribe una por una y se convierte en su propio bloque.
-// La pregunta nombra la técnica ("¿Qué hacés con quincha?") en vez de ser
-// genérica: así es una pregunta concreta que cualquiera contesta al toque.
-function agregarTecnica(nombre) {
-  var cont = document.getElementById('directorio-tecnicas');
-  nombre = normalizarNombreTecnica(nombre);
-  if (!cont || !nombre || cont.children.length >= MAX_TECNICAS) return false;
-  var repetida = Array.prototype.some.call(cont.children, function(b) {
-    return b.getAttribute('data-tecnica') === nombre;
-  });
-  if (repetida) return false;
-
-  // Tag arriba, en la caja de carga: es el resumen de lo que llevás puesto.
-  var tag = document.createElement('span');
-  tag.className = 'tecnica-tag';
-  tag.setAttribute('data-tecnica', nombre);
-  tag.innerHTML = esc(nombre)
-    + '<button type="button" title="Quitar" onclick="quitarTecnica(\'' + esc(nombre).replace(/'/g, "\\'") + '\')">✕</button>';
-  document.getElementById('tecnicas-tags').appendChild(tag);
-
-  // Bloque abajo, con la pregunta y las pastillas. No repite el nombre: ya
-  // está en el tag de arriba y en la propia pregunta.
-  var bloque = document.createElement('div');
-  bloque.className = 'tecnica-fila';
-  bloque.setAttribute('data-tecnica', nombre);
-  bloque.innerHTML =
-    '<p class="tecnica-pregunta">¿Qué hacés con <b>' + esc(nombre) + '</b>?</p>'
-    + '<div class="tecnica-rels">'
-    + RELACIONES.map(function(r) {
-        return '<button type="button" class="rel-chip" data-cod="' + r.cod + '" '
-          + 'onclick="this.classList.toggle(\'on\')">' + r.form + '</button>';
-      }).join('')
-    + '</div>';
-  cont.appendChild(bloque);
-  actualizarAltaTecnica();
-  return true;
-}
-
-function quitarTecnica(nombre) {
-  ['#tecnicas-tags', '#directorio-tecnicas'].forEach(function(sel) {
-    var el = document.querySelector(sel + ' [data-tecnica="' + nombre + '"]');
-    if (el) el.remove();
-  });
-  actualizarAltaTecnica();
-}
-
-// Al llegar al tope se bloquea el alta y se ocultan las sugerencias, para
-// que no queden chips que no hacen nada al tocarlos.
-function actualizarAltaTecnica() {
-  var cont = document.getElementById('directorio-tecnicas');
-  var lleno = cont.children.length >= MAX_TECNICAS;
-  var input = document.getElementById('tecnica-input');
-  var alta = document.querySelector('.tecnica-alta');
-  var sug = document.getElementById('tecnicas-sugeridos');
-  if (input) {
-    input.disabled = lleno;
-    input.placeholder = lleno ? 'Llegaste a 5' : (cont.children.length ? 'agregá otra...' : 'ej: quincha, techo verde...');
-  }
-  if (alta) alta.style.opacity = lleno ? '0.45' : '';
-
-  // Las ya elegidas no se ofrecen de nuevo. Si no queda ninguna para
-  // ofrecer (o ya se llegó al tope), se esconde también el "o tocá una de
-  // estas" para no dejar un título sin nada debajo.
-  var quedan = 0;
-  if (sug) {
-    Array.prototype.forEach.call(sug.querySelectorAll('.sug-chip'), function(b) {
-      var usada = !!cont.querySelector('[data-tecnica="' + b.getAttribute('data-tec') + '"]');
-      b.style.display = usada ? 'none' : '';
-      if (!usada) quedan++;
-    });
-    sug.style.display = (lleno || !quedan) ? 'none' : '';
-  }
-  var lbl = document.querySelector('.tecnica-sug-label');
-  if (lbl) lbl.style.display = (lleno || !quedan) ? 'none' : '';
-}
-
-// Serializa a "quincha:hago/enseno; revoques:hago" — texto plano a
-// propósito, se lee a ojo desde la Sheet. Una técnica sin ninguna relación
-// marcada se guarda igual: decir "sé de quincha" ya es información aunque
-// no aclare en qué rol.
-function serializarTecnicas() {
-  var bloques = document.querySelectorAll('#directorio-tecnicas .tecnica-fila');
-  var partes = [];
-  Array.prototype.forEach.call(bloques, function(bloque) {
-    var nombre = bloque.getAttribute('data-tecnica');
-    if (!nombre) return;
-    var rels = Array.prototype.slice.call(bloque.querySelectorAll('.rel-chip.on'))
-      .map(function(c) { return c.getAttribute('data-cod'); });
-    partes.push(rels.length ? nombre + ':' + rels.join('/') : nombre);
-  });
-  return partes.join('; ');
-}
-
-function parsearTecnicas(valor) {
-  return (valor || '').split(';').map(function(par) {
-    var trozos = par.split(':');
-    var nombre = (trozos[0] || '').trim();
-    if (!nombre) return null;
-    var cods = (trozos[1] || '').split('/').map(function(c) { return c.trim(); }).filter(Boolean);
-    return { nombre: nombre, cods: cods };
-  }).filter(Boolean);
 }
 
 function mostrarVista(vista) {
@@ -1955,59 +1713,43 @@ function cargarDirectorio() {
 
 function renderDirectorio() {
   var g = document.getElementById('grilla-directorio');
-  var filtroProv = document.getElementById('filtro-directorio-provincia') ? document.getElementById('filtro-directorio-provincia').value : '';
-  var filtroInteres = document.getElementById('filtro-directorio-interes') ? document.getElementById('filtro-directorio-interes').value : '';
+  var val = function(id) { var e = document.getElementById(id); return e ? e.value : ''; };
+  var filtroProv = val('filtro-directorio-provincia');
+  var texto = val('filtro-directorio-texto').trim().toLowerCase();
+  var soloDisp = document.getElementById('filtro-directorio-disponible');
+  soloDisp = soloDisp && soloDisp.checked;
+
   var personas = personasDirectorio.filter(function(p) {
     if (filtroProv && p['Provincia'] !== filtroProv) return false;
-    if (filtroInteres && (p['Intereses'] || '').indexOf(filtroInteres) === -1) return false;
+    if (soloDisp && String(p['OfreceServicios'] || '').toLowerCase() !== 'true') return false;
+    // Búsqueda sobre el texto libre: con perfiles escritos a mano rinde más
+    // que cualquier filtro por categoría — alguien busca "quincha" y aparecen
+    // todos los que la mencionaron, sin que nadie la haya elegido de una lista.
+    if (texto) {
+      var donde = ((p['Nombre'] || '') + ' ' + (p['Descripcion'] || '') + ' ' + (p['Provincia'] || '')).toLowerCase();
+      if (donde.indexOf(texto) === -1) return false;
+    }
     return true;
   });
+
   var n = personas.length;
   document.getElementById('conteo-directorio').textContent = n === 0 ? 'Sin resultados' : n + ' persona' + (n !== 1 ? 's' : '');
   if (n === 0) {
     g.innerHTML = '<div class="empty"><div class="empty-icon">🌿</div><h3>Todavía no hay nadie</h3><p>Sé el primero en sumarte</p></div>';
     return;
   }
+
   var html = '';
   personas.forEach(function(p) {
-    var tecnicas = parsearTecnicas(p['Tecnicas']);
-
-    // Sin badge ofrece/en camino. Estampaba en la tarjeta la misma jerarquía
-    // que evitamos al sacar la matrícula: partía a la gente en dos clases
-    // arriba del nombre. Y era redundante — la línea de cada técnica ya dice
-    // "hace" o "estudia", contado por la persona y sin veredicto encima.
-    // Si algún día hace falta separar oferta de búsqueda, va como filtro
-    // arriba de la grilla, no como sello por persona.
-
-    var tecnicasHtml = tecnicas.map(function(t) {
-      var etiquetas = t.cods.map(function(cod) {
-        for (var i = 0; i < RELACIONES.length; i++) {
-          if (RELACIONES[i].cod === cod) return RELACIONES[i].card;
-        }
-        return cod;
-      });
-      return '<div class="persona-tecnica"><b>' + esc(t.nombre) + '</b>'
-        + (etiquetas.length ? ' <span>· ' + esc(etiquetas.join(', ')) + '</span>' : '') + '</div>';
-    }).join('');
-
-    // ";" y no ",": hay valores de interés con coma adentro ("Organizar
-    // mingas, talleres o eventos") que con coma se partían en dos chips.
-    var intereses = (p['Intereses'] || '').split(';').map(function(i) { return i.trim(); }).filter(Boolean);
-    var interesesHtml = intereses.length
-      ? '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;">' + intereses.map(function(i) {
-          return '<span class="card-tipo">' + esc(i) + '</span>';
-        }).join('') + '</div>'
-      : '';
-
-    var anio = (p['AnioDesde'] || '').trim();
-    var meta = [p['Provincia'], anio ? 'desde ' + anio : ''].filter(Boolean).join(' · ');
-
+    var disponible = String(p['OfreceServicios'] || '').toLowerCase() === 'true';
     html += '<div class="persona-card">'
       + '<div class="persona-nombre">' + esc(p['Nombre']) + '</div>'
-      + (meta ? '<div class="persona-provincia">' + esc(meta) + '</div>' : '')
-      + tecnicasHtml
-      + interesesHtml
-      + (p['Descripcion'] ? '<div class="persona-desc">' + esc(p['Descripcion']) + '</div>' : '')
+      + (p['Provincia'] ? '<div class="persona-provincia">' + esc(p['Provincia']) + '</div>' : '')
+      // Texto chico y no una pastilla de color: después de haber sacado el
+      // sello ofrece/en camino, un badge vuelve a leerse como un rango. Esto
+      // dice el mismo hecho sin jerarquizar (y además lo declaró la persona).
+      + (disponible ? '<div class="persona-disponible">Disponible para trabajos o consultas</div>' : '')
+      + (p['Descripcion'] ? '<div class="persona-desc recortada" onclick="this.classList.toggle(\'recortada\')">' + esc(p['Descripcion']) + '</div>' : '')
       + '<button class="btn-contactar" onclick="abrirSolicitarContacto(\'' + esc(p['Id']) + '\',' + JSON.stringify(p['Nombre']) + ')">Quiero contactar</button>'
       + '</div>';
   });
@@ -2029,7 +1771,6 @@ function enviarDirectorio(e) {
   e.preventDefault();
   var btn = document.getElementById('btn-publicar-directorio');
   var msg = document.getElementById('directorio-form-msg');
-  var intereses = Array.prototype.slice.call(document.querySelectorAll('.directorio-interes-check:checked')).map(function(c) { return c.value; });
   var payload = {
     accion: 'directorio_alta',
     web: document.querySelector('#form-directorio .honeypot-field').value,
@@ -2037,9 +1778,7 @@ function enviarDirectorio(e) {
     email: document.getElementById('directorio-email').value,
     whatsapp: document.getElementById('directorio-whatsapp').value,
     provincia: document.getElementById('directorio-provincia').value,
-    intereses: intereses,
-    tecnicas: serializarTecnicas(),
-    anioDesde: document.getElementById('directorio-anio').value,
+    ofreceServicios: document.getElementById('directorio-disponible').checked,
     recibeNovedades: document.getElementById('directorio-autorizo').checked,
     descripcion: document.getElementById('directorio-descripcion').value
   };
@@ -2051,11 +1790,6 @@ function enviarDirectorio(e) {
       scrollAMensaje(msg);
       if (typeof gtag === 'function') gtag('event', 'persona_publicada');
       document.getElementById('form-directorio').reset();
-      // reset() no toca los bloques de técnica (son divs creados a mano)
-      document.getElementById('directorio-tecnicas').innerHTML = '';
-      document.getElementById('tecnicas-tags').innerHTML = '';
-      document.getElementById('tecnica-input').value = '';
-      actualizarAltaTecnica();
       btn.disabled = false;
       // recarga en el momento (no solo la próxima vez que se abra la vista),
       // así se ve reflejado sin tener que ir a Eventos y volver
@@ -2071,8 +1805,6 @@ function enviarDirectorio(e) {
 }
 
 poblarProvinciasDirectorio();
-poblarInteresesDirectorio();
-poblarTecnicasSugeridas();
 
 var contactoDirectorioId = null;
 
