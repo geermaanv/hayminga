@@ -245,4 +245,20 @@ def process_queue() -> int:
 
 
 if __name__ == "__main__":
-    process_queue()
+    # La cola de Instagram se cuelga de acá y no del import diario porque
+    # este cron corre cada 3 horas: baja de 24h a 3h la demora entre que se
+    # confirma un evento y aparece su pieza para publicar. Es gratis (solo
+    # lee y escribe el Sheet) e idempotente, así que correrlo seguido no
+    # duplica nada. Comparte concurrency.group con import-eventos, así que
+    # tampoco se pisan escribiendo.
+    try:
+        process_queue()
+    finally:
+        # En finally: que un envío de mail pendiente de reintento no impida
+        # generar la cola. Y en su propio try: un fallo generando contenido
+        # no debe romper el intake de mail, que es lo importante de este job.
+        try:
+            from src.contenido_instagram import generar
+            generar()
+        except Exception as e:
+            print(f"[email_intake] error generando la cola de Instagram — {e}")

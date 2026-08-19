@@ -1196,5 +1196,72 @@ class GeocodificarTests(unittest.TestCase):
         self.assertIn("El Hoyo", variantes)
 
 
+class ContenidoInstagramTests(unittest.TestCase):
+    """La cola de Instagram cuelga de un cron que corre cada 3 horas, así que
+    lo que más importa es que sea idempotente: correrla de nuevo no puede
+    duplicar piezas."""
+
+    def _evento(self, id="ev1", nombre="Taller de quincha", username="elabrazal",
+                estado="confirmado", virtual=False):
+        from datetime import date
+        return {"id": id, "nombre": nombre, "username": username, "estado": estado,
+                "fecha": date(2026, 9, 15), "provincia": "Córdoba",
+                "es_virtual": virtual, "link": "https://instagram.com/p/AAA/",
+                "imagen": "https://drive/x", "tipo_evento": "Taller"}
+
+    def _generar(self, eventos, claves_existentes=()):
+        from datetime import date
+        from src import contenido_instagram
+        service = Mock()
+        (service.spreadsheets.return_value.values.return_value.get
+         .return_value.execute.return_value) = {"values": [[c] for c in claves_existentes]}
+        with patch.object(contenido_instagram, "proximos_eventos", return_value=eventos), \
+             patch.object(contenido_instagram, "get_or_create_sheet_with_headers"):
+            n = contenido_instagram.generar(service=service, hoy=date(2026, 8, 18))
+        append = service.spreadsheets.return_value.values.return_value.append
+        filas = append.call_args.kwargs["body"]["values"] if append.called else []
+        return n, filas
+
+    def test_genera_una_historia_por_evento_mas_el_carrusel(self):
+        n, filas = self._generar([self._evento()])
+        self.assertEqual(n, 2)
+        self.assertEqual([f[2] for f in filas], ["historia_evento", "carrusel_semanal"])
+
+    def test_no_repite_lo_que_ya_esta_en_la_cola(self):
+        n, _ = self._generar([self._evento()],
+                             claves_existentes=["historia:ev1", "carrusel:2026-W34"])
+        self.assertEqual(n, 0)
+
+    def test_saltea_la_pieza_aunque_ya_este_publicada_o_descartada(self):
+        # El generador mira solo la Clave, no el Estado: una fila publicada o
+        # descartada tiene que seguir bloqueando la regeneración. Por eso las
+        # filas se descartan y no se borran.
+        n, _ = self._generar([self._evento()], claves_existentes=["historia:ev1"])
+        self.assertEqual([f[2] for f in _], ["carrusel_semanal"])
+        self.assertEqual(n, 1)
+
+    def test_ignora_eventos_sin_confirmar(self):
+        """Mientras REVISION_MANUAL esté en true todo entra como pendiente:
+        promocionar algo sin revisar sería peor que no promocionar nada."""
+        n, _ = self._generar([self._evento(estado="pendiente_confirmacion")])
+        self.assertEqual(n, 0)
+
+    def test_la_historia_incluye_la_mencion_a_la_cuenta_de_origen(self):
+        _, filas = self._generar([self._evento()])
+        self.assertEqual(filas[0][5], "@elabrazal")
+        self.assertIn("@elabrazal", filas[0][8])
+
+    def test_evento_sin_cuenta_de_origen_no_inventa_mencion(self):
+        # Los eventos cargados por mail o formulario no tienen cuenta.
+        _, filas = self._generar([self._evento(username="")])
+        self.assertEqual(filas[0][5], "")
+        self.assertNotIn("@", filas[0][8])
+
+    def test_el_caption_del_carrusel_lleva_el_recordatorio_de_como_aportar(self):
+        _, filas = self._generar([self._evento()])
+        self.assertIn("#hayminga", filas[1][8])
+        self.assertIn("hayminga.org", filas[1][8])
+
+
 if __name__ == "__main__":
     unittest.main()

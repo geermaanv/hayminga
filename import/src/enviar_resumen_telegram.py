@@ -24,7 +24,7 @@ def proximos_eventos() -> list[dict]:
     service = get_service()
     result = (
         service.spreadsheets().values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A1:U1000")
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A1:Y1000")
         .execute()
     )
     values = result.get("values", [])
@@ -51,6 +51,13 @@ def proximos_eventos() -> list[dict]:
             "provincia": row[idx["Provincia"]],
             "es_virtual": row[idx["Es_Virtual"]] == "true",
             "link": row[idx["Link_Promocion"]],
+            # Campos que no usa el digest de Telegram pero sí el generador de
+            # contenido de Instagram (contenido_instagram.py). Se leen acá
+            # para no duplicar la lectura del Sheet ni el filtro de fechas.
+            "id": row[idx["Id"]],
+            "imagen": row[idx.get("img", 12)] if "img" in idx else "",
+            "username": (row[idx["Username"]].strip().lower() if "Username" in idx else ""),
+            "estado": row[idx["Estado"]] if "Estado" in idx else "",
         })
 
     eventos.sort(key=lambda e: e["fecha"])

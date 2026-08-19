@@ -23,7 +23,7 @@ Guidance for Claude Code when working on hayminga.org.
 | Workflow | Schedule | Does |
 |----------|----------|------|
 | `import-eventos.yml` | ~08:07 daily | `python -m src.hiker_pipeline` — discovers events from HikerAPI (hashtags + followed accounts) |
-| `email-intake.yml` | every 3h | `python -m src.email_intake` — processes mail queue (HME tag). Split out (15/08/2026) so 1x/day import didn't delay mail. Cheap: reads Sheet, exits if empty, only calls LLM on real mail. Shares concurrency group with import-eventos to queue safely. |
+| `email-intake.yml` | every 3h | `python -m src.email_intake` — processes mail queue (HME tag), then refreshes the Instagram content queue (`contenido_instagram.generar()`). Split out (15/08/2026) so 1x/day import didn't delay mail. Cheap: reads Sheet, exits if empty, only calls LLM on real mail. Shares concurrency group with import-eventos to queue safely. |
 | `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=2`) |
 | `enviar-resumen.yml` | Tue 09:00 | `src/enviar_resumen_telegram.py` — sends weekly digest to Telegram + Directorio email |
 
@@ -45,6 +45,7 @@ python -m src.candidatos_hashtags                  # free: hashtag candidates fr
 python -m src.candidatos_tecnicas                  # free: technique vocabulary from confirmed events (Directorio suggestions)
 python -m src.mensajes_organizadores               # free: DM drafts to invite event organizers to the Directorio
 python -m src.geocodificar                         # free: dry-run geocoding of rows without coordinates (--escribir to apply)
+python -m src.contenido_instagram                  # free: refill the Instagram content queue (idempotent)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
@@ -109,6 +110,15 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 - `RecibeNovedades` — `"true"`/`"false"` as text. Only an explicit `"false"` opts out, so rows predating the column keep receiving.
 - Email and Whatsapp are never shown publicly — contact goes through the double opt-in flow.
 - The card shows no computed ranking of people; see PATRONES.md.
+
+**Instagram** (sheet `Instagram`, written by `contenido_instagram.py`): a work queue, not a report — one row per ready-to-publish piece (`historia_evento`, `carrusel_semanal`), with the caption, the `@` to mention and the link already resolved.
+
+- Runs from `email-intake.yml` (every 3h) rather than the daily import, so a confirmed event turns into a piece within hours instead of a day.
+- Idempotent through a deterministic `Clave` (`historia:<Id>`, `carrusel:2026-W34`). Existing keys are skipped **in any state**, so `publicado` and `descartado` both block regeneration.
+- **Rows must be marked `descartado`, never deleted** — deleting frees the key and the next run recreates the row.
+- Only queues events that are `confirmado` and `Activo`: promoting something unreviewed is worse than not promoting.
+- Hashtags are a fixed curated constant, deliberately not derived from `Hashtags_Post` — that field carries whatever the poster wrote, and is how a bioconstruction post ends up tagged `#fungi`.
+- Nothing is published automatically: story mentions aren't supported by the Instagram API and automated DMs violate its terms. What is automated is the preparation.
 
 ## Cross-cutting rules
 
