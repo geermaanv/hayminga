@@ -111,10 +111,10 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 - Email and Whatsapp are never shown publicly — contact goes through the double opt-in flow.
 - The card shows no computed ranking of people; see PATRONES.md.
 
-**Instagram** (sheet `Instagram`, written by `contenido_instagram.py`): a work queue, not a report — one row per ready-to-publish piece (`historia_evento`, `carrusel_semanal`), with the caption, the `@` to mention and the link already resolved.
+**Instagram** (sheet `Instagram`, written by `contenido_instagram.py`): a work queue, not a report — one row per unit of Instagram work (`historia_evento`, `carrusel_semanal`, `dm_organizador`), with the text, the `@` to mention and the link already resolved.
 
 - Runs from `email-intake.yml` (every 3h) rather than the daily import, so a confirmed event turns into a piece within hours instead of a day.
-- Idempotent through a deterministic `Clave` (`historia:<Id>`, `carrusel:2026-W34`). Existing keys are skipped **in any state**, so `publicado` and `descartado` both block regeneration.
+- Idempotent through a deterministic `Clave` (`historia:<Id>`, `carrusel:2026-W34`, `dm:<username>` — one invite per account ever, not one per event they post). Existing keys are skipped **in any state**, so `publicado` and `descartado` both block regeneration.
 - **Rows must be marked `descartado`, never deleted** — deleting frees the key and the next run recreates the row.
 - Only queues events that are `confirmado` and `Activo`: promoting something unreviewed is worse than not promoting.
 - Hashtags are a fixed curated constant, deliberately not derived from `Hashtags_Post` — that field carries whatever the poster wrote, and is how a bioconstruction post ends up tagged `#fungi`.

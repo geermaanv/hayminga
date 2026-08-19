@@ -22,6 +22,7 @@ vuelve a crear. Mismo criterio que `Estado=descartado` en Eventos.
 from datetime import date
 
 from src.enviar_resumen_telegram import proximos_eventos
+from src.mensajes_organizadores import analizar as organizadores_a_invitar
 from src.sheets import (SPREADSHEET_ID, get_or_create_sheet_with_headers,
                         get_service)
 
@@ -94,6 +95,24 @@ def _pieza_historia(ev: dict) -> list:
     )
 
 
+def _pieza_dm(org: dict) -> list:
+    """Invitación al Directorio para una cuenta que organizó algo que ya
+    publicamos. Una sola por cuenta, para siempre — la clave no lleva el
+    evento: no se le escribe de nuevo cada vez que sube un taller."""
+    usuario = org["usuario"]
+    return _fila(
+        clave=f"dm:{usuario}", tipo="dm_organizador",
+        # Se ordena por cuánto aportó sin saberlo: la cuenta con más eventos
+        # publicados es por la que conviene empezar. Va en Fecha_Evento para
+        # que la hoja quede ordenable por una sola columna.
+        fecha_evento=f"{999 - min(org['eventos'], 999):03d}",
+        titulo=f"Invitar al Directorio ({org['eventos']} evento/s publicados)",
+        mencionar=f"@{usuario}",
+        link=f"https://www.instagram.com/{usuario}/",
+        imagen="", texto=org["mensaje"],
+    )
+
+
 def _pieza_carrusel(eventos: list[dict], hoy: date) -> list:
     """Un carrusel semanal con los próximos eventos. El texto de cada placa
     va numerado en el mismo campo: las imágenes se arman a mano (Canva), lo
@@ -142,6 +161,13 @@ def generar(service=None, hoy: date | None = None) -> int:
     anio, semana, _ = hoy.isocalendar()
     if eventos and f"carrusel:{anio}-W{semana:02d}" not in existentes:
         filas.append(_pieza_carrusel(eventos[:8], hoy))
+
+    # DMs de invitación al Directorio. Van en la misma hoja y no en un
+    # reporte aparte porque son el mismo trabajo: texto ya escrito, cuenta
+    # destino, y hace falta saber a quién ya se le escribió.
+    for org in organizadores_a_invitar(service=service):
+        if f"dm:{org['usuario']}" not in existentes:
+            filas.append(_pieza_dm(org))
 
     if not filas:
         print("[contenido_instagram] Sin piezas nuevas")

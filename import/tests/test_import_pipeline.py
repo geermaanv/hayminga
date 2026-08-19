@@ -1209,13 +1209,15 @@ class ContenidoInstagramTests(unittest.TestCase):
                 "es_virtual": virtual, "link": "https://instagram.com/p/AAA/",
                 "imagen": "https://drive/x", "tipo_evento": "Taller"}
 
-    def _generar(self, eventos, claves_existentes=()):
+    def _generar(self, eventos, claves_existentes=(), organizadores=()):
         from datetime import date
         from src import contenido_instagram
         service = Mock()
         (service.spreadsheets.return_value.values.return_value.get
          .return_value.execute.return_value) = {"values": [[c] for c in claves_existentes]}
         with patch.object(contenido_instagram, "proximos_eventos", return_value=eventos), \
+             patch.object(contenido_instagram, "organizadores_a_invitar",
+                          return_value=list(organizadores)), \
              patch.object(contenido_instagram, "get_or_create_sheet_with_headers"):
             n = contenido_instagram.generar(service=service, hoy=date(2026, 8, 18))
         append = service.spreadsheets.return_value.values.return_value.append
@@ -1256,6 +1258,32 @@ class ContenidoInstagramTests(unittest.TestCase):
         _, filas = self._generar([self._evento(username="")])
         self.assertEqual(filas[0][5], "")
         self.assertNotIn("@", filas[0][8])
+
+    def test_encola_un_dm_por_cuenta_organizadora(self):
+        _, filas = self._generar(
+            [], organizadores=[{"usuario": "elabrazal", "eventos": 3, "mensaje": "Hola!"}])
+        self.assertEqual([f[2] for f in filas], ["dm_organizador"])
+        self.assertEqual(filas[0][5], "@elabrazal")
+        self.assertEqual(filas[0][0], "dm:elabrazal")
+
+    def test_no_le_escribe_dos_veces_a_la_misma_cuenta(self):
+        # La clave del DM no lleva el evento: es una invitación por cuenta,
+        # no una por cada taller que suban.
+        n, _ = self._generar(
+            [], claves_existentes=["dm:elabrazal"],
+            organizadores=[{"usuario": "elabrazal", "eventos": 3, "mensaje": "Hola!"}])
+        self.assertEqual(n, 0)
+
+    def test_los_dm_se_ordenan_por_cuanto_aporto_cada_cuenta(self):
+        _, filas = self._generar([], organizadores=[
+            {"usuario": "poco", "eventos": 1, "mensaje": "x"},
+            {"usuario": "mucho", "eventos": 7, "mensaje": "x"},
+        ])
+        # Fecha_Evento se usa como orden: la cuenta con más eventos va antes.
+        self.assertLess(
+            [f for f in filas if f[5] == "@mucho"][0][3],
+            [f for f in filas if f[5] == "@poco"][0][3],
+        )
 
     def test_el_caption_del_carrusel_lleva_el_recordatorio_de_como_aportar(self):
         _, filas = self._generar([self._evento()])
