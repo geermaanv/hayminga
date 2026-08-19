@@ -357,7 +357,7 @@ def load_processed_events(service) -> list[dict]:
     try:
         result = (
             service.spreadsheets().values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A2:U")
+            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A2:Y")
             .execute()
         )
         values = result.get("values", [])
@@ -373,6 +373,7 @@ def load_processed_events(service) -> list[dict]:
                 "nombre": row[1],
                 "provincia": row[7],
                 "fecha_inicio_iso": row[4],
+                "username": (row[24] or "").strip().lower(),
             })
         return out
     except Exception:
@@ -396,6 +397,27 @@ _STOPWORDS_NOMBRE = {
 _VENTANA_DIAS_REPOST = 10  # ± días para considerar "misma fecha" entre dos posteos
 _MIN_TOKENS_COMPARTIDOS = 2
 _RATIO_MINIMO_NOMBRE = 0.6
+
+# Para la señal por cuenta de origen se exige un parecido de nombre MÁS alto
+# que para la señal por provincia+fecha, porque se sueltan dos restricciones
+# a la vez. Con el umbral flojo, una cuenta que dicta "Taller de
+# Bioconstrucción" todos los meses se marcaría a sí misma en cada corrida.
+_RATIO_MINIMO_NOMBRE_MISMA_CUENTA = 0.99
+
+# Palabras que marcan que dos nombres parecidos son ediciones/partes
+# distintas y no el mismo evento: "Taller de Wood Frame" y "Taller de Wood
+# Frame Módulo II" comparten todos los tokens del más corto (ratio 1.0) y
+# sin embargo son dos cosas. Caso real detectado corriendo la detección en
+# seco sobre los eventos ya cargados.
+_MARCAS_DE_EDICION = {
+    "modulo", "modulos", "parte", "etapa", "edicion", "nivel", "avanzado",
+    "inicial", "segunda", "tercera", "cuarta", "primera", "continuacion",
+}
+
+
+def _son_ediciones_distintas(tokens_a: set[str], tokens_b: set[str]) -> bool:
+    """True si lo que distingue a un nombre del otro es una marca de edición."""
+    return bool((tokens_a ^ tokens_b) & _MARCAS_DE_EDICION)
 
 
 def _tokens_nombre(value: str | None) -> set[str]:
@@ -423,29 +445,48 @@ def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
     coincidencia exacta de nombre normalizado y no lo agarra si el texto
     varía.
 
-    Señal barata sin depender del username de origen (no se persiste hoy —
-    ver ROADMAP.md): nombre parecido (tokens compartidos sin contar
-    palabras genéricas del rubro) + misma provincia + fecha cercana.
-    Deliberadamente conservador y NO destructivo — igual que el match
-    exacto ambiguo, solo sirve para decidir si mandar a revisión manual,
-    nunca para descartar un evento."""
+    Dos señales, las dos conservadoras y NO destructivas — igual que el
+    match exacto ambiguo, solo sirven para mandar a revisión manual, nunca
+    para descartar:
+
+    1. Nombre parecido + misma provincia + fecha cercana. No depende del
+       username, así que sigue cubriendo los eventos que entran por mail o
+       formulario (ahí no hay cuenta de origen).
+    2. Misma cuenta de Instagram + nombre prácticamente idéntico, sin
+       importar fecha ni provincia. Es el caso que la señal 1 no ve: el
+       mismo organizador promocionando lo mismo con la fecha extraída
+       distinta. Acá el umbral de nombre es más exigente a propósito (ver
+       _RATIO_MINIMO_NOMBRE_MISMA_CUENTA): al soltar fecha y provincia, un
+       criterio flojo marcaría como duplicado cada edición de un curso que
+       se dicta varias veces al año, que en este rubro es lo habitual."""
+    tokens_evento = _tokens_nombre(event.get("nombre"))
+    if not tokens_evento:
+        return None
     provincia_evento = _normalize_key_part(event.get("provincia"))
     fecha_evento = event.get("fecha_inicio_iso") or event.get("fecha_inicio")
-    tokens_evento = _tokens_nombre(event.get("nombre"))
-    if not tokens_evento or not provincia_evento or not fecha_evento:
-        return None
+    usuario_evento = (event.get("username") or "").strip().lower()
 
     for existente in existentes:
-        if _normalize_key_part(existente.get("provincia")) != provincia_evento:
-            continue
-        if not _fechas_cercanas(fecha_evento, existente.get("fecha_inicio_iso")):
-            continue
         tokens_existente = _tokens_nombre(existente.get("nombre"))
         if not tokens_existente:
             continue
         compartidos = tokens_evento & tokens_existente
         ratio = len(compartidos) / min(len(tokens_evento), len(tokens_existente))
-        if len(compartidos) >= _MIN_TOKENS_COMPARTIDOS and ratio >= _RATIO_MINIMO_NOMBRE:
+        if len(compartidos) < _MIN_TOKENS_COMPARTIDOS:
+            continue
+
+        misma_cuenta = (
+            usuario_evento
+            and usuario_evento == (existente.get("username") or "").strip().lower()
+        )
+        if (misma_cuenta and ratio >= _RATIO_MINIMO_NOMBRE_MISMA_CUENTA
+                and not _son_ediciones_distintas(tokens_evento, tokens_existente)):
+            return existente
+
+        if (provincia_evento and fecha_evento
+                and _normalize_key_part(existente.get("provincia")) == provincia_evento
+                and _fechas_cercanas(fecha_evento, existente.get("fecha_inicio_iso"))
+                and ratio >= _RATIO_MINIMO_NOMBRE):
             return existente
     return None
 
@@ -549,6 +590,7 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
             "key": key, "shortcode": shortcode, "id": event["id"], "nombre": nombre,
             "provincia": event.get("provincia") or "",
             "fecha_inicio_iso": event.get("fecha_inicio_iso") or event.get("fecha_inicio") or "",
+            "username": (event.get("username") or "").strip().lower(),
         })
 
     if not rows:

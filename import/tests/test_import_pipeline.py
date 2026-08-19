@@ -1079,5 +1079,57 @@ class UsernameColumnTests(unittest.TestCase):
         self.assertEqual(evento["username"], "elabrazal")
 
 
+class DuplicadoPorCuentaTests(unittest.TestCase):
+    """Cuarta señal de find_probable_duplicate: misma cuenta de Instagram +
+    nombre prácticamente idéntico, sin importar fecha ni provincia. Cubre el
+    caso que las otras no ven — el mismo organizador promocionando lo mismo
+    con la fecha extraída distinta."""
+
+    def _existente(self, nombre, username="", provincia="", fecha=""):
+        return {"id": "abc123", "nombre": nombre, "username": username,
+                "provincia": provincia, "fecha_inicio_iso": fecha}
+
+    def test_misma_cuenta_y_mismo_nombre_con_fechas_lejanas(self):
+        # Caso real: @aulaabierta.ambiente con el mismo curso cargado dos
+        # veces, fechas separadas por meses y una fila sin provincia. Las
+        # tres señales anteriores lo dejaban pasar.
+        existentes = [self._existente(
+            "Curso Universitario: Diseño y Construcción de Techos y Cubiertas Vivas",
+            username="aulaabierta.ambiente", provincia="Córdoba", fecha="2026-08-05")]
+        evento = {
+            "nombre": "Curso Universitario: Diseño y Construcción de Techos y Cubiertas Vivas",
+            "username": "aulaabierta.ambiente", "provincia": "", "fecha_inicio_iso": "2026-10-26",
+        }
+        self.assertIsNotNone(sheets.find_probable_duplicate(evento, existentes))
+
+    def test_no_marca_ediciones_distintas_del_mismo_taller(self):
+        """El riesgo de esta señal: en este rubro es habitual dictar el mismo
+        curso por módulos o varias veces al año. Matarlos sería peor que el
+        duplicado que se quiere evitar."""
+        existentes = [self._existente("Taller de Wood Frame", username="latinyscom")]
+        evento = {"nombre": "Taller Construir en Madera y Wood Frame Módulo II",
+                  "username": "latinyscom", "provincia": "", "fecha_inicio_iso": "2026-09-01"}
+        self.assertIsNone(sheets.find_probable_duplicate(evento, existentes))
+
+    def test_distinta_cuenta_con_mismo_nombre_no_alcanza(self):
+        # Sin la cuenta en común vuelve a hacer falta provincia + fecha
+        # cercana, que es la señal vieja.
+        existentes = [self._existente("Taller de quincha liviana",
+                                      username="cuenta_a", provincia="Córdoba",
+                                      fecha="2026-08-05")]
+        evento = {"nombre": "Taller de quincha liviana", "username": "cuenta_b",
+                  "provincia": "", "fecha_inicio_iso": "2026-12-20"}
+        self.assertIsNone(sheets.find_probable_duplicate(evento, existentes))
+
+    def test_sin_username_sigue_valiendo_la_senal_vieja(self):
+        # Los eventos que entran por mail o formulario no tienen cuenta de
+        # origen: la señal de provincia + fecha cercana tiene que seguir viva.
+        existentes = [self._existente("Taller de quincha liviana", username="",
+                                      provincia="Córdoba", fecha="2026-08-05")]
+        evento = {"nombre": "Jornada de quincha liviana", "username": "",
+                  "provincia": "Córdoba", "fecha_inicio_iso": "2026-08-08"}
+        self.assertIsNotNone(sheets.find_probable_duplicate(evento, existentes))
+
+
 if __name__ == "__main__":
     unittest.main()

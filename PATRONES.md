@@ -93,6 +93,11 @@ Never let account profile override explicit country signals in caption or flyer.
 - When true: everything lands as `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`.
 - When false: `confianza=alta` publishes directly, `media`/`baja` still goes to review.
 
+**Dedup signals must widen the review net, never the discard net.** Three layers now (shortcode, exact key, fuzzy) and none of them ever deletes: an ambiguous match is inserted anyway as `pendiente_confirmacion` with a note pointing at the other Id.
+- The fourth signal (same Instagram account + near-identical name, ignoring date and province) closes the gap left open in Etapa 9.8 — the account was the missing evidence and simply wasn't persisted.
+- The danger it introduces is specific to this market: courses are routinely taught in modules or repeated several times a year. "Taller de Wood Frame" and "Taller de Wood Frame Módulo II" share every meaningful token of the shorter name, so the similarity ratio is 1.0 and they look identical. Hence `_MARCAS_DE_EDICION`: if what distinguishes the two names is an edition marker, it is not a duplicate.
+- Tune this kind of rule with a **dry run against real rows** before turning it on. The threshold turned out to be almost irrelevant (9 pairs at 0.99, 10 at 0.6) — the false positive worth fixing only showed up by reading the actual pairs.
+
 **The site does not rank people.** It shows what each person says about themselves and lets the searcher filter.
 - This came up three times in one session, disguised each time: a `matrícula` field, a per-technique "nivel de experiencia", and an `ofrece`/`en camino` badge computed on the card. All three felt reasonable when proposed; all three sorted people into classes.
 - Self-declared levels also mis-calibrate here: in a minga culture, declaring yourself "avanzado" is socially awkward, so the people who know most under-report.
