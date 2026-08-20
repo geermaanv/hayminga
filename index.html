@@ -193,9 +193,15 @@ select:focus{border-color:var(--tierra);}
 .vision-titulo{font-family:'Fraunces',serif;font-size:clamp(1.5rem,4vw,2.2rem);font-weight:300;color:var(--tierra-oscuro);margin-bottom:1.5rem;line-height:1.2;}
 .vision-titulo em{font-style:italic;color:var(--tierra-claro);}
 .vision-texto{font-size:0.95rem;line-height:1.8;color:var(--texto);margin-bottom:1rem;}
-.vision-lista{list-style:none;margin:0.5rem 0 1.25rem 0;display:flex;flex-direction:column;gap:0.5rem;}
-.vision-lista li{display:flex;gap:0.75rem;align-items:flex-start;font-size:0.95rem;color:var(--texto);line-height:1.6;}
-.vision-lista li::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--tierra-claro);flex-shrink:0;margin-top:0.45rem;}
+/* Bullets con ::before posicionado absoluto, no flex en el <li>:
+   con display:flex, un <li><strong>Etiqueta:</strong> texto...</li>
+   se partía en dos columnas (strong y el texto quedaban como flex
+   items separados en vez de fluir como un párrafo — el bug real que
+   se veía en los bullets de 'Nuestra misión'). Así el <li> vuelve a
+   ser flujo de texto normal sin importar qué elementos tenga adentro. */
+.vision-lista{list-style:none;margin:0.5rem 0 1.25rem 0;display:flex;flex-direction:column;gap:0.6rem;}
+.vision-lista li{position:relative;padding-left:1.4rem;font-size:0.95rem;color:var(--texto);line-height:1.6;}
+.vision-lista li::before{content:'';position:absolute;left:0;top:0.5em;width:8px;height:8px;border-radius:50%;background:var(--tierra-claro);}
 .vision-destacado{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:300;font-style:italic;color:var(--tierra);border-left:3px solid var(--tierra-claro);padding-left:1rem;margin:1.5rem 0;line-height:1.6;}
 .vision-beta{background:var(--paja);border-radius:var(--radio);padding:1rem 1.25rem;margin-top:2rem;font-size:0.88rem;color:var(--texto-suave);line-height:1.6;}
 .vision-beta strong{color:var(--tierra-oscuro);}
@@ -631,25 +637,25 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 <section class="vision" id="vision">
   <div class="vision-inner">
     <h2 class="vision-titulo">¿Qué es <em>hayminga</em>?</h2>
-    <p class="vision-texto">hayminga busca ser el nexo entre las personas, los saberes y las oportunidades de la bioconstrucción.</p>
-    <p class="vision-texto">Somos Maxi y Germán, venimos de la Tecnología y las Ciencias Sociales. Nos unimos al darnos cuenta de que, tras cada taller o minga, la gente siempre se hacía las mismas preguntas:</p>
+    <p class="vision-texto">hayminga es el nexo entre las personas, los saberes y las oportunidades de la bioconstrucción — todos los eventos de Argentina, en un solo lugar.</p>
+    <p class="vision-texto">Somos Maxi y Germán. Nos conocimos participando de talleres y mingas aunque venimos de universos tan distintos como la Tecnología y las Ciencias Sociales. Al final de cada encuentro, siempre quedaban las mismas preguntas flotando en el aire:</p>
     <ul class="vision-lista">
       <li>¿Dónde puedo seguir aprendiendo?</li>
       <li>¿Cómo me conecto con otros constructores?</li>
       <li>¿Cómo se organiza una minga de verdad?</li>
       <li>Quiero colaborar, ¿cómo sigo el camino?</li>
     </ul>
-    <p class="vision-texto">hayminga es una herramienta viva, diseñada para que el conocimiento de la bioconstrucción fluya libremente por toda Latinoamérica. <strong>No vendemos nada, solo conectamos.</strong></p>
+    <p class="vision-texto">hayminga es un canal vivo, diseñado para que el conocimiento de la bioconstrucción fluya libremente por toda Argentina. <strong>No vendemos nada, solo conectamos.</strong></p>
     <p class="vision-texto">Nuestra misión:</p>
     <ul class="vision-lista">
-      <li><strong>Mapear saberes:</strong> El lugar donde encontrás talleres, cursos, comunidades y profesionales de la bioconstrucción, desde el sur hasta el norte.</li>
-      <li><strong>Tejer la red:</strong> Crear una red densa y accesible para que, estés donde estés, siempre encuentres una comunidad que te apoye.</li>
+      <li><strong>Mapear saberes:</strong> el lugar donde encontrás talleres, cursos, comunidades y profesionales de la bioconstrucción.</li>
+      <li><strong>Tejer red:</strong> una red amplia y accesible, para que siempre encuentres a alguien dispuesto a ayudarte.</li>
     </ul>
-    <p class="vision-destacado">Creemos que la bioconstrucción no se aprende leyendo, sino ensuciándose las manos. hayminga es solo el mapa. Lo realmente importante sucede fuera de la pantalla, cuando pisás el barro por primera vez.</p>
-    <p class="vision-texto">Si estás empezando, aquí tenés un punto de partida para tu primer taller o tu comunidad más cercana. Si ya sos constructor/a, este es un espacio para compartir experiencia y encontrar los colaboradores que necesitás.</p>
-    <p class="vision-texto" style="font-family:'Fraunces',serif;font-size:1rem;color:var(--tierra-oscuro);">Construyamos de otra manera. Construyamos juntos. Construyamos desde la tierra.</p>
+    <p class="vision-destacado">Creemos que la bioconstrucción se aprende ensuciándose las manos. hayminga es solo el mapa. Lo realmente importante sucede fuera de la pantalla, cuando pisás el barro por primera vez.</p>
+    <p class="vision-texto">Si estás empezando, aquí tenés un punto de partida para llegar a tu primer taller o conectarte con tu comunidad más cercana. Si ya tenés experiencia construyendo, este es un espacio para compartir saberes y encontrar a los colaboradores que te hacen falta.</p>
+    <p class="vision-texto">Construyamos de otra manera. Construyamos juntos. Construyamos desde la tierra.</p>
     <div class="vision-beta">
-      <strong>Esta es la primera versión de hayminga.</strong> Estamos construyendo esto juntos — si tenés sugerencias o querés colaborar, escribinos por <a href="https://wa.me/5491126728949?text=%C2%A1Hola%20hayminga!%20Quiero%20sugerir%20algo%20%2F%20colaborar." target="_blank" rel="noopener" style="color:var(--tierra);">WhatsApp</a>.
+      <strong>Esta es la primera versión de hayminga</strong>, y va a ir cambiando con lo que nos cuenten. Si tenés una idea, una sugerencia, o encontraste algo que no funciona, escribinos por <a href="https://wa.me/5491126728949?text=%C2%A1Hola%20hayminga!%20Quiero%20sugerir%20algo%20%2F%20colaborar." target="_blank" rel="noopener" style="color:var(--tierra);">WhatsApp</a> o mandanos un <a href="mailto:germanv@gmail.com?subject=Sugerencia%20para%20hayminga" style="color:var(--tierra);">mail</a>.
     </div>
     <div class="vision-firmas">
       <span class="vision-firma">🌿 Maxi</span>
