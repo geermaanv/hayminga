@@ -7,6 +7,8 @@ Guidance for Claude Code when working on hayminga.org.
 2. `PATRONES.md` — critical patterns & constraints that affect code
 3. `ROADMAP.md` — narrative history: what's been tried & learned
 
+**Keep the docs current, not per-commit.** A `pre-commit` hook (`.githooks/pre-commit`, enabled via `git config core.hooksPath .githooks`) blocks commits that touch `import/src/*.py`, `index.html`, `Code.gs`, or workflow files once 4+ commits have passed since `ROADMAP.md` was last touched. This isn't "one entry per commit" — that would turn ROADMAP into a git-log mirror, which defeats its purpose as a narrative. It's a forced checkpoint: before the 5th commit in a row without touching it, stop and ask "does anything here deserve a paragraph?" Real failure this caught: 17 commits (favicon, WhatsApp community migration, geocoding, dedup by account, the whole Instagram content queue) landed before anyone went back to ROADMAP. Bypass with `git commit --no-verify` only when the user explicitly says the change is minor — don't reach for it by reflex.
+
 ## Architecture
 
 **Repo shape:**

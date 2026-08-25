@@ -221,6 +221,152 @@ Segunda salida del script, tan útil como la primera: los eventos donde no detec
 
 ---
 
+## Calidad de datos: username, dedup por cuenta, geocoding (21 ago)
+
+Tres cambios encadenados, todos habilitados por lo mismo: persistir el
+`username` de Instagram que origina cada evento — dato que HikerAPI ya
+traía pero que antes solo vivía en memoria (usado únicamente para el
+filtro de `cuentas_excluidas`).
+
+**Username persistido** (`5d0a08f`): columna nueva al final de `Eventos`.
+No cuesta ninguna llamada extra. Habilitó los otros dos cambios.
+
+**Cuarta señal de dedup, por cuenta de origen** (`2beeb16`): las tres
+señales existentes (shortcode, clave exacta, nombre+provincia+fecha) no
+agarraban el caso de la misma cuenta repromocionando el mismo evento con
+la fecha extraída distinta — el gap que había quedado abierto desde la
+Etapa 9.8 por no tener el username. Verificado en seco contra los 132
+eventos ya cargados antes de activarlo: 8 pares candidatos (~6%), la
+mayoría duplicados reales. Encontró de paso un caso real
+(`@aulaabierta.ambiente` con "Techos y Cubiertas Vivas" cargado dos veces
+con fechas separadas por dos meses) y un falso positivo que hubo que
+blindar explícitamente (ediciones distintas del mismo taller, tipo
+"Módulo II", no son duplicados — `_MARCAS_DE_EDICION`).
+
+**Geocodificación de la dirección extraída** (`f44cff6`): la única fuente
+de coordenadas era la ubicación etiquetada en el post, y la mayoría de
+los posts no etiqueta nada — 87 de 126 eventos importados quedaban sin
+coordenadas, cayendo al centroide de la provincia. Ahora, si no hay
+etiqueta pero sí `direccion`, se resuelve con Nominatim (gratis).
+Backfill de lo ya cargado: 25 filas completadas, eventos activos
+ubicados en el mapa pasaron de 23 a 35. Regla de diseño: ante la duda,
+no devolver nada — un pin en el lugar equivocado es peor que ninguno.
+
+## De importación a contacto: la cola de Instagram (21-22 ago)
+
+Con `@hayminga` recién creada, se armó el mecanismo para convertir la
+importación en contacto real con organizadores — el puente hacia F3.
+
+**`mensajes_organizadores.py`** (`5d0a08f`): genera el mensaje de
+invitación al Directorio para cada cuenta que organizó un evento ya
+publicado, citando su propio evento. Deliberadamente no manda nada —
+automatizar DMs viola los términos de Instagram, y el valor del mensaje
+está en que es personal, no en que sea rápido. 35 cuentas distintas
+identificadas (deduplicando por username: el mismo "Aula Abierta"
+aparecía escrito de tres formas distintas en el campo `Organizador` de
+texto libre).
+
+**Cola de contenido en una hoja nueva** (`5eaff85`, `7090881`): los DMs
+más historias por evento y el carrusel semanal, todo en una sola hoja
+`Instagram` idempotente por `Clave` (`dm:<username>`,
+`historia:<Id>`, `carrusel:2026-W34`). Corre colgada de
+`email-intake.yml` (cada 3h) y no del import diario, para que un evento
+confirmado tenga su pieza en horas, no en 24h. Regla operativa: las
+filas se marcan `descartado`, nunca se borran — borrar libera la clave y
+la próxima corrida la recrea.
+
+**`INSTAGRAM.md`** (`11d5c50`): guía paso a paso para alguien sin
+experiencia previa en la plataforma. La advertencia que más importa:
+con una cuenta nueva, mandar los 35 DM el mismo día se parece a un bot
+y puede terminar con la cuenta limitada — ritmo sugerido de 5 a 8 por
+día.
+
+**Estado al 25/8: la cola tiene 80 piezas, todas sin tocar.** El código
+está listo hace días; lo que falta es la acción humana de sentarse a
+mandar los primeros mensajes. Es el pendiente más importante del
+proyecto hoy, no uno más de la lista.
+
+## Directorio: de campos estructurados a texto libre (22 ago)
+
+Después de armar el modelo de técnicas con relación (`hago`/`enseño`/
+`estudio`/`obra propia`) e intereses por actividad, se lo simplificó
+del todo (`ab79500`): un solo campo de texto obligatorio ("Contanos de
+vos") más un checkbox de disponibilidad para trabajos.
+
+El argumento no fue solo bajar la fricción del formulario — fue que el
+texto libre **descubre vocabulario que los campos estructurados no**:
+en Fase 1, con el Directorio vacío, el formulario funciona como
+instrumento de investigación, igual que ya se decidió con el campo de
+técnica del modelo anterior. Lo que se escriba se puede minar después,
+como ya hace `candidatos_tecnicas.py` con los eventos.
+
+Sobrevive un solo dato estructurado, `OfreceServicios`: es el único que
+el que busca necesita y el único que no se puede inferir del texto sin
+que el sitio termine clasificando personas — la misma regla que ya
+había cerrado la discusión del badge ofrece/en camino en PATRONES.md.
+
+**Estado al 25/8: 1 sola fila (la de prueba de Germán).** El modelo ya
+no es el problema; el problema es el mismo de siempre — falta gente, y
+la vía de entrada son los 35 DM de la cola de Instagram.
+
+## Identidad visual: favicon, comunidad de WhatsApp, "¿Qué es hayminga?" (21-24 ago)
+
+**Reescritura completa de la sección "¿Qué es hayminga?"** (`35410b0`):
+revisión párrafo por párrafo con el usuario, resuelta con un prototipo
+publicado como Artifact (fuentes y colores reales del sitio embebidos)
+antes de tocar `index.html` — nunca se cambió el archivo real en frío.
+Cambios de fondo, no solo de redacción: afirmar en vez de aspirar
+("es el nexo" en vez de "busca ser"), "saberes" consistente en todo el
+texto, comportamiento en vez de identidad ("tenés experiencia
+construyendo" en vez de "sos constructor/a"), cierre iterativo con
+WhatsApp + mail en vez de un cartel estático de "primera versión". De
+rebote, un bug real de producción: los bullets de "Nuestra misión" se
+partían en columnas por un `display:flex` mal puesto en el `<li>` —
+estaba en el sitio desde antes de esta ronda, no era solo del prototipo.
+
+**Favicon** (`4641566`, `004613e`): del concepto elegido en una ronda de
+tres alternativas de marca (todas partiendo del propio vocabulario del
+proyecto, no de un ícono de "eco" genérico) — las iniciales de "hay" +
+"minga" unidas por una barra que hace de junta de mortero. La
+rasterización con la tipografía real (Syne) resultó más difícil de lo
+esperado: ni QuickLook ni el navegador sandboxeado esperaban a que
+cargara la fuente embebida: la versión final se generó con Chrome
+headless real. La primera versión (fondo claro) se perdía en una barra
+de pestañas junto a otros favicons — se reemplazó por una de fondo
+oscuro, mucho más contraste.
+
+**WhatsApp: de lista de difusión a Comunidad** (`536d86d`, más
+`aaa245c`/`b39f282`): la línea de "recibí novedades" quedó marcada por
+WhatsApp — el patrón de mandar el mismo mensaje uno por uno a cada
+contacto es exactamente lo que el algoritmo antispam detecta. Solución
+de raíz, no un parche: una Comunidad de WhatsApp, donde se publica una
+vez y llega a todos sin reenvío. Se migraron los dos links de
+"novedades" (header y footer); los otros tres links de WhatsApp del
+sitio (compartir evento, sugerir/colaborar, botón de compartir) quedan
+como línea directa a propósito — son mensajes puntuales a hayminga, no
+un canal de difusión.
+
+## Cierre de una pregunta abierta: ¿hace falta la imagen? (25 ago)
+
+Se había instrumentado el pipeline (`[METRICA]` en `extraer_evento()`)
+para medir cuántos eventos se resuelven solo con el caption del post
+contra cuántos necesitan la imagen — la sospecha era que tal vez se
+podía ahorrar la descarga en más casos de los que se hacía. La
+instrumentación estuvo puesta 5 días sin que nadie corriera el
+análisis. Corrida sobre la semana completa (5 corridas, ~2500
+intentos):
+
+- 9.4% se resuelve solo con el caption
+- 90.6% necesita la imagen
+- de los que necesitaron imagen, en el 48.3% de los casos la imagen
+  cambió el resultado respecto del intento solo-texto
+
+**Conclusión: la imagen es crítica, no un desperdicio.** Cierra la
+pregunta con datos en vez de dejarla abierta indefinidamente — y
+también deja una lección de proceso: instrumentar sin agendar cuándo se
+revisa es solo la mitad del trabajo (ver CLAUDE.md, regla de
+actualizar ROADMAP).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

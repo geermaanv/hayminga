@@ -166,37 +166,33 @@ La bioconstrucción es dispersa (eventos anunciados en Instagram, profesionales 
 
 ### Fase 1 (HOY): Importación automática
 
-| KPI | Actual | Meta | Cómo medir |
-|-----|--------|------|-----------|
-| **% eventos a pendientes** | ~15% | <12% | pendientes / eventos_importados |
-| **Tasa de publicación** | ~85% | >80% | confirmados / (confirmados + descartados) |
-| **Antigüedad pendientes** | ~1.5d | <2d | promedio días en estado pending |
-| **Eventos activos** | 30-40 | 50+ | count(Activo=true, Estado=confirmado) |
-| **% sin imagen necesaria** | TBD | >40% | eventos_resueltos_solo_caption / total_procesados |
+| KPI | Actual (25/8, ventana 7 días) | Meta | Cómo medir |
+|-----|------|------|-----------|
+| **Tasa de publicación** | **44%** | >80% | confirmados / (confirmados + descartados) |
+| **% a pendientes (backlog actual)** | 0% | — | ver nota: métrica a redefinir |
+| **Eventos activos** | **66** ✅ | 50+ | count(Activo=true) |
+| **% sin imagen necesaria** | 9.4% (resuelto) | — | la imagen es crítica, no tocar esa parte del pipeline |
+
+**La tasa de publicación bajó, no subió — y no está claro por qué todavía.** El número viejo (~85%) nunca se recalculó con datos reales; el 44% de esta semana es la primera medición real de este KPI. Antes de asumir que el pipeline empeoró: puede ser que haya crecido el volumen de fuentes (más hashtags/cuentas = más ruido de otros temas), o que el criterio de descarte se haya vuelto más estricto sin querer. **Pendiente: mirar qué se está descartando esta semana y por qué**, con el mismo criterio con que se midió caption-vs-imagen (leer los casos reales, no solo el número).
+
+**"% a pendientes" tal como estaba definido ya no mide lo que se quería medir.** Da 0% ahora mismo, pero es porque se revisa `?pendientes` el mismo día, no porque haya menos ambigüedad en la importación — un snapshot de backlog en un momento dado no es lo mismo que una tasa de ruido. Repensar esta métrica antes de seguir reportándola.
 
 ---
 
-## Estado actual (agosto 2026)
+## Estado actual (25 de agosto, 2026)
 
 **Fase:** 1 (Importación automática)
 
-**KPIs:**
-- ✅ % a pendientes: ~15% (meta: <12%)
-- ✅ Tasa de publicación: ~85% (meta: >80%)
-- ✅ Antigüedad promedio: ~1.5 días (meta: <2d)
-- ⏳ Eventos activos: 30-40 (meta: 50+)
-- ❌ Sin imagen necesaria: TBD (medir próxima corrida)
+**Eventos activos: 66 — superó la meta de F1 (50+).** La importación viene mejor de lo que este documento reflejaba (decía 30-40 hace una semana). Vale la pena discutir si la meta de F1 debería subirse, o si el foco ya puede empezar a correrse hacia F2.
 
-**Directorio (segundo pilar):** 0 personas reales. El modelo de datos quedó rediseñado (técnicas con relación + intereses por actividad), así que lo que falta no es producto sino gente. La lista de invitación existe y es concreta: **~30 organizadores** identificados en los eventos ya publicados. El contacto es tibio, no frío — sus eventos ya están en el sitio, así que el pedido es "¿querés perfil?" y no "¿quién sos?". Y el mismo contacto sirve después para pedirles que carguen sus eventos (Fase 3).
+**Directorio (segundo pilar): 1 fila (de prueba), 0 organizadores reales.** El modelo de datos y el formulario ya están resueltos (texto libre + disponibilidad para trabajos). Lo que falta **no es más producto — es ejecutar el contacto que ya está preparado**: 35 mensajes de invitación, uno por cuenta que organizó un evento ya publicado, esperando en la hoja `Instagram` desde hace varios días sin que se haya mandado ninguno. Es la acción pendiente más importante del proyecto hoy.
 
 Ojo con la secuencia: hasta que haya volumen, los filtros del Directorio no se muestran. Un filtro que siempre devuelve vacío es peor que no tenerlo.
 
 **Foco AHORA:**
-1. 🎯 **Mejorar % a pendientes** — reducir de 15% a <12%
-   - Automatizar detección (país, idioma, fecha)
-   - Reducir ruido en importación
-2. 🔍 **Validar importancia de imagen** — medir si vale la pena descargar
-3. 🔎 **Explorar Eventbrite** si Instagram se satura (probablemente 90% ahí)
-4. 📊 **Medir tráfico** — agregar GA4 para entender usuarios
+1. 🎯 **Mandar los primeros DM de la cola de Instagram** — es lo único que falta para que el Directorio deje de estar vacío. Ver `INSTAGRAM.md` para el ritmo seguro (5-8 por día, cuenta nueva).
+2. 🔍 **Investigar por qué bajó la tasa de publicación** (85% asumido → 44% medido) antes de tocar el pipeline a ciegas.
+3. 📊 **Medir tráfico** — agregar GA4 para entender usuarios, sigue pendiente desde la primera versión de este documento.
+4. 🔎 Explorar Eventbrite u otras fuentes: baja prioridad — la imagen resultó crítica y el caption solo no alcanza, así que el foco de eficiencia ya no está ahí.
 
 **NO hacer ahora:** Fase 2/3, refactor, features. Todo debe servir a mejorar KPIs F1.

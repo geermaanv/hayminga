@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Bloquea el commit si se tocó código real (import/src, index.html, Code.gs,
+# workflows) y pasaron más de $UMBRAL commits desde la última vez que se
+# actualizó ROADMAP.md. No es "un entry por commit" — eso arruinaría el
+# ROADMAP, que es narrativo, no un espejo del git log. Es "no dejes pasar
+# demasiado sin volver a mirar": el fallo real que motivó esto fue una
+# racha de 17 commits (favicon, comunidad de WA, geocoding, dedup, cola de
+# Instagram) sin una sola vuelta al documento.
+#
+# Bloquea y no solo avisa a propósito: las reglas de este repo le piden a
+# Claude Code no saltear hooks con --no-verify salvo pedido explícito del
+# usuario, así que un hook que bloquea genera la pausa real — "¿esto
+# amerita ROADMAP, o es menor y sigo?" — en el momento, no semanas después.
+#
+# Instalación (una vez por clon): git config core.hooksPath .githooks
+
+UMBRAL=4
+
+TOCA_CODIGO=$(git diff --cached --name-only | grep -E '^(import/src/.*\.py|index\.html|import/apps-script/Code\.gs|\.github/workflows/.*\.yml)$')
+[ -z "$TOCA_CODIGO" ] && exit 0
+
+# ¿ROADMAP.md ya viene en este mismo commit? Si sí, no hay nada que revisar.
+git diff --cached --name-only | grep -q '^ROADMAP\.md$' && exit 0
+
+ULTIMO_TOQUE=$(git log -1 --format=%H -- ROADMAP.md 2>/dev/null)
+if [ -z "$ULTIMO_TOQUE" ]; then
+  COMMITS_DESDE=999
+else
+  COMMITS_DESDE=$(git rev-list --count "$ULTIMO_TOQUE"..HEAD)
+fi
+
+if [ "$COMMITS_DESDE" -ge "$UMBRAL" ]; then
+  echo ""
+  echo "⚠️  ROADMAP.md no se toca hace $COMMITS_DESDE commits (último: $ULTIMO_TOQUE)."
+  echo "    Este commit toca código real:"
+  echo "$TOCA_CODIGO" | sed 's/^/      /'
+  echo ""
+  echo "    ¿Este cambio refleja una decisión o un patrón nuevo? Si sí, sumalo a"
+  echo "    ROADMAP.md antes de commitear. Si es menor (typo, ajuste chico),"
+  echo "    hacé: git commit --no-verify (solo si el usuario lo pidió explícito)."
+  echo ""
+  exit 1
+fi
+
+exit 0
