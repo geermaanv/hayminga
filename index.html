@@ -1092,6 +1092,9 @@ function aplicarFiltros() {
     }
     return true;
   });
+  eventosFiltrados.sort(function(a, b) {
+    return (parseFechaEvento(a['Fecha_Inicio']) || 0) - (parseFechaEvento(b['Fecha_Inicio']) || 0);
+  });
   renderResultados();
 }
 
