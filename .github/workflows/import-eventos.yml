@@ -24,7 +24,13 @@ jobs:
     # arreglar de nuestro lado, pero cortar la cola de cuentas por un mal
     # día ajeno es peor que darle más margen. El guardado incremental ya
     # protege contra perder todo si igual llega a pasar.
-    timeout-minutes: 60
+    #
+    # Subido de 60 a 120 (09/09/2026): dos corridas seguidas se cortaron
+    # a los 60 min justos. La segunda con Gemini sano (1 solo 504 en toda
+    # la corrida) llegó apenas a la mitad de cuentas_seguidas (74+) — ya
+    # no es un día degradado puntual, la lista de cuentas creció y hoy
+    # hashtags+cuentas necesitan ~100 min incluso en un día bueno.
+    timeout-minutes: 120
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       PYTHONUNBUFFERED: "1"

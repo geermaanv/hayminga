@@ -174,7 +174,11 @@ def _call_gemini(image_bytes: bytes, media_type: str, prompt_text: str) -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY no configurada")
-    client_gemini = genai.Client(api_key=api_key)
+    # Sin timeout, genai.Client puede colgarse en silencio (incidente real:
+    # 44min sin logs, ver PATRONES.md) — 30s alcanza incluso en tier gratis.
+    client_gemini = genai.Client(
+        api_key=api_key, http_options=types.HttpOptions(timeout=30_000)
+    )
     response = client_gemini.models.generate_content(
         model=GEMINI_MODEL,
         contents=[
