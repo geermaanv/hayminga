@@ -367,6 +367,27 @@ también deja una lección de proceso: instrumentar sin agendar cuándo se
 revisa es solo la mitad del trabajo (ver CLAUDE.md, regla de
 actualizar ROADMAP).
 
+## Timeout de import-eventos: de día degradado a límite estructural (09/09)
+
+Dos corridas seguidas se cortaron justo a los 60 minutos (el límite
+subido de 45 a 60 el 16/08 por un día malo de HikerAPI). La primera
+parecía repetir ese patrón: decenas de `504 DEADLINE_EXCEEDED` de
+Gemini. Pero la segunda, disparada manualmente media hora después, tuvo
+Gemini sano — un solo timeout en toda la corrida — y aun así llegó
+apenas a la mitad de `cuentas_seguidas` (74+) antes de cortarse.
+
+**Conclusión: ya no es un día externo degradado, es la lista de cuentas
+creciendo.** Hashtags + cuentas necesitan hoy ~100 minutos incluso sin
+ningún problema de API. Subir el margen otra vez (60→120) compra
+tiempo, pero si la lista sigue creciendo al ritmo de `curar_fuentes.py`
+agregando candidatas, va a volver a quedarse corto — la próxima vez
+que esto pase, medir si conviene partir el descubrimiento (hashtags y
+cuentas) en dos jobs en paralelo en vez de seguir subiendo el número.
+
+Sin pérdida de datos en ninguna de las dos corridas: el guardado es
+incremental y los posts no llegados a procesar quedan para la corrida
+siguiente (`RETRY` en `processor.py`, no se marcan como vistos).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
