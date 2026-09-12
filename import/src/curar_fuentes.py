@@ -4,18 +4,20 @@ Baja automática de hashtags/cuentas de config.json que dejaron de
 producir eventos — corre aparte del pipeline diario (semanal), lee la
 hoja FuentesStats que hiker_pipeline.py actualiza en cada corrida.
 
-Regla: 50 intentos seguidos sin ningún evento nuevo -> se saca de
-config.json. No se automatizan altas (esas necesitan criterio de
-calidad, no solo un número) — solo bajas, que son de bajo riesgo y
-fácilmente reversibles (agregar la fuente de nuevo a mano).
+Regla de baja: 50 intentos seguidos sin ningún evento nuevo -> se saca
+de config.json. Bajo riesgo y fácilmente reversible (agregar la fuente
+de nuevo a mano).
 
 También descubre candidatas nuevas y las agrega directo a config.json:
 usa v2/user/suggested/profiles de HikerAPI — las cuentas que Instagram
 sugiere como similares a cada una de las que ya seguimos. Da señal
 mucho mejor que revisar la lista de seguidores de una cuenta (ahí la
-mayoría es ruido — fans, cuentas personales sin relación al tema). El
-riesgo de una alta mala es bajo: si no produce nada, la baja automática
-la saca sola a los 50 intentos.
+mayoría es ruido — fans, cuentas personales sin relación al tema). Acá
+sí hay riesgo real de volumen (ver MAX_ALTAS_POR_CORRIDA): "sugerida
+por otra cuenta nuestra" es más débil de lo que parece — real incidente
+09/08/2026, 137 → 652 cuentas en una sola corrida. La baja automática
+eventualmente saca las que no producen nada, pero mientras tanto cada
+cuenta de más cuesta HikerAPI+Gemini en cada corrida diaria.
 
 Para no repetir la misma consulta de "sugeridas" en cada corrida, se
 registra en la hoja CuentasConsultadas cuándo se consultó cada cuenta
@@ -37,7 +39,15 @@ from src.sheets import (
 
 UMBRAL_INTENTOS_SIN_HIT = 50
 _DIAS_ANTES_DE_RECONSULTAR = 30
-MIN_SUGERENCIAS_PARA_AGREGAR = 2  # sugerida por al menos N cuentas nuestras
+MIN_SUGERENCIAS_PARA_AGREGAR = 3  # sugerida por al menos N cuentas nuestras
+
+# Piso de "al menos N sugerencias" solo, sin tope, dejó pasar 515 cuentas en
+# una corrida (08/09/2026: 137 → 652, cuentas_seguidas.py sin relación al
+# tema como @0zod.boy) — con suficientes cuentas fuente, Instagram sugiere
+# en común cuentas genéricas de "vida natural" que no son bioconstrucción.
+# Tope duro además del piso: toma como mucho las N más sugeridas por
+# corrida, prioriza calidad sobre volumen y mantiene la lista revisable.
+MAX_ALTAS_POR_CORRIDA = 15
 
 CONFIG_PATH = Path("config.json")
 
@@ -161,14 +171,23 @@ def descubrir_candidatos() -> list[str]:
     # (surf en Francia, acroyoga en los Alpes, etc.). Que la sugiera más
     # de una cuenta nuestra es la señal de que sí tiene que ver con el
     # tema, no solo con el algoritmo genérico de "cuentas parecidas".
-    nuevas = {u for u, n in conteo.items() if n >= MIN_SUGERENCIAS_PARA_AGREGAR}
+    candidatas = [u for u, n in conteo.items() if n >= MIN_SUGERENCIAS_PARA_AGREGAR]
 
     marcar_cuentas_consultadas(service, consultadas_ahora)
     guardar_cuentas_ids(service, ids_nuevos)
 
-    if not nuevas:
+    if not candidatas:
         print("[curar_fuentes] Sin candidatas nuevas esta vez")
         return []
+
+    candidatas.sort(key=lambda u: conteo[u], reverse=True)
+    nuevas = set(candidatas[:MAX_ALTAS_POR_CORRIDA])
+    if len(candidatas) > MAX_ALTAS_POR_CORRIDA:
+        print(
+            f"[curar_fuentes] {len(candidatas)} candidatas pasaron el piso, "
+            f"tope de {MAX_ALTAS_POR_CORRIDA} por corrida — quedan "
+            f"{len(candidatas) - MAX_ALTAS_POR_CORRIDA} para revisar a mano o la próxima corrida"
+        )
 
     config["cuentas_seguidas"] = sorted(cuentas_actuales | nuevas)
     CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
