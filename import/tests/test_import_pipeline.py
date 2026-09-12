@@ -429,41 +429,94 @@ class CuentasPaisTests(unittest.TestCase):
         service = Mock()
         sheets.guardar_cuentas_ids(service, {"cuenta_mx": 222}, {"cuenta_mx": "México"})
         body = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]
-        self.assertEqual(body["values"], [["cuenta_mx", "222", "México"]])
+        self.assertEqual(body["values"], [["cuenta_mx", "222", "México", ""]])
 
     def test_guardar_cuentas_ids_sin_pais_deja_columna_vacia(self):
         service = Mock()
         sheets.guardar_cuentas_ids(service, {"cuenta_ar": 111})
         body = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]
-        self.assertEqual(body["values"], [["cuenta_ar", "111", ""]])
+        self.assertEqual(body["values"], [["cuenta_ar", "111", "", ""]])
+
+
+class CuentasEmailTests(unittest.TestCase):
+    """EmailPublico en CuentasIds: public_email del perfil de Instagram,
+    usado para pedirle validación del evento al organizador por mail."""
+
+    @patch("src.sheets.get_or_create_sheet_with_headers")
+    def test_cargar_cuentas_email_ignora_filas_sin_email(self, get_or_create):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [
+                ["cuenta_sin_email", "111", "México", ""],
+                ["cuenta_con_email", "222", "", "org@ejemplo.com"],
+                ["cuenta_incompleta"],
+            ]
+        }
+        out = sheets.cargar_cuentas_email(service)
+        self.assertEqual(out, {"cuenta_con_email": "org@ejemplo.com"})
+
+    @patch("src.sheets.get_or_create_sheet_with_headers")
+    def test_contar_validaciones_organizador_cuenta_por_resultado(self, get_or_create):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [["confirmado"], ["confirmado"], ["rechazado"], ["pendiente"], [""], ["algo_no_reconocido"]]
+        }
+        out = sheets.contar_validaciones_organizador(service)
+        self.assertEqual(
+            out,
+            {"pendiente": 1, "confirmado": 2, "rechazado": 1, "vencido_sin_respuesta": 0},
+        )
+
+    def test_guardar_cuentas_ids_incluye_email_cuando_se_pasa(self):
+        service = Mock()
+        sheets.guardar_cuentas_ids(
+            service, {"cuenta_ar": 111}, email_por_cuenta={"cuenta_ar": "org@ejemplo.com"}
+        )
+        body = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]
+        self.assertEqual(body["values"], [["cuenta_ar", "111", "", "org@ejemplo.com"]])
 
     @patch("src.hiker_pipeline.requests.get")
     @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
-    def test_resolver_user_id_y_pais_detecta_pais_no_argentina(self, get):
+    def test_resolver_user_id_pais_y_email_detecta_pais_no_argentina(self, get):
         from src import hiker_pipeline
 
         get.return_value = Mock(status_code=200, json=lambda: {
             "pk": 999, "public_phone_country_code": "52",
         })
 
-        user_id, pais = hiker_pipeline.resolver_user_id_y_pais("cuenta_mx")
+        user_id, pais, email = hiker_pipeline.resolver_user_id_pais_y_email("cuenta_mx")
 
         self.assertEqual(user_id, 999)
         self.assertEqual(pais, "México")
+        self.assertEqual(email, "")
 
     @patch("src.hiker_pipeline.requests.get")
     @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
-    def test_resolver_user_id_y_pais_no_marca_argentina(self, get):
+    def test_resolver_user_id_pais_y_email_no_marca_argentina(self, get):
         from src import hiker_pipeline
 
         get.return_value = Mock(status_code=200, json=lambda: {
             "pk": 111, "public_phone_country_code": "54",
         })
 
-        user_id, pais = hiker_pipeline.resolver_user_id_y_pais("cuenta_ar")
+        user_id, pais, email = hiker_pipeline.resolver_user_id_pais_y_email("cuenta_ar")
 
         self.assertEqual(user_id, 111)
         self.assertEqual(pais, "")
+        self.assertEqual(email, "")
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "test-key"})
+    def test_resolver_user_id_pais_y_email_extrae_email_publico(self, get):
+        from src import hiker_pipeline
+
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "pk": 42, "public_email": "org@ejemplo.com",
+        })
+
+        user_id, pais, email = hiker_pipeline.resolver_user_id_pais_y_email("cuenta_con_email")
+
+        self.assertEqual(email, "org@ejemplo.com")
 
     @patch("src.hiker_pipeline.subir_imagen_a_drive")
     @patch("src.hiker_pipeline._download_image", return_value=False)
@@ -773,7 +826,7 @@ class NotificarRunTests(unittest.TestCase):
     que no explote justo en el caso que tiene que avisar (run incompleto,
     Sheet caído)."""
 
-    def _mensaje(self, estado_job="success", resumen=None, contar=None):
+    def _mensaje(self, estado_job="success", resumen=None, contar=None, validaciones=None):
         from src import notificar_run
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -782,11 +835,19 @@ class NotificarRunTests(unittest.TestCase):
             try:
                 if resumen is not None:
                     Path("run_summary.json").write_text(json.dumps(resumen))
-                with patch.object(notificar_run, "contar_estados") as contar_mock:
+                with patch.object(notificar_run, "contar_estados") as contar_mock, \
+                     patch.object(notificar_run, "get_service"), \
+                     patch.object(notificar_run, "contar_validaciones_organizador") as validaciones_mock:
                     if isinstance(contar, Exception):
                         contar_mock.side_effect = contar
                     else:
                         contar_mock.return_value = contar or (0, 0)
+                    if isinstance(validaciones, Exception):
+                        validaciones_mock.side_effect = validaciones
+                    else:
+                        validaciones_mock.return_value = validaciones or {
+                            "pendiente": 0, "confirmado": 0, "rechazado": 0, "vencido_sin_respuesta": 0,
+                        }
                     return notificar_run.armar_mensaje(estado_job)
             finally:
                 os.chdir(cwd)
@@ -806,6 +867,42 @@ class NotificarRunTests(unittest.TestCase):
             resumen={"eventos_insertados": 1, "llamadas_hikerapi": 187},
         )
         self.assertIn("Llamadas a HikerAPI: 187", mensaje)
+
+    def test_incluye_duracion_en_minutos_y_segundos(self):
+        mensaje = self._mensaje(resumen={"eventos_insertados": 1, "duracion_segundos": 125})
+        self.assertIn("Duración: 2m 5s", mensaje)
+
+    def test_duracion_bajo_un_minuto_no_muestra_minutos(self):
+        mensaje = self._mensaje(resumen={"eventos_insertados": 1, "duracion_segundos": 45})
+        self.assertIn("Duración: 45s", mensaje)
+
+    def test_incluye_validaciones_enviadas_hoy(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 3},
+        )
+        self.assertIn("Validaciones pedidas a organizadores hoy: 3", mensaje)
+
+    def test_incluye_acumulado_de_validaciones_de_organizadores(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 1},
+            validaciones={"pendiente": 4, "confirmado": 10, "rechazado": 2, "vencido_sin_respuesta": 3},
+        )
+        self.assertIn("confirmaron: 10", mensaje)
+        self.assertIn("rechazaron: 2", mensaje)
+        self.assertIn("esperando: 4", mensaje)
+        self.assertIn("sin respuesta a tiempo: 3", mensaje)
+
+    def test_sin_validaciones_historicas_no_agrega_linea(self):
+        mensaje = self._mensaje(resumen={"eventos_insertados": 2})
+        self.assertNotIn("confirmaron:", mensaje)
+
+    def test_error_contando_validaciones_no_rompe_el_aviso_si_hubo_envios(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 1},
+            validaciones=RuntimeError("sheet caído"),
+        )
+        self.assertIn("Eventos nuevos guardados: 2", mensaje)
+        self.assertIn("No se pudo contar el histórico de validaciones", mensaje)
 
     def test_reporta_caida_de_cuentas_seguidas(self):
         mensaje = self._mensaje(
@@ -931,6 +1028,57 @@ class HikerApiCostTests(unittest.TestCase):
         hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/algo")
 
         self.assertEqual(hiker_pipeline._errores_hikerapi[0], 0)
+
+
+class PedirValidacionOrganizadorTests(unittest.TestCase):
+    """Pedido de validación de evento por mail al organizador — ver
+    ROADMAP.md, 09/2026. Solo se dispara cuando HikerAPI trajo un email
+    público de la cuenta que originó el evento."""
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_sin_config_de_apps_script_no_intenta_nada(self):
+        from src import hiker_pipeline
+
+        resultado = hiker_pipeline.pedir_validacion_organizador(
+            {"id": "abc123", "nombre": "Taller"}, "org@ejemplo.com"
+        )
+        self.assertFalse(resultado)
+
+    @patch("src.hiker_pipeline.requests.post")
+    @patch.dict(os.environ, {
+        "APPS_SCRIPT_URL": "https://script.google.com/x",
+        "APPS_SCRIPT_SHARED_SECRET": "shh",
+    })
+    def test_manda_evento_id_y_email_al_apps_script(self, post):
+        from src import hiker_pipeline
+
+        post.return_value = Mock(json=lambda: {"success": True})
+        evento = {"id": "abc123", "nombre": "Taller de Barro", "fecha_inicio_iso": "2026-10-01"}
+
+        resultado = hiker_pipeline.pedir_validacion_organizador(evento, "org@ejemplo.com")
+
+        self.assertTrue(resultado)
+        payload = json.loads(post.call_args.kwargs["data"])
+        self.assertEqual(payload["accion"], "solicitar_validacion_evento")
+        self.assertEqual(payload["secreto"], "shh")
+        self.assertEqual(payload["evento_id"], "abc123")
+        self.assertEqual(payload["email"], "org@ejemplo.com")
+        self.assertEqual(payload["nombre"], "Taller de Barro")
+
+    @patch("src.hiker_pipeline.requests.post")
+    @patch.dict(os.environ, {
+        "APPS_SCRIPT_URL": "https://script.google.com/x",
+        "APPS_SCRIPT_SHARED_SECRET": "shh",
+    })
+    def test_apps_script_caido_no_rompe_la_corrida(self, post):
+        from src import hiker_pipeline
+
+        post.side_effect = RuntimeError("timeout")
+
+        resultado = hiker_pipeline.pedir_validacion_organizador(
+            {"id": "abc123"}, "org@ejemplo.com"
+        )
+        self.assertFalse(resultado)
 
 
 class CandidatosHashtagsTests(unittest.TestCase):

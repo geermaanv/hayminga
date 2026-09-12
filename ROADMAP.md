@@ -423,6 +423,44 @@ mirar qué cambió en los datos, no solo en el límite. Y un mecanismo de
 alta automática sin tope de volumen es peligroso por diseño: un piso de
 calidad débil no solo deja pasar ruido, se multiplica solo.
 
+## Validación de eventos por el organizador vía email (12/09)
+
+El trabajo manual no escala — la cola de `?pendientes` viene subiendo
+(43 → 56 en una semana) y no hay tiempo para bajarla a mano. Al mismo
+tiempo, la cola de DM a organizadores (`dm_organizador`, para invitarlos
+al Directorio) lleva semanas con 35 mensajes preparados y cero enviados:
+Instagram prohíbe automatizar DMs, y "alguien tiene que tocarlo a mano
+en el teléfono" resultó ser un cuello de botella real, no solo teórico.
+
+**Descubrimiento clave:** HikerAPI ya trae `public_email` en la misma
+respuesta de `user/by/username` que se usa hoy para detectar país (sin
+llamada extra). Medido con datos reales: **~62% de cobertura** (8 de 13
+cuentas de `cuentas_seguidas` al azar tenían el campo poblado), incluso
+en cuentas que no son "Business" — mismo patrón que
+`public_phone_country_code`.
+
+**Diseño:** en vez de otra cola manual, se reusó el mecanismo que ya
+existía en `Code.gs` para el opt-in del Directorio (link de un solo uso
+por token, `MailApp.sendEmail` + `doGet()`). Cuando hay email
+disponible, el evento no cae en `pendiente_confirmacion` — se le manda
+un mail al organizador con "¿confirmás o rechazás?" y queda en un
+estado nuevo y transitorio, `pendiente_organizador`. Si no responde en
+~5-7 días, cae a `pendiente_confirmacion` de siempre — es un atajo
+opcional, no un reemplazo de la revisión manual.
+
+Tope de 10 mails por corrida (`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA`)
+a propósito — mismo espíritu que `MAX_ALTAS_POR_CORRIDA`: después del
+incidente de `curar_fuentes.py` la regla en esta parte del proyecto es
+"nunca automatizar sin tope de volumen", y además una tanda grande de
+mails de golpe desde una cuenta se ve menos genuina que un goteo diario.
+
+**Métricas, no solo automatización:** cada solicitud queda en una hoja
+nueva `ValidacionesOrganizador` (Pendiente/Confirmado/Rechazado/Vencido)
+para poder responder con datos, no intuición, si el canal vale la pena
+— cuántos confirman vs. cuántos nunca responden. Se suma también al
+aviso diario de Telegram (duración de la corrida + validaciones
+mandadas hoy + acumulado histórico), no solo al resumen semanal.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
