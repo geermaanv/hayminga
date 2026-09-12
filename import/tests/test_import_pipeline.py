@@ -847,6 +847,28 @@ class NotificarRunTests(unittest.TestCase):
         self.assertIn("top apagado", mensaje)
         self.assertNotIn("recent vs top", mensaje)
 
+    def test_avisa_fuerte_si_la_mayoria_de_hikerapi_falla(self):
+        # Regresión 12/09/2026: key rota -> 179/179 llamadas con 401,
+        # pipeline terminó "success" con 0 posts, indistinguible en el
+        # aviso de un día real sin eventos nuevos.
+        mensaje = self._mensaje(resumen={
+            "eventos_insertados": 0,
+            "llamadas_hikerapi": 179,
+            "errores_hikerapi": 179,
+        })
+        self.assertIn("401 Unauthorized", mensaje)
+        self.assertIn("revisar HIKERAPI_KEY", mensaje)
+
+    def test_no_avisa_si_los_errores_de_hikerapi_son_pocos(self):
+        # Un puñado de 403/404 de cuentas privadas/borradas es normal
+        # (ver hiker_pipeline.py) y no debería disparar la alerta.
+        mensaje = self._mensaje(resumen={
+            "eventos_insertados": 3,
+            "llamadas_hikerapi": 179,
+            "errores_hikerapi": 4,
+        })
+        self.assertNotIn("revisar HIKERAPI_KEY", mensaje)
+
 
 class HikerApiCostTests(unittest.TestCase):
     """Costo de HikerAPI por corrida — recomendación #3 de ESTADO.md, sin
@@ -878,6 +900,37 @@ class HikerApiCostTests(unittest.TestCase):
             hiker_pipeline._download_image("https://cdn.example.com/img.jpg", Path(tmp) / "x.jpg")
 
         self.assertEqual(hiker_pipeline._llamadas_hikerapi[0], 0)
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "key-rota"})
+    def test_hiker_get_cuenta_401_como_error(self, get):
+        # Regresión 12/09/2026: una key rota hizo fallar las 179 llamadas
+        # de una corrida con 401, pero como cada fuente atrapa su propio
+        # error y sigue, el job terminó "success" sin que nada avisara.
+        from src import hiker_pipeline
+
+        hiker_pipeline._llamadas_hikerapi[0] = 0
+        hiker_pipeline._errores_hikerapi[0] = 0
+        get.return_value = Mock(status_code=401)
+
+        hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/algo")
+        hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/otra")
+
+        self.assertEqual(hiker_pipeline._llamadas_hikerapi[0], 2)
+        self.assertEqual(hiker_pipeline._errores_hikerapi[0], 2)
+
+    @patch("src.hiker_pipeline.requests.get")
+    @patch.dict(os.environ, {"HIKERAPI_KEY": "key-buena"})
+    def test_hiker_get_no_cuenta_error_en_llamada_200(self, get):
+        from src import hiker_pipeline
+
+        hiker_pipeline._llamadas_hikerapi[0] = 0
+        hiker_pipeline._errores_hikerapi[0] = 0
+        get.return_value = Mock(status_code=200)
+
+        hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/algo")
+
+        self.assertEqual(hiker_pipeline._errores_hikerapi[0], 0)
 
 
 class CandidatosHashtagsTests(unittest.TestCase):

@@ -72,10 +72,21 @@ def _hiker_key() -> str:
 # resuelta y no es una llamada a la API de HikerAPI.
 _llamadas_hikerapi = [0]
 
+# Cuenta llamadas que terminaron en error (post-mortem del 12/09/2026: una
+# key rota hizo que las 179 llamadas de la corrida fallaran con
+# "Unauthorized", pero como cada fuente atrapa su propio error y sigue con
+# la siguiente, el job terminó "success" con 0 posts — nada avisó que la
+# key estaba muerta hasta que se leyó el log a mano. Sin esto, ese
+# escenario es indistinguible de un día real sin eventos nuevos.
+_errores_hikerapi = [0]
+
 
 def _hiker_get(url: str, **kwargs):
     _llamadas_hikerapi[0] += 1
-    return requests.get(url, headers={"x-access-key": _hiker_key()}, **kwargs)
+    resp = requests.get(url, headers={"x-access-key": _hiker_key()}, **kwargs)
+    if resp.status_code == 401:
+        _errores_hikerapi[0] += 1
+    return resp
 
 
 def _item_a_post(item: dict) -> dict | None:
@@ -805,6 +816,7 @@ def run() -> int:
             "error_cuentas_seguidas": error_cuentas,
             "atribucion": atribucion,
             "llamadas_hikerapi": _llamadas_hikerapi[0],
+            "errores_hikerapi": _errores_hikerapi[0],
         }))
     except Exception as e:
         print(f"[hiker_pipeline] error escribiendo run_summary.json — {e}")
