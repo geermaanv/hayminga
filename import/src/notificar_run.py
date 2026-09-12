@@ -14,9 +14,17 @@ from pathlib import Path
 
 import requests
 
-from .sheets import COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service
+from .sheets import (
+    COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service,
+    contar_validaciones_organizador,
+)
 
 RESUMEN_PATH = Path("run_summary.json")
+
+
+def _formatear_duracion(segundos: float) -> str:
+    minutos, seg = divmod(round(segundos), 60)
+    return f"{minutos}m {seg}s" if minutos else f"{seg}s"
 
 
 def contar_estados() -> tuple[int, int]:
@@ -51,6 +59,8 @@ def armar_mensaje(estado_job: str) -> str:
 
     if resumen:
         lineas.append(f"Eventos nuevos guardados: {resumen.get('eventos_insertados', 0)}")
+        if "duracion_segundos" in resumen:
+            lineas.append(f"Duración: {_formatear_duracion(resumen['duracion_segundos'])}")
         if "llamadas_hikerapi" in resumen:
             lineas.append(f"Llamadas a HikerAPI: {resumen['llamadas_hikerapi']}")
         # Real incidente 12/09/2026: una key de HikerAPI rota hizo fallar
@@ -81,6 +91,27 @@ def armar_mensaje(estado_job: str) -> str:
             lineas.append("Revisar: https://hayminga.org/?pendientes")
     except Exception as e:
         lineas.append(f"No se pudieron contar pendientes/publicados: {e}")
+
+    # Validación de eventos por el organizador vía mail (ver ROADMAP.md,
+    # 09/2026) — cuántas se mandaron hoy + el acumulado histórico, para
+    # poder decidir a futuro si el canal sirve (cuántos confirman vs.
+    # cuántos nunca responden).
+    enviadas_hoy = (resumen or {}).get("validaciones_organizador_enviadas", 0)
+    if enviadas_hoy:
+        lineas.append(f"Validaciones pedidas a organizadores hoy: {enviadas_hoy}")
+    try:
+        conteo_validaciones = contar_validaciones_organizador(get_service())
+        total_validaciones = sum(conteo_validaciones.values())
+        if total_validaciones:
+            lineas.append(
+                "Organizadores — confirmaron: {confirmado}, rechazaron: {rechazado}, "
+                "esperando: {pendiente}, sin respuesta a tiempo: {vencido_sin_respuesta}".format(
+                    **conteo_validaciones
+                )
+            )
+    except Exception as e:
+        if enviadas_hoy:
+            lineas.append(f"No se pudo contar el histórico de validaciones: {e}")
 
     # Con /top apagado (15/08/2026) la comparación ya no existe: todos los
     # posts vienen de /recent. Se informa el volumen a secas, que sigue

@@ -44,8 +44,8 @@ from src.processor import (
 from src.geocodificar import geocodificar_direccion
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
-    cargar_cuentas_ids, cargar_cuentas_pais, guardar_cuentas_ids,
-    SPREADSHEET_ID, SHEET_NAME,
+    cargar_cuentas_ids, cargar_cuentas_pais, cargar_cuentas_email, guardar_cuentas_ids,
+    generate_id, SPREADSHEET_ID, SHEET_NAME,
 )
 
 IMAGES_DIR = Path("images_hiker")
@@ -175,13 +175,15 @@ def resolver_user_id(username: str) -> int | None:
     return resp.json().get("pk")
 
 
-def resolver_user_id_y_pais(username: str) -> tuple[int | None, str]:
-    """Igual que resolver_user_id, pero además saca la señal de país que
-    ya trae la misma respuesta: public_phone_country_code. No agrega
-    ninguna llamada — es un solo request, antes se tiraba el resto del
-    perfil después de sacar el pk. Confirmado con datos reales (16/08/2026):
-    NO depende de ser cuenta "Business" — 2 de 4 cuentas propias lo tenían
-    poblado con is_business=false. Cobertura parcial, pero gratis."""
+def resolver_user_id_pais_y_email(username: str) -> tuple[int | None, str, str]:
+    """Igual que resolver_user_id, pero además saca dos señales que ya
+    trae la misma respuesta: public_phone_country_code (país) y
+    public_email. No agrega ninguna llamada — es un solo request, antes se
+    tiraba el resto del perfil después de sacar el pk. Confirmado con
+    datos reales (16/08/2026 para país; 12/09/2026 para email): NO
+    depende de ser cuenta "Business" — cobertura parcial, pero gratis.
+    El email se usa para pedirle validación del evento al organizador por
+    mail en vez de esperar revisión manual (ver ROADMAP.md, 09/2026)."""
     resp = _hiker_get(
         "https://api.hikerapi.com/v1/user/by/username",
         params={"username": username},
@@ -191,7 +193,8 @@ def resolver_user_id_y_pais(username: str) -> tuple[int | None, str]:
     data = resp.json()
     codigo = (data.get("public_phone_country_code") or "").strip()
     pais = _pais_desde_telefono("+" + codigo) if codigo else ""
-    return data.get("pk"), pais
+    email = (data.get("public_email") or "").strip()
+    return data.get("pk"), pais, email
 
 
 def fetch_user_posts(username: str, amount: int = 12, user_id: int | None = None) -> list[dict]:
@@ -267,6 +270,37 @@ def subir_imagen_a_drive(image_bytes: bytes, media_type: str) -> str | None:
     except Exception as e:
         print(f"[hiker_pipeline] error subiendo imagen a Drive — {e}")
         return None
+
+
+def pedir_validacion_organizador(evento: dict, email: str) -> bool:
+    """Le pide al organizador que confirme/rechace el evento por mail, en
+    vez de dejarlo esperando revisión manual — ver ROADMAP.md, 09/2026.
+    Devuelve True si el mail salió (Apps Script confirmó el envío); si
+    falla, el evento se guarda igual con su Estado sin tocar (queda en
+    pendiente_confirmacion como antes, no se pierde nada)."""
+    apps_script_url = os.environ.get("APPS_SCRIPT_URL")
+    secreto = os.environ.get("APPS_SCRIPT_SHARED_SECRET")
+    if not apps_script_url or not secreto:
+        return False
+    try:
+        resp = requests.post(
+            apps_script_url,
+            headers={"Content-Type": "text/plain"},
+            data=json.dumps({
+                "accion": "solicitar_validacion_evento",
+                "secreto": secreto,
+                "evento_id": evento["id"],
+                "email": email,
+                "nombre": evento.get("nombre") or "",
+                "fecha_inicio": evento.get("fecha_inicio_iso") or evento.get("fecha_inicio") or "",
+            }),
+            timeout=30,
+        )
+        data = resp.json()
+        return bool(data.get("success"))
+    except Exception as e:
+        print(f"[hiker_pipeline] {evento.get('link')}: error pidiendo validación al organizador — {e}")
+        return False
 
 
 def _fecha_publicacion(post: dict) -> str:
@@ -496,6 +530,14 @@ _MAX_ANTIGUEDAD_POST_DIAS = 180
 # inactiva (no da de baja sola, ver el loop de cuentas_seguidas en run()).
 _MAX_INACTIVIDAD_CUENTA_DIAS = 180
 
+# Tope de mails de validación a organizadores por corrida — mismo espíritu
+# que MAX_ALTAS_POR_CORRIDA en curar_fuentes.py: si un día aparecen muchos
+# eventos nuevos con email a la vez, mejor mandar de a poco (que además
+# se ve más genuino que una tanda grande de golpe) que saturar de una. Lo
+# que no entra en el tope queda como pendiente_confirmacion de siempre —
+# no se pierde, se difiere.
+_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA = 10
+
 # La IA no es confiable marcando idioma/país cuando el flyer no lo dice
 # explícito (confirmado con casos reales: "4-day cob course", "Bamboo
 # Anatomy Workshop" quedaron con Pais e idioma vacíos y pasaron el
@@ -643,7 +685,9 @@ def procesar_post(
 
 
 def run() -> int:
+    _inicio = time.time()
     _llamadas_hikerapi[0] = 0  # por si run() se llama más de una vez en el mismo proceso (tests)
+    _errores_hikerapi[0] = 0
     config = json.loads(Path("config.json").read_text())
     hashtags = config.get("hashtags") or []
     if not hashtags:
@@ -734,6 +778,8 @@ def run() -> int:
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
     ids_nuevos = {}
     pais_nuevos = {}
+    email_nuevos = {}
+    validaciones_enviadas = [0]
     error_cuentas = ""
     try:
         # Todo este bloque va en un try/except: un fallo transitorio acá
@@ -742,17 +788,22 @@ def run() -> int:
         # moría entero y nunca llegaba a append_events().
         ids_cacheados = cargar_cuentas_ids(service)
         pais_cacheado = cargar_cuentas_pais(service)
+        email_cacheado = cargar_cuentas_email(service)
         for username in cuentas_seguidas:
             pais_cuenta = pais_cacheado.get(username, "")
+            email_cuenta = email_cacheado.get(username, "")
             try:
                 user_id = ids_cacheados.get(username)
                 if user_id is None:
-                    user_id, pais_resuelto = resolver_user_id_y_pais(username)
+                    user_id, pais_resuelto, email_resuelto = resolver_user_id_pais_y_email(username)
                     if user_id:
                         ids_nuevos[username] = user_id
                     if pais_resuelto:
                         pais_nuevos[username] = pais_resuelto
                         pais_cuenta = pais_resuelto
+                    if email_resuelto:
+                        email_nuevos[username] = email_resuelto
+                        email_cuenta = email_resuelto
                 posts = fetch_user_posts(username, user_id=user_id)
             except Exception as e:
                 print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
@@ -780,6 +831,20 @@ def run() -> int:
                     print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                     continue
                 if evento:
+                    # Si tenemos el email público del organizador, le pedimos
+                    # que confirme/rechace por mail en vez de dejarlo esperando
+                    # revisión manual — ver ROADMAP.md, 09/2026. Id se genera
+                    # acá (no en append_events) para que coincida con el que
+                    # queda en ValidacionesOrganizador.
+                    if (
+                        evento.get("estado") == "pendiente_confirmacion"
+                        and email_cuenta
+                        and validaciones_enviadas[0] < _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA
+                    ):
+                        evento.setdefault("id", generate_id())
+                        if pedir_validacion_organizador(evento, email_cuenta):
+                            evento["estado"] = "pendiente_organizador"
+                            validaciones_enviadas[0] += 1
                     eventos_cuenta.append(evento)
                     existing_links.add(post["link"])
                     existing_links.add(instagram_shortcode(post["link"]))
@@ -817,6 +882,8 @@ def run() -> int:
             "atribucion": atribucion,
             "llamadas_hikerapi": _llamadas_hikerapi[0],
             "errores_hikerapi": _errores_hikerapi[0],
+            "validaciones_organizador_enviadas": validaciones_enviadas[0],
+            "duracion_segundos": round(time.time() - _inicio, 1),
         }))
     except Exception as e:
         print(f"[hiker_pipeline] error escribiendo run_summary.json — {e}")
@@ -827,7 +894,7 @@ def run() -> int:
         print(f"[hiker_pipeline] error actualizando FuentesStats — {e}")
 
     try:
-        guardar_cuentas_ids(service, ids_nuevos, pais_nuevos)
+        guardar_cuentas_ids(service, ids_nuevos, pais_nuevos, email_nuevos)
     except Exception as e:
         print(f"[hiker_pipeline] error guardando CuentasIds — {e}")
 

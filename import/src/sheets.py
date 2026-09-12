@@ -40,7 +40,7 @@ CUENTAS_CONSULTADAS_HEADERS = ["Username", "FechaConsulta"]
 # cacheada acá para no perderla en corridas donde la cuenta ya está en
 # caché y no se vuelve a resolver.
 CUENTAS_IDS_SHEET_NAME = "CuentasIds"
-CUENTAS_IDS_HEADERS = ["Username", "UserId", "PaisTelefono"]
+CUENTAS_IDS_HEADERS = ["Username", "UserId", "PaisTelefono", "EmailPublico"]
 
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
@@ -303,16 +303,70 @@ def cargar_cuentas_pais(service) -> dict[str, str]:
     return out
 
 
-def guardar_cuentas_ids(service, nuevos: dict[str, int], pais_por_cuenta: dict[str, str] | None = None):
+VALIDACIONES_SHEET_NAME = "ValidacionesOrganizador"
+
+
+def contar_validaciones_organizador(service) -> dict[str, int]:
+    """Cuenta por Resultado la hoja que llena Code.gs cuando le pide al
+    organizador que confirme/rechace su evento por mail — ver ROADMAP.md,
+    09/2026. Sirve para el aviso diario y para decidir a futuro si vale
+    la pena el canal (cuántos confirman vs. cuántos nunca responden)."""
+    get_or_create_sheet_with_headers(
+        service, VALIDACIONES_SHEET_NAME,
+        ["EventoId", "Email", "Token", "FechaEnvio", "Resultado", "FechaResolucion"],
+    )
+    result = _con_reintentos(lambda: (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{VALIDACIONES_SHEET_NAME}!E2:E")
+        .execute()
+    ))
+    conteo = {"pendiente": 0, "confirmado": 0, "rechazado": 0, "vencido_sin_respuesta": 0}
+    for row in result.get("values", []):
+        resultado = (row[0] if row else "").strip()
+        if resultado in conteo:
+            conteo[resultado] += 1
+    return conteo
+
+
+def cargar_cuentas_email(service) -> dict[str, str]:
+    """Email público (`public_email`) del perfil de Instagram, cacheado
+    junto al user_id — mismo criterio que cargar_cuentas_pais: cobertura
+    parcial (no toda cuenta lo tiene cargado en Instagram), solo trae las
+    que sí. Usado para pedirle validación del evento al organizador por
+    mail en vez de esperar revisión manual (ver ROADMAP.md, 09/2026)."""
+    get_or_create_sheet_with_headers(service, CUENTAS_IDS_SHEET_NAME, CUENTAS_IDS_HEADERS)
+    result = _con_reintentos(lambda: (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:D")
+        .execute()
+    ))
+    out = {}
+    for row in result.get("values", []):
+        row = (row + [""] * 4)[:4]
+        if row[0] and row[3]:
+            out[row[0]] = row[3]
+    return out
+
+
+def guardar_cuentas_ids(
+    service,
+    nuevos: dict[str, int],
+    pais_por_cuenta: dict[str, str] | None = None,
+    email_por_cuenta: dict[str, str] | None = None,
+):
     if not nuevos:
         return
     pais_por_cuenta = pais_por_cuenta or {}
+    email_por_cuenta = email_por_cuenta or {}
     service.spreadsheets().values().append(
         spreadsheetId=SPREADSHEET_ID,
         range=f"{CUENTAS_IDS_SHEET_NAME}!A1",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [[u, str(pk), pais_por_cuenta.get(u, "")] for u, pk in nuevos.items()]},
+        body={"values": [
+            [u, str(pk), pais_por_cuenta.get(u, ""), email_por_cuenta.get(u, "")]
+            for u, pk in nuevos.items()
+        ]},
     ).execute()
 
 

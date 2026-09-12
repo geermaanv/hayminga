@@ -100,6 +100,15 @@ var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
+// Validación de eventos por el organizador vía email (09/2026, ver
+// ROADMAP.md) — alternativa a esperar revisión manual en ?pendientes
+// cuando HikerAPI trajo un email de contacto público del perfil de
+// Instagram que originó el evento. El email NO se guarda en Eventos
+// (misma política que el Directorio: no exponer contacto en una hoja
+// más visible de lo necesario) — vive solo acá.
+var VALIDACIONES_SHEET_NAME = 'ValidacionesOrganizador';
+var VALIDACIONES_HEADERS = ['EventoId', 'Email', 'Token', 'FechaEnvio', 'Resultado', 'FechaResolucion'];
+
 
 // ---- Formulario web (POST desde hayminga.org) ----
 
@@ -121,6 +130,8 @@ function doPost(e) {
       respuesta = { success: true, id: descartarEvento_(data) };
     } else if (data.accion === 'subir_imagen') {
       respuesta = { success: true, url: subirImagenADrive_(data) };
+    } else if (data.accion === 'solicitar_validacion_evento') {
+      respuesta = { success: true, id: solicitarValidacionEvento_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -207,6 +218,10 @@ function solicitarContacto_(data) {
 
 
 function doGet(e) {
+  if (e.parameter.evt === '1') {
+    return manejarValidacionEvento_(e.parameter.token, e.parameter.decision);
+  }
+
   var token = e.parameter.token;
   if (!token) {
     return HtmlService.createHtmlOutput('<p>Falta el token.</p>');
@@ -476,6 +491,109 @@ function descartarEvento_(data) {
   sheet.getRange(filaEncontrada, 1).setNumberFormat('@').setValue('false');
   sheet.getRange(filaEncontrada, 17).setNumberFormat('@').setValue('descartado');
   return data.id;
+}
+
+
+// ---- Validación de eventos por el organizador (vía email) ----
+
+// Llamada por src/hiker_pipeline.py cuando encuentra un email público en
+// el perfil de Instagram que originó el evento. Mismo secreto que
+// "subir_imagen": es solo para el pipeline, no para el público.
+function solicitarValidacionEvento_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('Secreto inválido');
+  }
+  if (!data.evento_id || !data.email) {
+    throw new Error('Falta evento_id o email');
+  }
+
+  var sheet = getOrCreateSheetWithHeaders_(VALIDACIONES_SHEET_NAME, VALIDACIONES_HEADERS);
+  var token = Utilities.getUuid().replace(/-/g, '');
+  appendRowComoTexto_(sheet, [
+    data.evento_id, data.email, token, new Date(), 'pendiente', '',
+  ], [4]); // columna 4 = FechaEnvio, es un Date de verdad
+
+  var scriptUrl = ScriptApp.getService().getUrl();
+  var linkConfirmar = scriptUrl + '?evt=1&token=' + token + '&decision=confirmar';
+  var linkRechazar  = scriptUrl + '?evt=1&token=' + token + '&decision=rechazar';
+
+  MailApp.sendEmail({
+    to: data.email,
+    subject: 'hayminga.org detectó tu evento — ¿lo publicamos?',
+    body:
+      'Hola!\n\n' +
+      'Vimos en Instagram que organizás "' + (data.nombre || 'un evento') + '"' +
+      (data.fecha_inicio ? ' (' + data.fecha_inicio + ')' : '') + ' y lo sumamos a ' +
+      'hayminga.org, el portal de eventos de bioconstrucción en Argentina.\n\n' +
+      '¿Está bien así? Un clic y listo:\n\n' +
+      'Sí, publicalo:\n' + linkConfirmar + '\n\n' +
+      'No, no es así / no quiero:\n' + linkRechazar + '\n\n' +
+      'Si no hacés nada, lo revisamos nosotros a mano en unos días.\n\n' +
+      '— hayminga.org (portal armado por la comunidad, sumá el tuyo con #hayminga)',
+  });
+
+  return data.evento_id;
+}
+
+function manejarValidacionEvento_(token, decision) {
+  var mensaje;
+  if (!token || (decision !== 'confirmar' && decision !== 'rechazar')) {
+    mensaje = '<h2>Link inválido</h2><p>Faltan datos.</p>';
+  } else {
+    var resultado = resolverValidacionEvento_(token, decision);
+    if (resultado === 'ya_usado') {
+      mensaje = '<h2>Este link ya no es válido</h2><p>Ya fue usado antes, o venció.</p>';
+    } else if (resultado === 'no_encontrado') {
+      mensaje = '<h2>Este link ya no es válido</h2><p>No encontramos esa solicitud.</p>';
+    } else if (decision === 'confirmar') {
+      mensaje = '<h2>¡Listo, gracias!</h2><p>Tu evento ya está publicado en hayminga.org 🌿</p>';
+    } else {
+      mensaje = '<h2>Listo</h2><p>Sacamos el evento de hayminga.org. Gracias por avisarnos.</p>';
+    }
+  }
+  return HtmlService.createHtmlOutput(
+    '<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;color:#2A1A0A;">' + mensaje + '</body>'
+  );
+}
+
+function resolverValidacionEvento_(token, decision) {
+  var sheet = getOrCreateSheetWithHeaders_(VALIDACIONES_SHEET_NAME, VALIDACIONES_HEADERS);
+  var datos = sheet.getDataRange().getValues();
+  for (var i = 1; i < datos.length; i++) {
+    if (String(datos[i][2]) !== token) continue; // columna 3 = Token
+    if (datos[i][4] !== 'pendiente') return 'ya_usado'; // columna 5 = Resultado
+    var eventoId = datos[i][0];
+
+    sheet.getRange(i + 1, 5).setValue(decision === 'confirmar' ? 'confirmado' : 'rechazado');
+    sheet.getRange(i + 1, 6).setValue(new Date());
+
+    var encontrado = actualizarEstadoEvento_(
+      eventoId,
+      decision === 'confirmar' ? 'confirmado' : 'descartado',
+      decision === 'confirmar'
+    );
+    return encontrado ? 'ok' : 'no_encontrado';
+  }
+  return 'no_encontrado';
+}
+
+// Toca solo Activo (col 1) y Estado (col 17) — el organizador aprueba o
+// rechaza lo ya extraído, no lo edita (mismo alcance que descartarEvento_).
+function actualizarEstadoEvento_(eventoId, estado, activo) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
+  var ultimaFila = sheet.getLastRow();
+  var ids = sheet.getRange(2, 15, ultimaFila - 1, 1).getValues(); // columna O = Id
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(eventoId)) {
+      var fila = i + 2;
+      sheet.getRange(fila, 1).setNumberFormat('@').setValue(activo ? 'true' : 'false');
+      sheet.getRange(fila, 17).setNumberFormat('@').setValue(estado);
+      return true;
+    }
+  }
+  return false;
 }
 
 

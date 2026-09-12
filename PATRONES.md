@@ -82,6 +82,17 @@ Never let account profile override explicit country signals in caption or flyer.
 - Production (billing enabled): 0.5s interval, much higher ceiling.
 - Configurable by env var — no code changes needed.
 
+**Any auto-write/auto-send loop needs a hard per-run cap, not just a quality
+floor** — a floor alone doesn't bound blast radius.
+- Real incident: `curar_fuentes.py`'s `MIN_SUGERENCIAS_PARA_AGREGAR=2` floor
+  let a single run add 515 accounts (137→652), then 2976 more the next run
+  (09/2026) before anyone noticed — see ROADMAP.md.
+- Same reasoning applied to the organizer-validation emails
+  (`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA=10`): even a "correct" trigger
+  condition can fire on many rows at once on a given day.
+- Excess candidates are deferred to the next run / the normal manual
+  queue, never dropped — the cap changes timing, not outcome.
+
 ## Architecture Constraints
 
 **Frontend ↔ Importer coupled via column order in Sheets** — always append, never reorder.
