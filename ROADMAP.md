@@ -388,7 +388,33 @@ Sin pérdida de datos en ninguna de las dos corridas: el guardado es
 incremental y los posts no llegados a procesar quedan para la corrida
 siguiente (`RETRY` en `processor.py`, no se marcan como vistos).
 
-## Métricas a monitorear
+## Corrección: no era crecimiento gradual, era un bug de altas (12/09)
+
+La entrada anterior quedó corta. Tres corridas más después de subir a
+120 min volvieron a cortarse justo en el límite — subir el número solo
+pateó el problema tres días. La causa real: `curar_fuentes.py` agregó
+**515 cuentas en una sola corrida** el 08/09 (137 → 652,
+`dc1696e`, cuentas sin relación al tema tipo `@0zod.boy`), no un
+crecimiento orgánico de a poco.
+
+El piso `MIN_SUGERENCIAS_PARA_AGREGAR=2` ("sugerida por al menos 2
+cuentas nuestras") ya existía justamente para este problema — un
+incidente previo sin el piso trajo más de 900 cuentas de golpe — pero
+resultó insuficiente: con 137 cuentas fuente diversas, Instagram sugiere
+en común suficientes cuentas genéricas de "vida natural" como para que
+un piso de 2 casi no filtre nada.
+
+**Fix:** revertidas las 515 altas (`cuentas_seguidas` vuelve a 137),
+piso subido a 3, y sobre todo un tope duro (`MAX_ALTAS_POR_CORRIDA=15`)
+que prioriza las más sugeridas y deja el resto para la corrida
+siguiente — así una mala tanda de "sugeridas" nunca vuelve a
+multiplicar la lista de una vez. El timeout de 120 min queda como está
+(no hace daño tener margen de sobra), pero ya no debería hacer falta
+con 137 cuentas.
+
+**Lección:** cuando el mismo síntoma vuelve a pasar después de "arreglarlo"
+subiendo un número, el número no era la causa — hay que mirar qué
+cambió en los datos, no solo en el límite.
 
 **Ahora (F1):**
 - Eventos activos: meta 50+
