@@ -53,6 +53,18 @@ def armar_mensaje(estado_job: str) -> str:
         lineas.append(f"Eventos nuevos guardados: {resumen.get('eventos_insertados', 0)}")
         if "llamadas_hikerapi" in resumen:
             lineas.append(f"Llamadas a HikerAPI: {resumen['llamadas_hikerapi']}")
+        # Real incidente 12/09/2026: una key de HikerAPI rota hizo fallar
+        # las 179 llamadas de la corrida con 401, pero como cada fuente
+        # atrapa su propio error y sigue con la siguiente, el job terminó
+        # "success" con 0 posts — indistinguible de un día real sin
+        # eventos nuevos hasta que alguien leyó el log a mano.
+        llamadas = resumen.get("llamadas_hikerapi", 0)
+        errores = resumen.get("errores_hikerapi", 0)
+        if llamadas and errores / llamadas >= 0.5:
+            lineas.append(
+                f"⚠️ {errores}/{llamadas} llamadas a HikerAPI fallaron con 401 "
+                f"Unauthorized — revisar HIKERAPI_KEY, no es un día sin eventos"
+            )
         error_cuentas = resumen.get("error_cuentas_seguidas") or ""
         if error_cuentas:
             lineas.append(f"Sección cuentas seguidas CAYÓ: {error_cuentas[:120]}")
