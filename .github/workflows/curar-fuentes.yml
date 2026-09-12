@@ -1,8 +1,13 @@
 name: Curar fuentes de descubrimiento (hashtags/cuentas)
 
 on:
-  schedule:
-    - cron: "0 12 * * *"  # 09:00 hora Argentina, todos los días (temporal, hasta tener más volumen)
+  # Cron desactivado (12/09/2026): descubrir_candidatos() infló
+  # cuentas_seguidas de 137 a 3627 en dos corridas (ver ROADMAP.md). Con
+  # el tope MAX_ALTAS_POR_CORRIDA ya puesto en curar_fuentes.py, correrlo
+  # de nuevo por workflow_dispatch cuando se decida reactivarlo debería
+  # ser seguro — mientras tanto, solo manual.
+  # schedule:
+  #   - cron: "0 12 * * *"  # 09:00 hora Argentina
   workflow_dispatch: {}
 
 permissions:
