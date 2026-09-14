@@ -303,31 +303,6 @@ def cargar_cuentas_pais(service) -> dict[str, str]:
     return out
 
 
-VALIDACIONES_SHEET_NAME = "ValidacionesOrganizador"
-
-
-def contar_validaciones_organizador(service) -> dict[str, int]:
-    """Cuenta por Resultado la hoja que llena Code.gs cuando le pide al
-    organizador que confirme/rechace su evento por mail — ver ROADMAP.md,
-    09/2026. Sirve para el aviso diario y para decidir a futuro si vale
-    la pena el canal (cuántos confirman vs. cuántos nunca responden)."""
-    get_or_create_sheet_with_headers(
-        service, VALIDACIONES_SHEET_NAME,
-        ["EventoId", "Email", "Token", "FechaEnvio", "Resultado", "FechaResolucion"],
-    )
-    result = _con_reintentos(lambda: (
-        service.spreadsheets().values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"{VALIDACIONES_SHEET_NAME}!E2:E")
-        .execute()
-    ))
-    conteo = {"pendiente": 0, "confirmado": 0, "rechazado": 0, "vencido_sin_respuesta": 0}
-    for row in result.get("values", []):
-        resultado = (row[0] if row else "").strip()
-        if resultado in conteo:
-            conteo[resultado] += 1
-    return conteo
-
-
 def cargar_cuentas_email(service) -> dict[str, str]:
     """Email público (`public_email`) del perfil de Instagram, cacheado
     junto al user_id — mismo criterio que cargar_cuentas_pais: cobertura

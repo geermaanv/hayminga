@@ -765,6 +765,7 @@ function cargarDatos() {
       var mesActualKey = hoyInicio.getFullYear() + '-' + String(hoyInicio.getMonth() + 1).padStart(2, '0');
       seleccionarMes(mesActualKey);
       iniciarRevisionSiCorresponde();
+      abrirDirectorioSiCorresponde();
     })
     .catch(function(err) {
       console.error('Error:', err);
@@ -1405,6 +1406,15 @@ function mostrarContadorPendientes() {
 
 // ---- Revisión manual (cambio temporal): ?pendientes ----
 var eventoEnRevision = null;
+
+// ?directorio=1 — link directo desde el mail a organizadores (ver
+// ROADMAP.md, contacto por email): abre el form del Directorio solo,
+// en vez de mandarlos al sitio a buscar el botón "Sumate".
+function abrirDirectorioSiCorresponde() {
+  var params = new URLSearchParams(window.location.search);
+  if (!params.has('directorio')) return;
+  abrirFormDirectorio();
+}
 
 function iniciarRevisionSiCorresponde() {
   var params = new URLSearchParams(window.location.search);

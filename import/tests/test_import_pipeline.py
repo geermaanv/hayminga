@@ -455,18 +455,6 @@ class CuentasEmailTests(unittest.TestCase):
         out = sheets.cargar_cuentas_email(service)
         self.assertEqual(out, {"cuenta_con_email": "org@ejemplo.com"})
 
-    @patch("src.sheets.get_or_create_sheet_with_headers")
-    def test_contar_validaciones_organizador_cuenta_por_resultado(self, get_or_create):
-        service = Mock()
-        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
-            "values": [["confirmado"], ["confirmado"], ["rechazado"], ["pendiente"], [""], ["algo_no_reconocido"]]
-        }
-        out = sheets.contar_validaciones_organizador(service)
-        self.assertEqual(
-            out,
-            {"pendiente": 1, "confirmado": 2, "rechazado": 1, "vencido_sin_respuesta": 0},
-        )
-
     def test_guardar_cuentas_ids_incluye_email_cuando_se_pasa(self):
         service = Mock()
         sheets.guardar_cuentas_ids(
@@ -826,7 +814,7 @@ class NotificarRunTests(unittest.TestCase):
     que no explote justo en el caso que tiene que avisar (run incompleto,
     Sheet caído)."""
 
-    def _mensaje(self, estado_job="success", resumen=None, contar=None, validaciones=None):
+    def _mensaje(self, estado_job="success", resumen=None, contar=None):
         from src import notificar_run
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -835,19 +823,11 @@ class NotificarRunTests(unittest.TestCase):
             try:
                 if resumen is not None:
                     Path("run_summary.json").write_text(json.dumps(resumen))
-                with patch.object(notificar_run, "contar_estados") as contar_mock, \
-                     patch.object(notificar_run, "get_service"), \
-                     patch.object(notificar_run, "contar_validaciones_organizador") as validaciones_mock:
+                with patch.object(notificar_run, "contar_estados") as contar_mock:
                     if isinstance(contar, Exception):
                         contar_mock.side_effect = contar
                     else:
                         contar_mock.return_value = contar or (0, 0)
-                    if isinstance(validaciones, Exception):
-                        validaciones_mock.side_effect = validaciones
-                    else:
-                        validaciones_mock.return_value = validaciones or {
-                            "pendiente": 0, "confirmado": 0, "rechazado": 0, "vencido_sin_respuesta": 0,
-                        }
                     return notificar_run.armar_mensaje(estado_job)
             finally:
                 os.chdir(cwd)
@@ -876,33 +856,15 @@ class NotificarRunTests(unittest.TestCase):
         mensaje = self._mensaje(resumen={"eventos_insertados": 1, "duracion_segundos": 45})
         self.assertIn("Duración: 45s", mensaje)
 
-    def test_incluye_validaciones_enviadas_hoy(self):
+    def test_incluye_avisos_mandados_hoy(self):
         mensaje = self._mensaje(
             resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 3},
         )
-        self.assertIn("Validaciones pedidas a organizadores hoy: 3", mensaje)
+        self.assertIn("Avisos mandados a organizadores hoy: 3", mensaje)
 
-    def test_incluye_acumulado_de_validaciones_de_organizadores(self):
-        mensaje = self._mensaje(
-            resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 1},
-            validaciones={"pendiente": 4, "confirmado": 10, "rechazado": 2, "vencido_sin_respuesta": 3},
-        )
-        self.assertIn("confirmaron: 10", mensaje)
-        self.assertIn("rechazaron: 2", mensaje)
-        self.assertIn("esperando: 4", mensaje)
-        self.assertIn("sin respuesta a tiempo: 3", mensaje)
-
-    def test_sin_validaciones_historicas_no_agrega_linea(self):
+    def test_sin_avisos_no_agrega_linea(self):
         mensaje = self._mensaje(resumen={"eventos_insertados": 2})
-        self.assertNotIn("confirmaron:", mensaje)
-
-    def test_error_contando_validaciones_no_rompe_el_aviso_si_hubo_envios(self):
-        mensaje = self._mensaje(
-            resumen={"eventos_insertados": 2, "validaciones_organizador_enviadas": 1},
-            validaciones=RuntimeError("sheet caído"),
-        )
-        self.assertIn("Eventos nuevos guardados: 2", mensaje)
-        self.assertIn("No se pudo contar el histórico de validaciones", mensaje)
+        self.assertNotIn("Avisos mandados", mensaje)
 
     def test_reporta_caida_de_cuentas_seguidas(self):
         mensaje = self._mensaje(
@@ -1030,17 +992,18 @@ class HikerApiCostTests(unittest.TestCase):
         self.assertEqual(hiker_pipeline._errores_hikerapi[0], 0)
 
 
-class PedirValidacionOrganizadorTests(unittest.TestCase):
-    """Pedido de validación de evento por mail al organizador — ver
+class AvisarEventoPublicadoTests(unittest.TestCase):
+    """Aviso por mail al organizador de que su evento ya se publicó — ver
     ROADMAP.md, 09/2026. Solo se dispara cuando HikerAPI trajo un email
-    público de la cuenta que originó el evento."""
+    público de la cuenta que originó el evento; no hay confirmación por
+    click, el email ya alcanzó para publicar directo."""
 
     @patch.dict(os.environ, {}, clear=True)
     def test_sin_config_de_apps_script_no_intenta_nada(self):
         from src import hiker_pipeline
 
-        resultado = hiker_pipeline.pedir_validacion_organizador(
-            {"id": "abc123", "nombre": "Taller"}, "org@ejemplo.com"
+        resultado = hiker_pipeline.avisar_evento_publicado(
+            {"nombre": "Taller"}, "org@ejemplo.com"
         )
         self.assertFalse(resultado)
 
@@ -1049,19 +1012,18 @@ class PedirValidacionOrganizadorTests(unittest.TestCase):
         "APPS_SCRIPT_URL": "https://script.google.com/x",
         "APPS_SCRIPT_SHARED_SECRET": "shh",
     })
-    def test_manda_evento_id_y_email_al_apps_script(self, post):
+    def test_manda_nombre_y_email_al_apps_script(self, post):
         from src import hiker_pipeline
 
         post.return_value = Mock(json=lambda: {"success": True})
-        evento = {"id": "abc123", "nombre": "Taller de Barro", "fecha_inicio_iso": "2026-10-01"}
+        evento = {"nombre": "Taller de Barro"}
 
-        resultado = hiker_pipeline.pedir_validacion_organizador(evento, "org@ejemplo.com")
+        resultado = hiker_pipeline.avisar_evento_publicado(evento, "org@ejemplo.com")
 
         self.assertTrue(resultado)
         payload = json.loads(post.call_args.kwargs["data"])
-        self.assertEqual(payload["accion"], "solicitar_validacion_evento")
+        self.assertEqual(payload["accion"], "avisar_evento_publicado")
         self.assertEqual(payload["secreto"], "shh")
-        self.assertEqual(payload["evento_id"], "abc123")
         self.assertEqual(payload["email"], "org@ejemplo.com")
         self.assertEqual(payload["nombre"], "Taller de Barro")
 
@@ -1075,8 +1037,8 @@ class PedirValidacionOrganizadorTests(unittest.TestCase):
 
         post.side_effect = RuntimeError("timeout")
 
-        resultado = hiker_pipeline.pedir_validacion_organizador(
-            {"id": "abc123"}, "org@ejemplo.com"
+        resultado = hiker_pipeline.avisar_evento_publicado(
+            {"nombre": "Taller"}, "org@ejemplo.com"
         )
         self.assertFalse(resultado)
 

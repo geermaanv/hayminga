@@ -461,6 +461,33 @@ para poder responder con datos, no intuición, si el canal vale la pena
 aviso diario de Telegram (duración de la corrida + validaciones
 mandadas hoy + acumulado histórico), no solo al resumen semanal.
 
+## Corrección: se sacó el mecanismo de confirmar/rechazar por token (14/09)
+
+La entrada anterior (12/09) todavía pedía "¿confirmás o rechazás?" por
+mail con link de un solo uso. Repensándolo: pedirle al organizador que
+haga clic para confirmar algo que HikerAPI ya trae con bastante señal de
+confianza (email público de la cuenta que posteó) es fricción de más, y
+un link roto o un mail a spam deja el evento colgado en
+`pendiente_organizador` sin necesidad.
+
+**Cambio de modelo:** el evento se publica directo apenas hay email
+disponible (`Estado=confirmado`, `Activo=true`, sin pasar por
+`pendiente_confirmacion` ni por ningún estado transitorio nuevo) y el
+mail que se manda ya no pide nada — avisa que el evento está publicado,
+con link, y dos CTA: sumarse al Directorio (con la razón: te hace
+encontrable todo el año, no solo la semana del evento) y taggear a
+`@hayminga` la próxima vez para no depender de que lo encontremos por
+hashtag. Si algo está mal, el organizador responde el mail y se corrige
+a mano — no hay volumen para que eso sea un cuello de botella.
+
+Con esto se cae todo lo que existía solo para sostener el flujo de
+click: el estado `pendiente_organizador`, la hoja
+`ValidacionesOrganizador` y el desglose de confirmaron/rechazaron/
+esperando/vencieron en Telegram. Queda solo el conteo de mails mandados
+por corrida (mismo tope de 10) — la métrica que importa ahora no es
+"cuántos confirman" sino simplemente si el canal se usa y si llegan
+respuestas pidiendo cambios.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

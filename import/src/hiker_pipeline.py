@@ -45,7 +45,7 @@ from src.geocodificar import geocodificar_direccion
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
     cargar_cuentas_ids, cargar_cuentas_pais, cargar_cuentas_email, guardar_cuentas_ids,
-    generate_id, SPREADSHEET_ID, SHEET_NAME,
+    SPREADSHEET_ID, SHEET_NAME,
 )
 
 IMAGES_DIR = Path("images_hiker")
@@ -272,12 +272,15 @@ def subir_imagen_a_drive(image_bytes: bytes, media_type: str) -> str | None:
         return None
 
 
-def pedir_validacion_organizador(evento: dict, email: str) -> bool:
-    """Le pide al organizador que confirme/rechace el evento por mail, en
-    vez de dejarlo esperando revisión manual — ver ROADMAP.md, 09/2026.
-    Devuelve True si el mail salió (Apps Script confirmó el envío); si
-    falla, el evento se guarda igual con su Estado sin tocar (queda en
-    pendiente_confirmacion como antes, no se pierde nada)."""
+def avisar_evento_publicado(evento: dict, email: str) -> bool:
+    """Avisa por mail al organizador que su evento ya se publicó (no pide
+    confirmación por click — tener el email público ya es señal suficiente
+    de confianza, ver ROADMAP.md 09/2026) y suma los dos CTA que importan:
+    Directorio y taggear a @hayminga la próxima vez. Si algo está mal, el
+    organizador responde el mail y se corrige a mano — no hay link de
+    edición todavía, se prueba así primero. Devuelve True si el mail salió
+    (Apps Script confirmó el envío); si falla, el evento ya quedó publicado
+    igual, solo no se avisó — no se pierde nada."""
     apps_script_url = os.environ.get("APPS_SCRIPT_URL")
     secreto = os.environ.get("APPS_SCRIPT_SHARED_SECRET")
     if not apps_script_url or not secreto:
@@ -287,19 +290,17 @@ def pedir_validacion_organizador(evento: dict, email: str) -> bool:
             apps_script_url,
             headers={"Content-Type": "text/plain"},
             data=json.dumps({
-                "accion": "solicitar_validacion_evento",
+                "accion": "avisar_evento_publicado",
                 "secreto": secreto,
-                "evento_id": evento["id"],
                 "email": email,
                 "nombre": evento.get("nombre") or "",
-                "fecha_inicio": evento.get("fecha_inicio_iso") or evento.get("fecha_inicio") or "",
             }),
             timeout=30,
         )
         data = resp.json()
         return bool(data.get("success"))
     except Exception as e:
-        print(f"[hiker_pipeline] {evento.get('link')}: error pidiendo validación al organizador — {e}")
+        print(f"[hiker_pipeline] {evento.get('link')}: error avisando al organizador — {e}")
         return False
 
 
@@ -831,20 +832,18 @@ def run() -> int:
                     print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                     continue
                 if evento:
-                    # Si tenemos el email público del organizador, le pedimos
-                    # que confirme/rechace por mail en vez de dejarlo esperando
-                    # revisión manual — ver ROADMAP.md, 09/2026. Id se genera
-                    # acá (no en append_events) para que coincida con el que
-                    # queda en ValidacionesOrganizador.
-                    if (
-                        evento.get("estado") == "pendiente_confirmacion"
-                        and email_cuenta
-                        and validaciones_enviadas[0] < _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA
-                    ):
-                        evento.setdefault("id", generate_id())
-                        if pedir_validacion_organizador(evento, email_cuenta):
-                            evento["estado"] = "pendiente_organizador"
-                            validaciones_enviadas[0] += 1
+                    # Tener el email público del organizador ya es señal
+                    # suficiente de confianza: se publica directo (sin pasar
+                    # por pendiente_confirmacion) y se avisa por mail con los
+                    # CTA de Directorio + tag a @hayminga — ver ROADMAP.md,
+                    # 09/2026. El tope solo frena el mail (no saturar de
+                    # golpe), nunca la publicación en sí.
+                    if evento.get("estado") == "pendiente_confirmacion" and email_cuenta:
+                        evento["estado"] = "confirmado"
+                        evento["activo"] = True
+                        if validaciones_enviadas[0] < _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA:
+                            if avisar_evento_publicado(evento, email_cuenta):
+                                validaciones_enviadas[0] += 1
                     eventos_cuenta.append(evento)
                     existing_links.add(post["link"])
                     existing_links.add(instagram_shortcode(post["link"]))
