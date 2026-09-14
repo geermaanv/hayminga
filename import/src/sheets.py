@@ -42,6 +42,14 @@ CUENTAS_CONSULTADAS_HEADERS = ["Username", "FechaConsulta"]
 CUENTAS_IDS_SHEET_NAME = "CuentasIds"
 CUENTAS_IDS_HEADERS = ["Username", "UserId", "PaisTelefono", "EmailPublico"]
 
+# Hoja del Directorio, escrita solo por Code.gs (ver CLAUDE.md) — acá se
+# lee de solo lectura, columna Email (F), para no invitar de nuevo a
+# alguien que ya se dio de alta cuando se le avisa que su evento se
+# publicó (avisar_evento_publicado en hiker_pipeline.py, ver ROADMAP.md
+# 14/09).
+DIRECTORIO_SHEET_NAME = "Directorio"
+DIRECTORIO_EMAIL_RANGE = "F2:F"
+
 # Nuevas columnas (Id, Contacto, Estado) van al final a propósito: así las
 # columnas existentes no cambian de letra ni rompen consumidores que todavía
 # esperan esas posiciones.
@@ -323,6 +331,24 @@ def cargar_cuentas_email(service) -> dict[str, str]:
     return out
 
 
+def cargar_emails_directorio(service) -> set[str]:
+    """Emails ya inscriptos en el Directorio (hoja de solo lectura acá,
+    escrita por Code.gs — ver CLAUDE.md). Se usa para no invitar de nuevo a
+    alguien que ya se dio de alta cuando se le avisa que su evento se
+    publicó (ver ROADMAP.md, 14/09). Si la hoja todavía no existe o falla
+    la lectura, no bloquea el resto de la corrida: se asume que no hay
+    nadie inscripto."""
+    try:
+        result = _con_reintentos(lambda: (
+            service.spreadsheets().values()
+            .get(spreadsheetId=SPREADSHEET_ID, range=f"{DIRECTORIO_SHEET_NAME}!{DIRECTORIO_EMAIL_RANGE}")
+            .execute()
+        ))
+    except Exception:
+        return set()
+    return {row[0].strip().lower() for row in result.get("values", []) if row and row[0].strip()}
+
+
 def guardar_cuentas_ids(
     service,
     nuevos: dict[str, int],
@@ -343,6 +369,44 @@ def guardar_cuentas_ids(
             for u, pk in nuevos.items()
         ]},
     ).execute()
+
+
+def actualizar_cuentas_ids(
+    service,
+    pais_por_cuenta: dict[str, str] | None = None,
+    email_por_cuenta: dict[str, str] | None = None,
+):
+    """A diferencia de guardar_cuentas_ids (que solo agrega filas nuevas),
+    esto actualiza País/Email en filas YA existentes — hace falta porque
+    resolver_user_id_pais_y_email() solo corre para cuentas sin user_id
+    cacheado, así que una cuenta resuelta antes de que estos campos
+    existieran nunca los completa sola. Ver backfill_cuentas_email.py
+    (ROADMAP.md, 14/09)."""
+    pais_por_cuenta = pais_por_cuenta or {}
+    email_por_cuenta = email_por_cuenta or {}
+    usernames = set(pais_por_cuenta) | set(email_por_cuenta)
+    if not usernames:
+        return
+    result = _con_reintentos(lambda: (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:A")
+        .execute()
+    ))
+    filas = {row[0]: i for i, row in enumerate(result.get("values", []), start=2) if row}
+    updates = []
+    for u in usernames:
+        fila = filas.get(u)
+        if not fila:
+            continue
+        if u in pais_por_cuenta:
+            updates.append({"range": f"{CUENTAS_IDS_SHEET_NAME}!C{fila}", "values": [[pais_por_cuenta[u]]]})
+        if u in email_por_cuenta:
+            updates.append({"range": f"{CUENTAS_IDS_SHEET_NAME}!D{fila}", "values": [[email_por_cuenta[u]]]})
+    if updates:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"valueInputOption": "RAW", "data": updates},
+        ).execute()
 
 
 def _col_letter(n: int) -> str:

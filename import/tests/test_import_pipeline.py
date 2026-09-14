@@ -551,6 +551,102 @@ class CuentasEmailTests(unittest.TestCase):
         self.assertIsNotNone(evento)
         self.assertEqual(evento["pais"], "Argentina")
 
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_procesar_post_detecta_tag_a_hayminga(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Bioconstrucción",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": "Argentina",
+            "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/CCC333/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de barro en Córdoba, gracias @hayminga por difundir!",
+                "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertTrue(evento["ya_taggeado_hayminga"])
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_procesar_post_sin_tag_a_hayminga(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Bioconstrucción",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": "Argentina",
+            "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/DDD444/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de barro en Córdoba", "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertFalse(evento["ya_taggeado_hayminga"])
+
+
+class DirectorioEmailsTests(unittest.TestCase):
+    """Lectura de solo lectura de la columna Email del Directorio — para no
+    invitar de nuevo a alguien ya inscripto al avisarle que su evento se
+    publicó (ver ROADMAP.md, 14/09)."""
+
+    def test_cargar_emails_directorio_normaliza_a_minuscula(self):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [["Org@Ejemplo.com"], [""], ["otra@ejemplo.com"]]
+        }
+        out = sheets.cargar_emails_directorio(service)
+        self.assertEqual(out, {"org@ejemplo.com", "otra@ejemplo.com"})
+
+    def test_cargar_emails_directorio_si_falla_devuelve_vacio(self):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.side_effect = RuntimeError("nope")
+        out = sheets.cargar_emails_directorio(service)
+        self.assertEqual(out, set())
+
+
+class ActualizarCuentasIdsTests(unittest.TestCase):
+    """actualizar_cuentas_ids: a diferencia de guardar_cuentas_ids (que solo
+    agrega filas nuevas), esto backfillea País/Email en filas existentes —
+    lo usa backfill_cuentas_email.py (ver ROADMAP.md, 14/09)."""
+
+    def test_actualiza_solo_las_columnas_con_dato_nuevo(self):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [["cuenta_a"], ["cuenta_b"]]
+        }
+        sheets.actualizar_cuentas_ids(
+            service,
+            pais_por_cuenta={"cuenta_a": "Argentina"},
+            email_por_cuenta={"cuenta_b": "org@ejemplo.com"},
+        )
+        data = service.spreadsheets.return_value.values.return_value.batchUpdate.call_args.kwargs["body"]["data"]
+        self.assertIn({"range": "CuentasIds!C2", "values": [["Argentina"]]}, data)
+        self.assertIn({"range": "CuentasIds!D3", "values": [["org@ejemplo.com"]]}, data)
+
+    def test_sin_datos_no_llama_a_batch_update(self):
+        service = Mock()
+        sheets.actualizar_cuentas_ids(service, {}, {})
+        service.spreadsheets.return_value.values.return_value.batchUpdate.assert_not_called()
+
+    def test_cuenta_desconocida_se_ignora(self):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [["cuenta_a"]]
+        }
+        sheets.actualizar_cuentas_ids(service, email_por_cuenta={"cuenta_fantasma": "org@ejemplo.com"})
+        service.spreadsheets.return_value.values.return_value.batchUpdate.assert_not_called()
+
 
 class SheetsTests(unittest.TestCase):
     def test_dedupe_key_allows_same_title_on_different_dates(self):
@@ -1026,6 +1122,29 @@ class AvisarEventoPublicadoTests(unittest.TestCase):
         self.assertEqual(payload["secreto"], "shh")
         self.assertEqual(payload["email"], "org@ejemplo.com")
         self.assertEqual(payload["nombre"], "Taller de Barro")
+        # Por default (sin pasar los flags) no invita de nuevo ni agradece
+        # de más — el llamador decide con los datos que ya tiene.
+        self.assertFalse(payload["yaEnDirectorio"])
+        self.assertFalse(payload["yaTaggeado"])
+
+    @patch("src.hiker_pipeline.requests.post")
+    @patch.dict(os.environ, {
+        "APPS_SCRIPT_URL": "https://script.google.com/x",
+        "APPS_SCRIPT_SHARED_SECRET": "shh",
+    })
+    def test_manda_ya_en_directorio_y_ya_taggeado_al_apps_script(self, post):
+        from src import hiker_pipeline
+
+        post.return_value = Mock(json=lambda: {"success": True})
+
+        hiker_pipeline.avisar_evento_publicado(
+            {"nombre": "Taller de Barro"}, "org@ejemplo.com",
+            ya_en_directorio=True, ya_taggeado=True,
+        )
+
+        payload = json.loads(post.call_args.kwargs["data"])
+        self.assertTrue(payload["yaEnDirectorio"])
+        self.assertTrue(payload["yaTaggeado"])
 
     @patch("src.hiker_pipeline.requests.post")
     @patch.dict(os.environ, {
@@ -1041,6 +1160,69 @@ class AvisarEventoPublicadoTests(unittest.TestCase):
             {"nombre": "Taller"}, "org@ejemplo.com"
         )
         self.assertFalse(resultado)
+
+
+class BackfillCuentasEmailTests(unittest.TestCase):
+    """Script manual de una sola corrida: completa País/Email para cuentas
+    de CuentasIds cacheadas antes de que existieran estos campos (ver
+    ROADMAP.md, 14/09)."""
+
+    @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email")
+    @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
+    @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111, "cuenta_b": 222})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={"cuenta_a": "Argentina"})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
+    def test_dry_run_no_llama_a_hikerapi(
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+    ):
+        from src import backfill_cuentas_email
+
+        backfill_cuentas_email.backfill(dry_run=True)
+
+        resolver.assert_not_called()
+        actualizar.assert_not_called()
+
+    @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email")
+    @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
+    @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111, "cuenta_b": 222})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={"cuenta_a": "Argentina"})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
+    def test_escribir_solo_resuelve_cuentas_incompletas(
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+    ):
+        from src import backfill_cuentas_email
+
+        # cuenta_a ya tiene país (falta email); cuenta_b no tiene ninguno.
+        resolver.side_effect = [
+            (111, "Argentina", "a@ejemplo.com"),
+            (222, "", "b@ejemplo.com"),
+        ]
+
+        backfill_cuentas_email.backfill(dry_run=False)
+
+        self.assertEqual(resolver.call_count, 2)
+        actualizar.assert_called_once_with(
+            get_service.return_value,
+            {"cuenta_a": "Argentina"},
+            {"cuenta_a": "a@ejemplo.com", "cuenta_b": "b@ejemplo.com"},
+        )
+
+    @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email", side_effect=RuntimeError("401"))
+    @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
+    @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
+    def test_error_en_una_cuenta_no_frena_el_resto(
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+    ):
+        from src import backfill_cuentas_email
+
+        backfill_cuentas_email.backfill(dry_run=False)
+
+        actualizar.assert_called_once_with(get_service.return_value, {}, {})
 
 
 class CandidatosHashtagsTests(unittest.TestCase):
