@@ -1182,13 +1182,14 @@ class BackfillCuentasEmailTests(unittest.TestCase):
     ROADMAP.md, 14/09)."""
 
     @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email._cuentas_seguidas_activas", return_value={"cuenta_a", "cuenta_b"})
     @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email")
     @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
     @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111, "cuenta_b": 222})
     @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={"cuenta_a": "Argentina"})
     @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
     def test_dry_run_no_llama_a_hikerapi(
-        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, activas, get_service,
     ):
         from src import backfill_cuentas_email
 
@@ -1198,13 +1199,14 @@ class BackfillCuentasEmailTests(unittest.TestCase):
         actualizar.assert_not_called()
 
     @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email._cuentas_seguidas_activas", return_value={"cuenta_a", "cuenta_b"})
     @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email")
     @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
     @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111, "cuenta_b": 222})
     @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={"cuenta_a": "Argentina"})
     @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
     def test_escribir_solo_resuelve_cuentas_incompletas(
-        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, activas, get_service,
     ):
         from src import backfill_cuentas_email
 
@@ -1224,19 +1226,42 @@ class BackfillCuentasEmailTests(unittest.TestCase):
         )
 
     @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email._cuentas_seguidas_activas", return_value={"cuenta_a"})
     @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email", side_effect=RuntimeError("401"))
     @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
     @patch("src.backfill_cuentas_email.cargar_cuentas_ids", return_value={"cuenta_a": 111})
     @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={})
     @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
     def test_error_en_una_cuenta_no_frena_el_resto(
-        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, get_service,
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, activas, get_service,
     ):
         from src import backfill_cuentas_email
 
         backfill_cuentas_email.backfill(dry_run=False)
 
         actualizar.assert_called_once_with(get_service.return_value, {}, {})
+
+    @patch("src.backfill_cuentas_email.get_service")
+    @patch("src.backfill_cuentas_email._cuentas_seguidas_activas", return_value={"cuenta_activa"})
+    @patch("src.backfill_cuentas_email.resolver_user_id_pais_y_email")
+    @patch("src.backfill_cuentas_email.actualizar_cuentas_ids")
+    @patch("src.backfill_cuentas_email.cargar_cuentas_ids",
+           return_value={"cuenta_activa": 111, "cuenta_vieja_del_bug": 222})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_pais", return_value={})
+    @patch("src.backfill_cuentas_email.cargar_cuentas_email", return_value={})
+    def test_ignora_cuentas_cacheadas_que_ya_no_estan_en_config(
+        self, cuentas_email, cuentas_pais, cuentas_ids, actualizar, resolver, activas, get_service,
+    ):
+        """CuentasIds arrastra cuentas que ya no se siguen (ej. las ~515 del
+        bug de curar_fuentes de agosto) — no hay que gastar HikerAPI en
+        resolverlas si el pipeline nunca las va a usar."""
+        from src import backfill_cuentas_email
+
+        resolver.return_value = (111, "Argentina", "a@ejemplo.com")
+
+        backfill_cuentas_email.backfill(dry_run=False)
+
+        resolver.assert_called_once_with("cuenta_activa")
 
 
 class CandidatosHashtagsTests(unittest.TestCase):
