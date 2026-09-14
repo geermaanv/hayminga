@@ -1,0 +1,47 @@
+name: Backfill emails de cuentas (temporal)
+
+# Corrida manual de UNA SOLA VEZ: completa País/Email en CuentasIds para
+# cuentas cacheadas antes de que existieran esos campos (bug de cobertura
+# descrito en ROADMAP.md, 14/09 — ver src/backfill_cuentas_email.py). No
+# es un cron, es una migración puntual — este archivo se borra después de
+# correrla, mismo criterio que _diagnostico-hikerapi.yml en septiembre.
+
+on:
+  workflow_dispatch:
+    inputs:
+      escribir:
+        description: "true = llama a HikerAPI y guarda; false = solo cuenta cuántas cuentas faltan (dry-run)"
+        required: true
+        default: "false"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: import
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: import/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Backfill
+        env:
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
+        run: |
+          if [ "${{ inputs.escribir }}" = "true" ]; then
+            python -m src.backfill_cuentas_email --escribir
+          else
+            python -m src.backfill_cuentas_email
+          fi
