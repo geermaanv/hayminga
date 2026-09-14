@@ -91,14 +91,14 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 
 **Event state:** Two orthogonal fields per row:
 - `Activo` (true/false) — controls visibility on site
-- `Estado` — curation state: `confirmado`, `pendiente_confirmacion` (review queue), `descartado` (blacklisted, but dedup still tracks it), `pendiente_organizador` (transient, see below)
-  - Older values (`pendiente`, `revision_fuente`) collapsed into `pendiente_confirmacion` — don't reintroduce.
+- `Estado` — curation state: `confirmado`, `pendiente_confirmacion` (review queue), `descartado` (blacklisted, but dedup still tracks it)
+  - Older values (`pendiente`, `revision_fuente`, `pendiente_organizador`) collapsed into `pendiente_confirmacion` or removed — don't reintroduce.
 
-**Organizer validation by email** (09/2026, see ROADMAP.md): manual review doesn't scale, so when HikerAPI's profile lookup returns a `public_email` for the account that posted the event, `hiker_pipeline.py` skips `pendiente_confirmacion` and sets `Estado=pendiente_organizador` instead, then calls `Code.gs` (`solicitar_validacion_evento`, same shared-secret channel as `subir_imagen`) to email the organizer a one-click confirm/reject link. Capped at `_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` (10) per run — a trickle, not a blast, same reasoning as `MAX_ALTAS_POR_CORRIDA` in `curar_fuentes.py`.
-- `pendiente_organizador` is always transient: confirm → `confirmado`+`Activo=true`; reject → `descartado`; no response within ~5-7 days → falls back to `pendiente_confirmacion` (today's queue, nothing lost).
-- Tracked in its own sheet `ValidacionesOrganizador` (`EventoId, Email, Token, FechaEnvio, Resultado, FechaResolucion`) — mirrors `SolicitudesContacto`'s token-link pattern for the Directorio. Email is deliberately **not** stored on `Eventos` (same no-PII-on-a-more-visible-sheet policy as Directorio).
-- Email cached per account in `CuentasIds!EmailPublico` (same free-lookup, partial-coverage pattern as `PaisTelefono`) — `sheets.cargar_cuentas_email()` / `contar_validaciones_organizador()`.
+**Organizer notification by email** (09/2026, see ROADMAP.md): manual review doesn't scale, so when HikerAPI's profile lookup returns a `public_email` for the account that posted the event, `hiker_pipeline.py` publishes it straight away (`Estado=confirmado`, `Activo=true`, skipping `pendiente_confirmacion` entirely) — having a public business email is treated as enough of a trust signal on its own. It then calls `Code.gs` (`avisar_evento_publicado`, same shared-secret channel as `subir_imagen`) to email the organizer that their event is live, with two CTAs: join the Directorio (explained, not just linked) and tag `@hayminga` next time so it gets picked up automatically. No confirm/reject click, no token, no separate tracking sheet — if something's wrong the organizer just replies to the mail and it gets fixed by hand. Capped at `_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` (10) mails per run — a trickle, not a blast, same reasoning as `MAX_ALTAS_POR_CORRIDA` in `curar_fuentes.py`; the cap only throttles the mail, never the publication.
+- Email cached per account in `CuentasIds!EmailPublico` (same free-lookup, partial-coverage pattern as `PaisTelefono`) — `sheets.cargar_cuentas_email()`.
 - Only wired for `cuentas_seguidas`-sourced events (the account resolution call already happens there for free); hashtag-sourced events don't get a per-post lookup — would add a paid call per post.
+- Known gap: the email lookup only runs `if user_id is None`, so accounts already cached in `CuentasIds` before this feature existed never get `EmailPublico` backfilled — most of the existing ~137 accounts won't trigger this until that's fixed.
+- The Directorio CTA links to `hayminga.org?directorio=1`, which opens the signup form directly (mirrors the `?pendientes` deep link).
 
 **Review queue** (`hayminga.org/?pendientes`): Manual actions via `Code.gs`.
 - `confirmar_evento` — activates row, reopens form for edits

@@ -14,10 +14,7 @@ from pathlib import Path
 
 import requests
 
-from .sheets import (
-    COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service,
-    contar_validaciones_organizador,
-)
+from .sheets import COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service
 
 RESUMEN_PATH = Path("run_summary.json")
 
@@ -92,26 +89,12 @@ def armar_mensaje(estado_job: str) -> str:
     except Exception as e:
         lineas.append(f"No se pudieron contar pendientes/publicados: {e}")
 
-    # Validación de eventos por el organizador vía mail (ver ROADMAP.md,
-    # 09/2026) — cuántas se mandaron hoy + el acumulado histórico, para
-    # poder decidir a futuro si el canal sirve (cuántos confirman vs.
-    # cuántos nunca responden).
+    # Aviso a organizadores vía mail (ver ROADMAP.md, 09/2026): el evento
+    # ya se publicó solo, esto es cuántos avisos + CTA (Directorio, tag a
+    # @hayminga) salieron hoy.
     enviadas_hoy = (resumen or {}).get("validaciones_organizador_enviadas", 0)
     if enviadas_hoy:
-        lineas.append(f"Validaciones pedidas a organizadores hoy: {enviadas_hoy}")
-    try:
-        conteo_validaciones = contar_validaciones_organizador(get_service())
-        total_validaciones = sum(conteo_validaciones.values())
-        if total_validaciones:
-            lineas.append(
-                "Organizadores — confirmaron: {confirmado}, rechazaron: {rechazado}, "
-                "esperando: {pendiente}, sin respuesta a tiempo: {vencido_sin_respuesta}".format(
-                    **conteo_validaciones
-                )
-            )
-    except Exception as e:
-        if enviadas_hoy:
-            lineas.append(f"No se pudo contar el histórico de validaciones: {e}")
+        lineas.append(f"Avisos mandados a organizadores hoy: {enviadas_hoy}")
 
     # Con /top apagado (15/08/2026) la comparación ya no existe: todos los
     # posts vienen de /recent. Se informa el volumen a secas, que sigue
