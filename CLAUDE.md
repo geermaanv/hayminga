@@ -2,6 +2,8 @@
 
 Guidance for Claude Code when working on hayminga.org.
 
+**Idioma:** responder siempre en español en esta conversación/repo — es como se habla con el mantenedor.
+
 **Before making changes, read (in order):**
 1. `ESTRATEGIA.md` — goal, phases, why each decision matters
 2. `PATRONES.md` — critical patterns & constraints that affect code
@@ -48,6 +50,7 @@ python -m src.candidatos_tecnicas                  # free: technique vocabulary 
 python -m src.mensajes_organizadores               # free: DM drafts to invite event organizers to the Directorio
 python -m src.geocodificar                         # free: dry-run geocoding of rows without coordinates (--escribir to apply)
 python -m src.contenido_instagram                  # free: refill the Instagram content queue (idempotent)
+python -m src.backfill_cuentas_email               # one-off, costs HikerAPI calls: backfill País/Email for cuentas_seguidas cached before those fields existed (--escribir to apply)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
@@ -97,8 +100,9 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 **Organizer notification by email** (09/2026, see ROADMAP.md): manual review doesn't scale, so when HikerAPI's profile lookup returns a `public_email` for the account that posted the event, `hiker_pipeline.py` publishes it straight away (`Estado=confirmado`, `Activo=true`, skipping `pendiente_confirmacion` entirely) — having a public business email is treated as enough of a trust signal on its own. It then calls `Code.gs` (`avisar_evento_publicado`, same shared-secret channel as `subir_imagen`) to email the organizer that their event is live, with two CTAs: join the Directorio (explained, not just linked) and tag `@hayminga` next time so it gets picked up automatically. No confirm/reject click, no token, no separate tracking sheet — if something's wrong the organizer just replies to the mail and it gets fixed by hand. Capped at `_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` (10) mails per run — a trickle, not a blast, same reasoning as `MAX_ALTAS_POR_CORRIDA` in `curar_fuentes.py`; the cap only throttles the mail, never the publication.
 - Email cached per account in `CuentasIds!EmailPublico` (same free-lookup, partial-coverage pattern as `PaisTelefono`) — `sheets.cargar_cuentas_email()`.
 - Only wired for `cuentas_seguidas`-sourced events (the account resolution call already happens there for free); hashtag-sourced events don't get a per-post lookup — would add a paid call per post.
-- Known gap: the email lookup only runs `if user_id is None`, so accounts already cached in `CuentasIds` before this feature existed never get `EmailPublico` backfilled — most of the existing ~137 accounts won't trigger this until that's fixed.
+- The mail is conditional, not always the same text: `sheets.cargar_emails_directorio()` skips the Directorio paragraph if that email is already registered, and `ya_taggeado_hayminga` (regex over the post caption for `#hayminga`/`@hayminga`) swaps the "tag us next time" line for a thank-you when the post already did.
 - The Directorio CTA links to `hayminga.org?directorio=1`, which opens the signup form directly (mirrors the `?pendientes` deep link).
+- The email lookup only runs `if user_id is None` (to avoid a paid call per account per run), so accounts already cached in `CuentasIds` before this feature existed never get `EmailPublico` backfilled by the daily pipeline itself. Fixed with a one-off manual script, not a pipeline change (see `backfill_cuentas_email.py` above) — it's a static profile field, doesn't need to be re-checked daily.
 
 **Review queue** (`hayminga.org/?pendientes`): Manual actions via `Code.gs`.
 - `confirmar_evento` — activates row, reopens form for edits

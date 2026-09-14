@@ -488,6 +488,30 @@ por corrida (mismo tope de 10) — la métrica que importa ahora no es
 "cuántos confirman" sino simplemente si el canal se usa y si llegan
 respuestas pidiendo cambios.
 
+**Mail más inteligente, no siempre el mismo texto (14/09):** dos ajustes
+para que el mail no le pida a nadie algo que no corresponde. Primero,
+`sheets.cargar_emails_directorio()` lee la columna Email del Directorio
+antes de armar el mail: si el organizador ya está inscripto, se saca el
+párrafo de invitación — invitar de nuevo a quien ya se sumó suena a que
+no se le prestó atención. Segundo, `procesar_post()` ya detecta con
+regex (`ya_taggeado_hayminga`) si el caption del post traía `#hayminga`
+o `@hayminga`; si es así, el mail agradece en vez de pedir que lo haga
+la próxima vez.
+
+De paso se resolvió el bug de cobertura que quedó pendiente el 12/09:
+`resolver_user_id_pais_y_email()` solo corre para cuentas sin `user_id`
+cacheado (para no gastar una llamada paga por cuenta en cada corrida), así
+que las cuentas resueltas antes de que existiera el campo `EmailPublico`
+nunca lo completaban solas — confirmado en producción con
+`@diplomadobioarquitectura` y `@ecoaldea_nakkal`, ambas con email público
+real que nunca disparó ningún aviso. En vez de tocar el pipeline diario
+(que repetiría el mismo gasto todos los días para siempre), se agregó
+`backfill_cuentas_email.py`: script manual de una sola corrida, dry-run
+por default, que resuelve solo las cuentas con país o email faltante y
+guarda con `sheets.actualizar_cuentas_ids()` (a diferencia de
+`guardar_cuentas_ids()`, que solo agrega filas nuevas, este actualiza las
+que ya existen).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

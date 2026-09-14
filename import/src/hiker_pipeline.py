@@ -45,7 +45,7 @@ from src.geocodificar import geocodificar_direccion
 from src.sheets import (
     append_events, get_service, instagram_shortcode, actualizar_fuentes_stats,
     cargar_cuentas_ids, cargar_cuentas_pais, cargar_cuentas_email, guardar_cuentas_ids,
-    SPREADSHEET_ID, SHEET_NAME,
+    cargar_emails_directorio, SPREADSHEET_ID, SHEET_NAME,
 )
 
 IMAGES_DIR = Path("images_hiker")
@@ -272,15 +272,19 @@ def subir_imagen_a_drive(image_bytes: bytes, media_type: str) -> str | None:
         return None
 
 
-def avisar_evento_publicado(evento: dict, email: str) -> bool:
+def avisar_evento_publicado(
+    evento: dict, email: str, ya_en_directorio: bool = False, ya_taggeado: bool = False,
+) -> bool:
     """Avisa por mail al organizador que su evento ya se publicó (no pide
     confirmación por click — tener el email público ya es señal suficiente
-    de confianza, ver ROADMAP.md 09/2026) y suma los dos CTA que importan:
-    Directorio y taggear a @hayminga la próxima vez. Si algo está mal, el
-    organizador responde el mail y se corrige a mano — no hay link de
-    edición todavía, se prueba así primero. Devuelve True si el mail salió
-    (Apps Script confirmó el envío); si falla, el evento ya quedó publicado
-    igual, solo no se avisó — no se pierde nada."""
+    de confianza, ver ROADMAP.md 09/2026). El mail es condicional en vez de
+    siempre igual: si el email ya está en el Directorio no lo invita de
+    nuevo, y si el post ya taggeaba a @hayminga le agradece en vez de
+    pedírselo (ver ROADMAP.md 14/09). Si algo está mal, el organizador
+    responde el mail y se corrige a mano — no hay link de edición todavía,
+    se prueba así primero. Devuelve True si el mail salió (Apps Script
+    confirmó el envío); si falla, el evento ya quedó publicado igual, solo
+    no se avisó — no se pierde nada."""
     apps_script_url = os.environ.get("APPS_SCRIPT_URL")
     secreto = os.environ.get("APPS_SCRIPT_SHARED_SECRET")
     if not apps_script_url or not secreto:
@@ -294,6 +298,8 @@ def avisar_evento_publicado(evento: dict, email: str) -> bool:
                 "secreto": secreto,
                 "email": email,
                 "nombre": evento.get("nombre") or "",
+                "yaEnDirectorio": ya_en_directorio,
+                "yaTaggeado": ya_taggeado,
             }),
             timeout=30,
         )
@@ -625,6 +631,10 @@ def procesar_post(
     # no están todavía en config.json (los posts suelen traer muchos más
     # de los que buscamos nosotros).
     data["hashtags_post"] = " ".join(sorted(set(re.findall(r"#\w+", post.get("caption") or ""))))
+    # Para el mail de aviso al organizador (avisar_evento_publicado): si ya
+    # taggeó o mencionó a @hayminga en este post, se lo agradecemos en vez
+    # de pedírselo — pedir algo que ya hizo suena a que no lo vimos.
+    data["ya_taggeado_hayminga"] = bool(re.search(r"(?i)[#@]hayminga\b", post.get("caption") or ""))
     data = validate_event_data(data)
 
     # Última señal de país, más débil que las anteriores a propósito: es
@@ -790,6 +800,7 @@ def run() -> int:
         ids_cacheados = cargar_cuentas_ids(service)
         pais_cacheado = cargar_cuentas_pais(service)
         email_cacheado = cargar_cuentas_email(service)
+        emails_directorio = cargar_emails_directorio(service)
         for username in cuentas_seguidas:
             pais_cuenta = pais_cacheado.get(username, "")
             email_cuenta = email_cacheado.get(username, "")
@@ -842,7 +853,9 @@ def run() -> int:
                         evento["estado"] = "confirmado"
                         evento["activo"] = True
                         if validaciones_enviadas[0] < _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA:
-                            if avisar_evento_publicado(evento, email_cuenta):
+                            ya_en_directorio = email_cuenta.strip().lower() in emails_directorio
+                            ya_taggeado = bool(evento.get("ya_taggeado_hayminga"))
+                            if avisar_evento_publicado(evento, email_cuenta, ya_en_directorio, ya_taggeado):
                                 validaciones_enviadas[0] += 1
                     eventos_cuenta.append(evento)
                     existing_links.add(post["link"])

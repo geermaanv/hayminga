@@ -500,24 +500,43 @@ function avisarEventoPublicado_(data) {
   }
 
   var nombre = data.nombre || 'tu evento';
-  MailApp.sendEmail({
-    to: data.email,
-    subject: '"' + nombre + '" ya está en hayminga.org',
-    body:
-      'Hola!\n\n' +
-      'Vimos que organizás "' + nombre + '" y ya lo sumamos a hayminga.org, ' +
-      'el portal de eventos de bioconstrucción en Argentina:\n\n' +
-      'https://hayminga.org\n\n' +
-      '¿Algún cambio? Respondé este mail y lo vemos.\n\n' +
+  var partes = [
+    'Hola!\n\n' +
+    'Vimos que organizás "' + nombre + '" y ya lo sumamos a hayminga.org, ' +
+    'el portal de eventos de bioconstrucción en Argentina:\n\n' +
+    'https://hayminga.org\n\n' +
+    '¿Algún cambio? Respondé este mail y lo vemos.',
+  ];
+
+  // Si el email ya está en el Directorio no tiene sentido invitarlo de
+  // nuevo (el pipeline lo resuelve antes de llamar acá, ver
+  // cargar_emails_directorio en sheets.py — ROADMAP.md 14/09).
+  if (!data.yaEnDirectorio) {
+    partes.push(
       'Ya que estamos: sumate al Directorio de profesionales de hayminga.org. ' +
       'Es gratis, y es donde la gente busca a quién contratar para su próxima ' +
       'obra — quincheros, terminaciones, estufas, lo que hagas. Publicar un ' +
       'evento te suma visibilidad por una semana; el Directorio te deja ' +
       'encontrable todo el año:\n\n' +
-      'https://hayminga.org?directorio=1\n\n' +
-      'Para tu próximo evento, taggeá a @hayminga o usá #hayminga en el post ' +
-      '— así lo sumamos solos, sin que tengas que avisarnos.\n\n' +
-      '— hayminga.org',
+      'https://hayminga.org?directorio=1'
+    );
+  }
+
+  // Si el post ya taggeaba a @hayminga o #hayminga se lo agradecemos en vez
+  // de pedírselo — pedir algo que ya hizo suena a que no lo vimos.
+  partes.push(
+    data.yaTaggeado
+      ? 'Gracias por taggearnos — así lo encontramos solos, sin que tengas que avisarnos.'
+      : 'Para tu próximo evento, taggeá a @hayminga o usá #hayminga en el post ' +
+        '— así lo sumamos solos, sin que tengas que avisarnos.'
+  );
+
+  partes.push('— hayminga.org');
+
+  MailApp.sendEmail({
+    to: data.email,
+    subject: '"' + nombre + '" ya está en hayminga.org',
+    body: partes.join('\n\n'),
   });
 
   return true;
