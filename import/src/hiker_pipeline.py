@@ -791,6 +791,11 @@ def run() -> int:
     pais_nuevos = {}
     email_nuevos = {}
     validaciones_enviadas = [0]
+    # Detalle (no solo el conteo) para el aviso de Telegram — la idea
+    # original de "responder con datos, no intuición, si el canal sirve"
+    # (ver ROADMAP.md, 12/09) necesita saber A QUIÉN se le escribió, no
+    # solo cuántos.
+    avisos_organizador_detalle = []
     error_cuentas = ""
     try:
         # Todo este bloque va en un try/except: un fallo transitorio acá
@@ -857,6 +862,10 @@ def run() -> int:
                             ya_taggeado = bool(evento.get("ya_taggeado_hayminga"))
                             if avisar_evento_publicado(evento, email_cuenta, ya_en_directorio, ya_taggeado):
                                 validaciones_enviadas[0] += 1
+                                avisos_organizador_detalle.append({
+                                    "email": email_cuenta,
+                                    "nombre": evento.get("nombre") or "",
+                                })
                     eventos_cuenta.append(evento)
                     existing_links.add(post["link"])
                     existing_links.add(instagram_shortcode(post["link"]))
@@ -895,6 +904,7 @@ def run() -> int:
             "llamadas_hikerapi": _llamadas_hikerapi[0],
             "errores_hikerapi": _errores_hikerapi[0],
             "validaciones_organizador_enviadas": validaciones_enviadas[0],
+            "avisos_organizador_detalle": avisos_organizador_detalle,
             "duracion_segundos": round(time.time() - _inicio, 1),
         }))
     except Exception as e:

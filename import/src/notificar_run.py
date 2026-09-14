@@ -91,10 +91,14 @@ def armar_mensaje(estado_job: str) -> str:
 
     # Aviso a organizadores vía mail (ver ROADMAP.md, 09/2026): el evento
     # ya se publicó solo, esto es cuántos avisos + CTA (Directorio, tag a
-    # @hayminga) salieron hoy.
-    enviadas_hoy = (resumen or {}).get("validaciones_organizador_enviadas", 0)
+    # @hayminga) salieron hoy. Se lista el detalle (no solo el conteo) para
+    # poder revisar a mano si hace falta — ver ROADMAP.md, 14/09.
+    detalle_avisos = (resumen or {}).get("avisos_organizador_detalle") or []
+    enviadas_hoy = (resumen or {}).get("validaciones_organizador_enviadas", len(detalle_avisos))
     if enviadas_hoy:
         lineas.append(f"Avisos mandados a organizadores hoy: {enviadas_hoy}")
+        for aviso in detalle_avisos:
+            lineas.append(f"  · {aviso.get('email', '')} — {aviso.get('nombre', '')}")
 
     # Con /top apagado (15/08/2026) la comparación ya no existe: todos los
     # posts vienen de /recent. Se informa el volumen a secas, que sigue

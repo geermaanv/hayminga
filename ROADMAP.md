@@ -512,6 +512,12 @@ guarda con `sheets.actualizar_cuentas_ids()` (a diferencia de
 `guardar_cuentas_ids()`, que solo agrega filas nuevas, este actualiza las
 que ya existen).
 
+El aviso diario de Telegram ahora también lista el detalle (email +
+nombre del evento) de cada mail mandado ese día, no solo el conteo — es
+la idea original del 12/09 ("responder con datos, no intuición, si el
+canal sirve") pero sin la infraestructura de estados/hoja que se sacó:
+alcanza con guardar la lista en `run_summary.json` para el día.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
