@@ -958,6 +958,20 @@ class NotificarRunTests(unittest.TestCase):
         )
         self.assertIn("Avisos mandados a organizadores hoy: 3", mensaje)
 
+    def test_incluye_detalle_de_emails_avisados(self):
+        mensaje = self._mensaje(
+            resumen={
+                "eventos_insertados": 2,
+                "validaciones_organizador_enviadas": 2,
+                "avisos_organizador_detalle": [
+                    {"email": "org1@ejemplo.com", "nombre": "Taller de Barro"},
+                    {"email": "org2@ejemplo.com", "nombre": "Minga Comunitaria"},
+                ],
+            },
+        )
+        self.assertIn("org1@ejemplo.com — Taller de Barro", mensaje)
+        self.assertIn("org2@ejemplo.com — Minga Comunitaria", mensaje)
+
     def test_sin_avisos_no_agrega_linea(self):
         mensaje = self._mensaje(resumen={"eventos_insertados": 2})
         self.assertNotIn("Avisos mandados", mensaje)
