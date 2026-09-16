@@ -543,6 +543,20 @@ una cuenta ya se le mandó un aviso — hoy o cualquier día anterior — un
 evento nuevo de esa misma cuenta manda el suyo igual. Cada evento es su
 propia notificación; no hay lógica de "ya le escribimos, no de nuevo".
 
+**Backfill retroactivo:** el fix de arriba solo aplica hacia adelante —
+los eventos de hashtag ya publicados esa semana se quedaron sin aviso
+porque en su momento no corría esa lógica. `avisar_organizadores_retroactivo.py`
+hace lo mismo que haría el pipeline en vivo pero sobre eventos que ya
+están `confirmado`/`Activo=true` (no publica nada de nuevo, solo avisa):
+filtra por fecha de descubrimiento (`lunes_de_esta_semana()` por
+default), resuelve el email si no está cacheado (mismo costo por evento
+que el fix de arriba) y manda el mail. `ya_taggeado` se aproxima con la
+columna `Hashtags_Post` en vez del caption completo — solo capta
+`#hayminga`, no una mención `@hayminga` suelta, así que en el borde
+puede no agradecer cuando correspondería. Dry-run por default,
+`--escribir` para mandar de verdad, `--limite=N` como freno manual (el
+tope de la corrida diaria no aplica acá, es un script aparte).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
