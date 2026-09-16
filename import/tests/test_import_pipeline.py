@@ -1176,6 +1176,168 @@ class AvisarEventoPublicadoTests(unittest.TestCase):
         self.assertFalse(resultado)
 
 
+class IntentarPublicarConEmailTests(unittest.TestCase):
+    """_intentar_publicar_con_email: desde 16/09 corre para CUALQUIER
+    evento con email conocido (hashtag o cuenta_seguida), no solo los de
+    cuentas_seguidas — ver ROADMAP.md."""
+
+    def _evento(self, **extra):
+        base = {"estado": "pendiente_confirmacion", "activo": False,
+                "nombre": "Taller de Barro", "username": "organizador_x"}
+        base.update(extra)
+        return base
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado", return_value=True)
+    def test_email_ya_cacheado_publica_y_avisa_sin_resolver(self, avisar):
+        from src import hiker_pipeline
+
+        evento = self._evento()
+        validaciones, detalle = [0], []
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "org@ejemplo.com"}, set(),
+            {}, {}, {}, validaciones, detalle, resolver_si_falta=False,
+        )
+
+        self.assertEqual(evento["estado"], "confirmado")
+        self.assertTrue(evento["activo"])
+        avisar.assert_called_once_with(evento, "org@ejemplo.com", False, False)
+        self.assertEqual(validaciones, [1])
+        self.assertEqual(detalle, [{"email": "org@ejemplo.com", "nombre": "Taller de Barro"}])
+
+    @patch("src.hiker_pipeline.resolver_user_id_pais_y_email")
+    @patch("src.hiker_pipeline.avisar_evento_publicado", return_value=True)
+    def test_sin_email_cacheado_pero_resolver_si_falta_resuelve_y_cachea(self, avisar, resolver):
+        from src import hiker_pipeline
+
+        resolver.return_value = (999, "", "nuevo@ejemplo.com")
+        evento = self._evento()
+        email_cacheado, ids_nuevos, pais_nuevos, email_nuevos = {}, {}, {}, {}
+        validaciones, detalle = [0], []
+
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, email_cacheado, set(),
+            ids_nuevos, pais_nuevos, email_nuevos, validaciones, detalle,
+            resolver_si_falta=True,
+        )
+
+        resolver.assert_called_once_with("organizador_x")
+        self.assertEqual(evento["estado"], "confirmado")
+        self.assertEqual(email_cacheado["organizador_x"], "nuevo@ejemplo.com")
+        self.assertEqual(email_nuevos["organizador_x"], "nuevo@ejemplo.com")
+        self.assertEqual(ids_nuevos["organizador_x"], 999)
+        avisar.assert_called_once_with(evento, "nuevo@ejemplo.com", False, False)
+
+    @patch("src.hiker_pipeline.resolver_user_id_pais_y_email")
+    @patch("src.hiker_pipeline.avisar_evento_publicado")
+    def test_sin_email_y_sin_resolver_si_falta_no_hace_nada(self, avisar, resolver):
+        from src import hiker_pipeline
+
+        evento = self._evento()
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {}, set(), {}, {}, {}, [0], [], resolver_si_falta=False,
+        )
+
+        resolver.assert_not_called()
+        avisar.assert_not_called()
+        self.assertEqual(evento["estado"], "pendiente_confirmacion")
+
+    @patch("src.hiker_pipeline.resolver_user_id_pais_y_email", return_value=(None, "", ""))
+    @patch("src.hiker_pipeline.avisar_evento_publicado")
+    def test_resolver_sin_email_publico_deja_pendiente(self, avisar, resolver):
+        from src import hiker_pipeline
+
+        evento = self._evento()
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {}, set(), {}, {}, {}, [0], [], resolver_si_falta=True,
+        )
+
+        avisar.assert_not_called()
+        self.assertEqual(evento["estado"], "pendiente_confirmacion")
+
+    @patch("src.hiker_pipeline.resolver_user_id_pais_y_email", side_effect=RuntimeError("401"))
+    @patch("src.hiker_pipeline.avisar_evento_publicado")
+    def test_error_resolviendo_no_rompe_y_deja_pendiente(self, avisar, resolver):
+        from src import hiker_pipeline
+
+        evento = self._evento()
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {}, set(), {}, {}, {}, [0], [], resolver_si_falta=True,
+        )
+
+        avisar.assert_not_called()
+        self.assertEqual(evento["estado"], "pendiente_confirmacion")
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado")
+    def test_evento_que_no_esta_pendiente_no_se_toca(self, avisar):
+        from src import hiker_pipeline
+
+        evento = self._evento(estado="confirmado")
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "org@ejemplo.com"}, set(), {}, {}, {}, [0], [],
+        )
+
+        avisar.assert_not_called()
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado")
+    def test_sin_username_no_hace_nada(self, avisar):
+        from src import hiker_pipeline
+
+        evento = self._evento(username="")
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "org@ejemplo.com"}, set(), {}, {}, {}, [0], [],
+        )
+
+        avisar.assert_not_called()
+        self.assertEqual(evento["estado"], "pendiente_confirmacion")
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado", return_value=True)
+    def test_tope_alcanzado_publica_pero_no_manda_mail(self, avisar):
+        from src import hiker_pipeline
+
+        evento = self._evento()
+        validaciones = [hiker_pipeline._MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA]
+        detalle = []
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "org@ejemplo.com"}, set(), {}, {}, {},
+            validaciones, detalle,
+        )
+
+        self.assertEqual(evento["estado"], "confirmado")
+        self.assertTrue(evento["activo"])
+        avisar.assert_not_called()
+        self.assertEqual(detalle, [])
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado", return_value=True)
+    def test_no_deduplica_por_cuenta_manda_de_nuevo(self, avisar):
+        """A pedido explícito: si a la cuenta ya se le mandó un aviso antes
+        (en esta corrida u otra), un evento nuevo de esa misma cuenta igual
+        manda el suyo — no hay supresión por cuenta ya avisada."""
+        from src import hiker_pipeline
+
+        validaciones, detalle = [1], [{"email": "org@ejemplo.com", "nombre": "Evento anterior"}]
+        evento = self._evento(nombre="Evento nuevo")
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "org@ejemplo.com"}, set(), {}, {}, {},
+            validaciones, detalle,
+        )
+
+        self.assertEqual(avisar.call_count, 1)
+        self.assertEqual(validaciones, [2])
+        self.assertEqual(len(detalle), 2)
+
+    @patch("src.hiker_pipeline.avisar_evento_publicado", return_value=True)
+    def test_pasa_ya_en_directorio_y_ya_taggeado(self, avisar):
+        from src import hiker_pipeline
+
+        evento = self._evento(ya_taggeado_hayminga=True)
+        hiker_pipeline._intentar_publicar_con_email(
+            evento, {"organizador_x": "Org@Ejemplo.com"}, {"org@ejemplo.com"},
+            {}, {}, {}, [0], [],
+        )
+
+        avisar.assert_called_once_with(evento, "Org@Ejemplo.com", True, True)
+
+
 class BackfillCuentasEmailTests(unittest.TestCase):
     """Script manual de una sola corrida: completa País/Email para cuentas
     de CuentasIds cacheadas antes de que existieran estos campos (ver

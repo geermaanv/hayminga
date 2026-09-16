@@ -518,6 +518,31 @@ la idea original del 12/09 ("responder con datos, no intuición, si el
 canal sirve") pero sin la infraestructura de estados/hoja que se sacó:
 alcanza con guardar la lista en `run_summary.json` para el día.
 
+## El aviso por email ahora corre para todo evento, no solo cuentas_seguidas (16/09)
+
+Probando el flujo en producción (14 y 15/09) salieron 0 avisos en ambas
+corridas a pesar de tener 77 cuentas con email ya cacheadas — el motivo
+era simple: los eventos nuevos de esos dos días vinieron de hashtag, y
+`avisar_evento_publicado` solo estaba cableado para `cuentas_seguidas`
+(la única fuente donde la cuenta ya se resolvía gratis de antemano).
+Confuso además porque, sin ver el código, "tiene email pero no le
+llegó nada" parece un bug.
+
+**Cambio:** `_intentar_publicar_con_email()` centraliza la lógica que
+antes vivía solo en el loop de `cuentas_seguidas` y ahora la llaman los
+dos loops de descubrimiento (hashtag y cuenta) apenas `procesar_post()`
+devuelve un evento. Para hashtag, que no resuelve la cuenta de antemano,
+se paga una llamada a HikerAPI por evento — pero por evento YA FILTRADO
+Y EXTRAÍDO (unos pocos por día), no por cada uno de los ~800-900 posts
+crudos que trae un hashtag antes de descartar la enorme mayoría; el
+costo extra es marginal comparado con las 179 llamadas que ya hace la
+corrida.
+
+**Sin deduplicación por cuenta, a propósito** (pedido explícito): si a
+una cuenta ya se le mandó un aviso — hoy o cualquier día anterior — un
+evento nuevo de esa misma cuenta manda el suyo igual. Cada evento es su
+propia notificación; no hay lógica de "ya le escribimos, no de nuevo".
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
