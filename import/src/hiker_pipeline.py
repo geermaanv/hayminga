@@ -310,6 +310,66 @@ def avisar_evento_publicado(
         return False
 
 
+def _intentar_publicar_con_email(
+    evento: dict,
+    email_cacheado: dict,
+    emails_directorio: set,
+    ids_nuevos: dict,
+    pais_nuevos: dict,
+    email_nuevos: dict,
+    validaciones_enviadas: list,
+    avisos_organizador_detalle: list,
+    resolver_si_falta: bool = False,
+) -> None:
+    """Si la cuenta que originó el evento tiene un email público conocido,
+    lo publica directo (sin pasar por pendiente_confirmacion) y manda el
+    aviso — para CUALQUIER evento, no solo los de cuentas_seguidas (ver
+    ROADMAP.md, 16/09). `resolver_si_falta=True` hace la llamada paga a
+    HikerAPI cuando el email no está cacheado — se usa para hashtags,
+    donde a diferencia de cuentas_seguidas no hay una resolución de cuenta
+    gratis de antemano; el costo es bajo porque solo se paga por EVENTO
+    real (ya filtrado, extraído y confirmado como evento), no por cada uno
+    de los ~800 posts crudos que trae un hashtag.
+
+    No hay deduplicación por cuenta: si a la misma cuenta le tocó ya un
+    aviso antes (esta corrida u otra), este evento igual manda el suyo —
+    cada evento nuevo es su propio aviso, a propósito."""
+    if evento.get("estado") != "pendiente_confirmacion":
+        return
+    username = evento.get("username") or ""
+    if not username:
+        return
+
+    email = email_cacheado.get(username, "")
+    if not email and resolver_si_falta:
+        try:
+            user_id, pais_resuelto, email_resuelto = resolver_user_id_pais_y_email(username)
+        except Exception as e:
+            print(f"[hiker_pipeline] @{username}: error resolviendo email — {e}")
+            return
+        if user_id:
+            ids_nuevos[username] = user_id
+        if pais_resuelto:
+            pais_nuevos[username] = pais_resuelto
+        if email_resuelto:
+            email_nuevos[username] = email_resuelto
+            email_cacheado[username] = email_resuelto
+            email = email_resuelto
+
+    if not email:
+        return
+
+    evento["estado"] = "confirmado"
+    evento["activo"] = True
+    if validaciones_enviadas[0] >= _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA:
+        return
+    ya_en_directorio = email.strip().lower() in emails_directorio
+    ya_taggeado = bool(evento.get("ya_taggeado_hayminga"))
+    if avisar_evento_publicado(evento, email, ya_en_directorio, ya_taggeado):
+        validaciones_enviadas[0] += 1
+        avisos_organizador_detalle.append({"email": email, "nombre": evento.get("nombre") or ""})
+
+
 def _fecha_publicacion(post: dict) -> str:
     if not post.get("taken_at_ts"):
         return ""
@@ -728,6 +788,26 @@ def run() -> int:
     # cambia (ya se vieron 404s). Revisar ~22/08 — ver ROADMAP.md Etapa 9.6.
     USAR_TOP = False
 
+    # Aviso al organizador por email (ver ROADMAP.md, 09/2026 y 16/09):
+    # declarado ANTES del loop de hashtags porque desde 16/09 corre para
+    # cualquier evento con email conocido, no solo los de cuentas_seguidas.
+    # Si la lectura de caches falla, seguimos con todo vacío — un evento
+    # que no se pueda chequear queda pendiente_confirmacion como siempre,
+    # nunca se pierde por esto.
+    ids_nuevos = {}
+    pais_nuevos = {}
+    email_nuevos = {}
+    validaciones_enviadas = [0]
+    avisos_organizador_detalle = []
+    try:
+        ids_cacheados = cargar_cuentas_ids(service)
+        pais_cacheado = cargar_cuentas_pais(service)
+        email_cacheado = cargar_cuentas_email(service)
+        emails_directorio = cargar_emails_directorio(service)
+    except Exception as e:
+        print(f"[hiker_pipeline] error leyendo caches de cuentas/Directorio — {e}")
+        ids_cacheados, pais_cacheado, email_cacheado, emails_directorio = {}, {}, {}, set()
+
     atribucion = {"posts_recent": 0, "posts_top": 0, "solo_en_recent": 0, "eventos_solo_recent": 0}
     for hashtag in hashtags:
         posts = []
@@ -764,6 +844,19 @@ def run() -> int:
                 print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                 continue
             if evento:
+                # Igual que para cuentas_seguidas: si la cuenta que originó
+                # el post tiene email público, se publica directo y se
+                # avisa (ver ROADMAP.md, 16/09). Acá sí hace falta resolver
+                # con una llamada paga si no está cacheado — a diferencia
+                # de cuentas_seguidas, un hashtag no resuelve la cuenta de
+                # antemano gratis — pero se paga por EVENTO ya filtrado,
+                # no por cada uno de los posts crudos del hashtag.
+                _intentar_publicar_con_email(
+                    evento, email_cacheado, emails_directorio,
+                    ids_nuevos, pais_nuevos, email_nuevos,
+                    validaciones_enviadas, avisos_organizador_detalle,
+                    resolver_si_falta=True,
+                )
                 eventos_hashtag.append(evento)
                 shortcode = instagram_shortcode(post["link"])
                 if shortcode in shortcodes_recent and shortcode not in shortcodes_top:
@@ -787,28 +880,14 @@ def run() -> int:
     # a diferencia de los hashtags, no compite por popularidad global, así
     # que es más confiable para encontrar eventos argentinos genuinos.
     cuentas_seguidas = [c.lstrip("@").lower() for c in config.get("cuentas_seguidas") or []]
-    ids_nuevos = {}
-    pais_nuevos = {}
-    email_nuevos = {}
-    validaciones_enviadas = [0]
-    # Detalle (no solo el conteo) para el aviso de Telegram — la idea
-    # original de "responder con datos, no intuición, si el canal sirve"
-    # (ver ROADMAP.md, 12/09) necesita saber A QUIÉN se le escribió, no
-    # solo cuántos.
-    avisos_organizador_detalle = []
     error_cuentas = ""
     try:
         # Todo este bloque va en un try/except: un fallo transitorio acá
         # (pasó dos veces con un SSLEOFError de red) no debe hacer perder
         # los eventos ya encontrados por hashtag arriba — antes el script
         # moría entero y nunca llegaba a append_events().
-        ids_cacheados = cargar_cuentas_ids(service)
-        pais_cacheado = cargar_cuentas_pais(service)
-        email_cacheado = cargar_cuentas_email(service)
-        emails_directorio = cargar_emails_directorio(service)
         for username in cuentas_seguidas:
             pais_cuenta = pais_cacheado.get(username, "")
-            email_cuenta = email_cacheado.get(username, "")
             try:
                 user_id = ids_cacheados.get(username)
                 if user_id is None:
@@ -820,7 +899,7 @@ def run() -> int:
                         pais_cuenta = pais_resuelto
                     if email_resuelto:
                         email_nuevos[username] = email_resuelto
-                        email_cuenta = email_resuelto
+                        email_cacheado[username] = email_resuelto
                 posts = fetch_user_posts(username, user_id=user_id)
             except Exception as e:
                 print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
@@ -848,24 +927,15 @@ def run() -> int:
                     print(f"[hiker_pipeline] {post['link']}: error procesando — {e}")
                     continue
                 if evento:
-                    # Tener el email público del organizador ya es señal
-                    # suficiente de confianza: se publica directo (sin pasar
-                    # por pendiente_confirmacion) y se avisa por mail con los
-                    # CTA de Directorio + tag a @hayminga — ver ROADMAP.md,
-                    # 09/2026. El tope solo frena el mail (no saturar de
-                    # golpe), nunca la publicación en sí.
-                    if evento.get("estado") == "pendiente_confirmacion" and email_cuenta:
-                        evento["estado"] = "confirmado"
-                        evento["activo"] = True
-                        if validaciones_enviadas[0] < _MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA:
-                            ya_en_directorio = email_cuenta.strip().lower() in emails_directorio
-                            ya_taggeado = bool(evento.get("ya_taggeado_hayminga"))
-                            if avisar_evento_publicado(evento, email_cuenta, ya_en_directorio, ya_taggeado):
-                                validaciones_enviadas[0] += 1
-                                avisos_organizador_detalle.append({
-                                    "email": email_cuenta,
-                                    "nombre": evento.get("nombre") or "",
-                                })
+                    # El email de esta cuenta ya se resolvió gratis arriba
+                    # (misma llamada que trae el user_id) — no hace falta
+                    # resolver_si_falta acá, a diferencia de hashtags.
+                    _intentar_publicar_con_email(
+                        evento, email_cacheado, emails_directorio,
+                        ids_nuevos, pais_nuevos, email_nuevos,
+                        validaciones_enviadas, avisos_organizador_detalle,
+                        resolver_si_falta=False,
+                    )
                     eventos_cuenta.append(evento)
                     existing_links.add(post["link"])
                     existing_links.add(instagram_shortcode(post["link"]))
