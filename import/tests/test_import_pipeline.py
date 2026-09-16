@@ -1426,6 +1426,175 @@ class BackfillCuentasEmailTests(unittest.TestCase):
         resolver.assert_called_once_with("cuenta_activa")
 
 
+class AvisarOrganizadoresRetroactivoTests(unittest.TestCase):
+    """Backfill manual del aviso por mail para eventos ya publicados que
+    en su momento no lo dispararon (ej. eventos de hashtag antes del fix
+    del 16/09) — ver ROADMAP.md."""
+
+    def _fila(self, activo="true", estado="confirmado", nombre="Taller de Barro",
+              username="organizador_x", fecha_descubrimiento="2026-09-16",
+              hashtags_post=""):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[0] = activo
+        fila[1] = nombre
+        fila[16] = estado
+        fila[20] = fecha_descubrimiento
+        fila[23] = hashtags_post
+        fila[24] = username
+        return fila
+
+    def test_eventos_elegibles_filtra_por_estado_activo_username_y_fecha(self):
+        from src import avisar_organizadores_retroactivo as m
+
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [
+                self._fila(),  # elegible
+                self._fila(estado="pendiente_confirmacion"),  # no confirmado
+                self._fila(activo="false"),  # no activo
+                self._fila(username=""),  # sin cuenta de origen
+                self._fila(fecha_descubrimiento="2026-09-01"),  # antes del corte
+            ]
+        }
+
+        elegibles = m.eventos_elegibles(service, desde=date(2026, 9, 15))
+
+        self.assertEqual(len(elegibles), 1)
+        self.assertEqual(elegibles[0]["username"], "organizador_x")
+
+    def test_lunes_de_esta_semana(self):
+        from src import avisar_organizadores_retroactivo as m
+
+        # 16/09/2026 es miércoles -> el lunes de esa semana es 14/09.
+        self.assertEqual(m.lunes_de_esta_semana(date(2026, 9, 16)), date(2026, 9, 14))
+        self.assertEqual(m.lunes_de_esta_semana(date(2026, 9, 14)), date(2026, 9, 14))
+
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado")
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email", return_value={"organizador_x": "org@ejemplo.com"})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value=set())
+    def test_dry_run_no_manda_ni_escribe(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [{"nombre": "Taller", "username": "organizador_x", "hashtags_post": ""}]
+
+        enviados = m.avisar(dry_run=True)
+
+        resolver.assert_not_called()
+        avisar.assert_not_called()
+        self.assertEqual(enviados, 1)
+
+    @patch("src.avisar_organizadores_retroactivo.guardar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.actualizar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado", return_value=True)
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value={"org@ejemplo.com"})
+    def test_resuelve_email_faltante_y_cachea_como_cuenta_nueva(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+        actualizar, guardar,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [{"nombre": "Taller", "username": "organizador_nuevo", "hashtags_post": "#hayminga"}]
+        resolver.return_value = (555, "", "org@ejemplo.com")
+
+        enviados = m.avisar(dry_run=False)
+
+        resolver.assert_called_once_with("organizador_nuevo")
+        avisar.assert_called_once_with(
+            elegibles.return_value[0], "org@ejemplo.com", True, True,
+        )
+        guardar.assert_called_once_with(
+            get_service.return_value,
+            {"organizador_nuevo": 555}, {}, {"organizador_nuevo": "org@ejemplo.com"},
+        )
+        actualizar.assert_called_once_with(get_service.return_value, {}, {})
+        self.assertEqual(enviados, 1)
+
+    @patch("src.avisar_organizadores_retroactivo.guardar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.actualizar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado", return_value=True)
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={"organizador_viejo": 111})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value=set())
+    def test_cuenta_ya_cacheada_sin_email_usa_actualizar_no_guardar(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+        actualizar, guardar,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [{"nombre": "Taller", "username": "organizador_viejo", "hashtags_post": ""}]
+        resolver.return_value = (111, "Argentina", "viejo@ejemplo.com")
+
+        m.avisar(dry_run=False)
+
+        actualizar.assert_called_once_with(
+            get_service.return_value,
+            {"organizador_viejo": "Argentina"}, {"organizador_viejo": "viejo@ejemplo.com"},
+        )
+        guardar.assert_called_once_with(get_service.return_value, {}, {}, {})
+
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado")
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email", return_value=(None, "", ""))
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value=set())
+    def test_sin_email_publico_se_saltea(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [{"nombre": "Taller", "username": "sin_email", "hashtags_post": ""}]
+
+        enviados = m.avisar(dry_run=False)
+
+        avisar.assert_not_called()
+        self.assertEqual(enviados, 0)
+
+    @patch("src.avisar_organizadores_retroactivo.guardar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.actualizar_cuentas_ids")
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado", return_value=True)
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email",
+           return_value={"cuenta_a": "a@ejemplo.com", "cuenta_b": "b@ejemplo.com", "cuenta_c": "c@ejemplo.com"})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value=set())
+    def test_respeta_limite(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+        actualizar, guardar,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [
+            {"nombre": "Uno", "username": "cuenta_a", "hashtags_post": ""},
+            {"nombre": "Dos", "username": "cuenta_b", "hashtags_post": ""},
+            {"nombre": "Tres", "username": "cuenta_c", "hashtags_post": ""},
+        ]
+
+        enviados = m.avisar(dry_run=False, limite=2)
+
+        self.assertEqual(avisar.call_count, 2)
+        self.assertEqual(enviados, 2)
+        resolver.assert_not_called()
+
+
 class CandidatosHashtagsTests(unittest.TestCase):
     """analizar() no debe llamar a HikerAPI/Gemini/Claude — solo lee la
     hoja de Sheets (ya mockeada acá) y config.json local."""
