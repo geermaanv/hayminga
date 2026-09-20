@@ -1470,6 +1470,20 @@ class AvisarOrganizadoresRetroactivoTests(unittest.TestCase):
         self.assertEqual(m.lunes_de_esta_semana(date(2026, 9, 16)), date(2026, 9, 14))
         self.assertEqual(m.lunes_de_esta_semana(date(2026, 9, 14)), date(2026, 9, 14))
 
+    def test_un_evento_por_cuenta_se_queda_con_el_mas_reciente(self):
+        from src import avisar_organizadores_retroactivo as m
+
+        eventos = [
+            {"nombre": "Viejo", "username": "cuenta_a", "fecha_descubrimiento": date(2026, 1, 1)},
+            {"nombre": "Nuevo", "username": "cuenta_a", "fecha_descubrimiento": date(2026, 9, 1)},
+            {"nombre": "Único", "username": "cuenta_b", "fecha_descubrimiento": date(2026, 5, 1)},
+        ]
+
+        resultado = m.un_evento_por_cuenta(eventos)
+
+        por_username = {e["username"]: e["nombre"] for e in resultado}
+        self.assertEqual(por_username, {"cuenta_a": "Nuevo", "cuenta_b": "Único"})
+
     @patch("src.avisar_organizadores_retroactivo.get_service")
     @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado")
     @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
@@ -1592,6 +1606,35 @@ class AvisarOrganizadoresRetroactivoTests(unittest.TestCase):
 
         self.assertEqual(avisar.call_count, 2)
         self.assertEqual(enviados, 2)
+        resolver.assert_not_called()
+
+    @patch("src.avisar_organizadores_retroactivo.get_service")
+    @patch("src.avisar_organizadores_retroactivo.avisar_evento_publicado", return_value=True)
+    @patch("src.avisar_organizadores_retroactivo.resolver_user_id_pais_y_email")
+    @patch("src.avisar_organizadores_retroactivo.eventos_elegibles")
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_ids", return_value={})
+    @patch("src.avisar_organizadores_retroactivo.cargar_cuentas_email",
+           return_value={"cuenta_muchos_eventos": "org@ejemplo.com", "otra_cuenta": "otro@ejemplo.com"})
+    @patch("src.avisar_organizadores_retroactivo.cargar_emails_directorio", return_value=set())
+    def test_uno_por_cuenta_manda_un_solo_mail_por_organizador(
+        self, dirio, email_cache, ids_cache, elegibles, resolver, avisar, get_service,
+    ):
+        from src import avisar_organizadores_retroactivo as m
+
+        elegibles.return_value = [
+            {"nombre": "Evento viejo", "username": "cuenta_muchos_eventos",
+             "hashtags_post": "", "fecha_descubrimiento": date(2026, 1, 1)},
+            {"nombre": "Evento reciente", "username": "cuenta_muchos_eventos",
+             "hashtags_post": "", "fecha_descubrimiento": date(2026, 9, 1)},
+            {"nombre": "Otro organizador", "username": "otra_cuenta",
+             "hashtags_post": "", "fecha_descubrimiento": date(2026, 5, 1)},
+        ]
+
+        enviados = m.avisar(dry_run=False, uno_por_cuenta=True)
+
+        self.assertEqual(enviados, 2)
+        nombres_mandados = {c.args[0]["nombre"] for c in avisar.call_args_list}
+        self.assertEqual(nombres_mandados, {"Evento reciente", "Otro organizador"})
         resolver.assert_not_called()
 
 

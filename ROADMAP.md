@@ -557,6 +557,29 @@ puede no agradecer cuando correspondería. Dry-run por default,
 `--escribir` para mandar de verdad, `--limite=N` como freno manual (el
 tope de la corrida diaria no aplica acá, es un script aparte).
 
+**Cobertura real medida (20/09):** corriendo el backfill con
+`--desde=2020-01-01` (todos los eventos ya publicados, no solo esta
+semana) dio 121 eventos elegibles, 63 con email resoluble — pero solo
+**39 cuentas distintas**: varias acumulaban 5-7 eventos cada una (ej.
+`centronakkal` con 7), y mandar uno por evento las hubiera bombardeado
+con varios mails de golpe en la misma tanda. Se agregó
+`--uno-por-cuenta` (usa `un_evento_por_cuenta()`) para este caso: manda
+un solo aviso por cuenta, del evento con `Fecha_Descubrimiento` más
+reciente — deliberadamente distinto del "sin deduplicación" de arriba,
+que sigue siendo la regla para la corrida diaria en vivo. La
+deduplicación por cuenta solo tiene sentido para una tanda retroactiva
+grande, nunca para el flujo normal.
+
+**Copy revisado (20/09):** tres ajustes al mail — "Ya que estamos:
+sumate..." sonaba a ocurrencia tardía, pasó a "Te invitamos a
+sumarte..." con "te lleva menos de 90 segundos" (baja la fricción
+percibida); se agregó "Hacé clic para darte de alta:" antes del link
+del Directorio (el link solo, sin texto que lo introduzca, se perdía);
+y el CTA de taggear a @hayminga ahora explica el motivo ("nos permite
+automatizar la importación y te asegura que lo publicamos
+rápidamente") en vez de solo pedirlo — la razón vende mejor que el
+pedido pelado.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
