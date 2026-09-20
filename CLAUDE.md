@@ -51,7 +51,7 @@ python -m src.mensajes_organizadores               # free: DM drafts to invite e
 python -m src.geocodificar                         # free: dry-run geocoding of rows without coordinates (--escribir to apply)
 python -m src.contenido_instagram                  # free: refill the Instagram content queue (idempotent)
 python -m src.backfill_cuentas_email               # one-off, costs HikerAPI calls: backfill País/Email for cuentas_seguidas cached before those fields existed (--escribir to apply)
-python -m src.avisar_organizadores_retroactivo     # one-off, costs HikerAPI calls + sends real email: notify organizers of already-published events that never got avisar_evento_publicado (e.g. hashtag events before 16/09) — dry-run by default, --escribir to send, --limite=N to cap, --desde=YYYY-MM-DD to widen the window (default: this week)
+python -m src.avisar_organizadores_retroactivo     # one-off, costs HikerAPI calls + sends real email: notify organizers of already-published events that never got avisar_evento_publicado (e.g. hashtag events before 16/09) — dry-run by default, --escribir to send, --limite=N to cap, --desde=YYYY-MM-DD to widen the window (default: this week), --uno-por-cuenta to send only the most recent event per account (avoids bombarding an org with several mails in one batch)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```

@@ -11,9 +11,13 @@ solo revisa si la cuenta que los originó tiene email público (cacheado o
 resuelto al vuelo, mismo criterio que backfill_cuentas_email.py — llamada
 paga a HikerAPI solo cuando hace falta) y manda el mail.
 
-Sin deduplicación por cuenta, mismo criterio que el pipeline diario: cada
-evento elegible manda su propio aviso, aunque dos eventos de la semana
-sean de la misma cuenta.
+Sin deduplicación por cuenta por default, mismo criterio que el pipeline
+diario: cada evento elegible manda su propio aviso, aunque dos eventos de
+la semana sean de la misma cuenta. `--uno-por-cuenta` cambia esto para
+una tanda grande y retroactiva (ej. --desde=2020-01-01, donde una misma
+cuenta puede acumular 5-7 eventos): manda UN solo aviso por cuenta, del
+evento con Fecha_Descubrimiento más reciente — evita bombardear a la
+misma persona con varios mails de golpe en un envío histórico.
 
 `ya_taggeado` se aproxima con Hashtags_Post (columna persistida) en vez
 del regex sobre el caption completo que usa el pipeline en vivo — ese
@@ -72,16 +76,36 @@ def eventos_elegibles(service, desde: date) -> list[dict]:
             "nombre": row[1],
             "username": username,
             "hashtags_post": row[23] or "",
+            "fecha_descubrimiento": fecha,
         })
     return elegibles
 
 
-def avisar(dry_run: bool = True, desde: date | None = None, limite: int | None = None) -> int:
+def un_evento_por_cuenta(eventos: list[dict]) -> list[dict]:
+    """Para un envío retroactivo grande: si una misma cuenta originó
+    varios eventos elegibles, se queda solo con el más reciente (por
+    Fecha_Descubrimiento) — un aviso por organizador, no uno por evento."""
+    ultimo_por_cuenta: dict[str, dict] = {}
+    for evento in eventos:
+        actual = ultimo_por_cuenta.get(evento["username"])
+        if actual is None or evento["fecha_descubrimiento"] > actual["fecha_descubrimiento"]:
+            ultimo_por_cuenta[evento["username"]] = evento
+    return list(ultimo_por_cuenta.values())
+
+
+def avisar(
+    dry_run: bool = True, desde: date | None = None, limite: int | None = None,
+    uno_por_cuenta: bool = False,
+) -> int:
     service = get_service()
     desde = desde or lunes_de_esta_semana(date.today())
     eventos = eventos_elegibles(service, desde)
     print(f"[avisar_organizadores_retroactivo] {len(eventos)} evento(s) confirmado(s)/activo(s) "
           f"con cuenta de origen desde {desde.isoformat()}")
+    if uno_por_cuenta:
+        eventos = un_evento_por_cuenta(eventos)
+        print(f"[avisar_organizadores_retroactivo] {len(eventos)} cuenta(s) distinta(s) "
+              f"(uno-por-cuenta: se queda con el evento más reciente de cada una)")
 
     ids_cacheados = cargar_cuentas_ids(service)
     email_cacheado = cargar_cuentas_email(service)
@@ -146,6 +170,7 @@ def avisar(dry_run: bool = True, desde: date | None = None, limite: int | None =
 if __name__ == "__main__":
     argv = sys.argv[1:]
     escribir = "--escribir" in argv
+    uno_por_cuenta = "--uno-por-cuenta" in argv
     limite = None
     desde = None
     for arg in argv:
@@ -153,4 +178,4 @@ if __name__ == "__main__":
             limite = int(arg.split("=", 1)[1])
         elif arg.startswith("--desde="):
             desde = date.fromisoformat(arg.split("=", 1)[1])
-    avisar(dry_run=not escribir, desde=desde, limite=limite)
+    avisar(dry_run=not escribir, desde=desde, limite=limite, uno_por_cuenta=uno_por_cuenta)
