@@ -513,11 +513,12 @@ function avisarEventoPublicado_(data) {
   // cargar_emails_directorio en sheets.py — ROADMAP.md 14/09).
   if (!data.yaEnDirectorio) {
     partes.push(
-      'Ya que estamos: sumate al Directorio de profesionales de hayminga.org. ' +
-      'Es gratis, y es donde la gente busca a quién contratar para su próxima ' +
-      'obra — quincheros, terminaciones, estufas, lo que hagas. Publicar un ' +
-      'evento te suma visibilidad por una semana; el Directorio te deja ' +
-      'encontrable todo el año:\n\n' +
+      'Te invitamos a sumarte al Directorio de profesionales de hayminga.org. ' +
+      'Te lleva menos de 90 segundos, es gratis, y es donde la gente busca a ' +
+      'quién contratar para su próxima obra — quincheros, terminaciones, ' +
+      'estufas, lo que hagas. Publicar un evento te suma visibilidad por una ' +
+      'semana; el Directorio te deja encontrable todo el año.\n\n' +
+      'Hacé clic para darte de alta:\n\n' +
       'https://hayminga.org?directorio=1'
     );
   }
@@ -527,8 +528,9 @@ function avisarEventoPublicado_(data) {
   partes.push(
     data.yaTaggeado
       ? 'Gracias por taggearnos — así lo encontramos solos, sin que tengas que avisarnos.'
-      : 'Para tu próximo evento, taggeá a @hayminga o usá #hayminga en el post ' +
-        '— así lo sumamos solos, sin que tengas que avisarnos.'
+      : 'Para tu próximo evento, no te olvides de usar @hayminga en el post — ' +
+        'eso nos permite automatizar la importación y te asegura que lo ' +
+        'publicamos rápidamente.'
   );
 
   partes.push('— hayminga.org');
