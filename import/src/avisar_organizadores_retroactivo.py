@@ -22,7 +22,10 @@ puede subestimar el agradecimiento en algún caso borde.
 
 Dry-run por default (solo lista qué mandaría, no llama a Apps Script ni
 escribe nada); correr con --escribir para mandar de verdad. `--limite=N`
-para cortar después de N avisos reales, por las dudas.
+para cortar después de N avisos reales, por las dudas. `--desde=YYYY-MM-DD`
+cambia el corte de Fecha_Descubrimiento (default: lunes de esta semana) —
+usar una fecha bien vieja (ej. --desde=2020-01-01) para cubrir TODOS los
+eventos ya publicados, no solo los recientes.
 """
 import sys
 from datetime import date, timedelta
@@ -144,7 +147,10 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     escribir = "--escribir" in argv
     limite = None
+    desde = None
     for arg in argv:
         if arg.startswith("--limite="):
             limite = int(arg.split("=", 1)[1])
-    avisar(dry_run=not escribir, limite=limite)
+        elif arg.startswith("--desde="):
+            desde = date.fromisoformat(arg.split("=", 1)[1])
+    avisar(dry_run=not escribir, desde=desde, limite=limite)
