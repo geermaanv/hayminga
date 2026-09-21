@@ -1,0 +1,66 @@
+name: Test TypeSafe Jev API (temporal)
+
+# Prueba de acceso: confirma que TYPESAFE_API_KEY funciona antes de evaluar
+# si Jev sirve para reemplazar el filtro Gemini "es_evento" del pipeline
+# (ver ROADMAP.md). Manda dos captions de ejemplo (una que claramente es
+# evento, otra que no) para ver también una primera señal cualitativa.
+# No toca nada de producción. Se borra después de usarla.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probar Choice contra la API de Jev
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: |
+          set -e
+          echo "--- Caption 1: claramente un evento ---"
+          curl -sS -X POST https://api.typesafe.ai/v1/systemone \
+            -H "Authorization: Bearer $TYPESAFE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "state": "Taller de bioconstrucción con superadobe. Sábado 12 de octubre, 10hs, en la Ecoescuela Tay Pichín, San Marcos Sierras, Córdoba. Cupos limitados, inscripción por DM.",
+              "model": "jev-latest",
+              "questions": {
+                "es_evento": {
+                  "type": "choice",
+                  "instructions": "Es este texto la promoción de un evento (taller, curso, encuentro) con fecha y lugar?",
+                  "criteria": {
+                    "si": "Es un evento con fecha y lugar concretos",
+                    "no": "No es un evento (foto, reflexión, producto, oferta laboral, etc.)"
+                  }
+                }
+              }
+            }' | tee /tmp/resp1.json
+          echo
+          echo "--- Caption 2: claramente NO es un evento ---"
+          curl -sS -X POST https://api.typesafe.ai/v1/systemone \
+            -H "Authorization: Bearer $TYPESAFE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "state": "Miren qué lindo quedó este horno de barro que hicimos la semana pasada en el patio de casa!",
+              "model": "jev-latest",
+              "questions": {
+                "es_evento": {
+                  "type": "choice",
+                  "instructions": "Es este texto la promoción de un evento (taller, curso, encuentro) con fecha y lugar?",
+                  "criteria": {
+                    "si": "Es un evento con fecha y lugar concretos",
+                    "no": "No es un evento (foto, reflexión, producto, oferta laboral, etc.)"
+                  }
+                }
+              }
+            }' | tee /tmp/resp2.json
+          echo
+          echo "--- Resultado ---"
+          python3 -c "
+          import json
+          r1 = json.load(open('/tmp/resp1.json'))
+          r2 = json.load(open('/tmp/resp2.json'))
+          print('Caption evento -> ', r1['answers']['es_evento'])
+          print('Caption NO evento -> ', r2['answers']['es_evento'])
+          "
