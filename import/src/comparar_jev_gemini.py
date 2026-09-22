@@ -176,10 +176,19 @@ def _gemini_clasificar(caption: str, fecha_publicacion: str) -> dict:
 
 
 def _jev_clasificar(caption: str) -> dict:
+    """La API de Jev no devuelve el string elegido directo: cada pregunta
+    vuelve como {"type": "choice", "choice": "<opción>", "confidence": ...,
+    "probabilities": {...}} — más rico que la salida plana de Gemini
+    (trae confianza numérica de la propia clasificación), pero hay que
+    extraer "choice" para comparar contra el string de Gemini."""
     respuestas = jev_client.preguntar(caption, PREGUNTAS_JEV)
+    es_evento = respuestas.get("es_evento") or {}
+    confianza = respuestas.get("confianza") or {}
     return {
-        "es_evento": respuestas.get("es_evento"),
-        "confianza": respuestas.get("confianza"),
+        "es_evento": es_evento.get("choice"),
+        "es_evento_confidence": es_evento.get("confidence"),
+        "confianza": confianza.get("choice"),
+        "confianza_confidence": confianza.get("confidence"),
         "raw": respuestas,
     }
 
@@ -214,7 +223,13 @@ def imprimir_resumen(resultados: list[dict]) -> None:
     for fila in resultados:
         g, j = fila["gemini"], fila["jev"]
         g_txt = f"{g.get('es_evento')}/{g.get('confianza')}" if "error" not in g else f"ERROR: {g['error'][:40]}"
-        j_txt = f"{j.get('es_evento')}/{j.get('confianza')}" if "error" not in j else f"ERROR: {j['error'][:40]}"
+        if "error" not in j:
+            j_txt = (
+                f"{j.get('es_evento')}({j.get('es_evento_confidence')})/"
+                f"{j.get('confianza')}({j.get('confianza_confidence')})"
+            )
+        else:
+            j_txt = f"ERROR: {j['error'][:40]}"
         marca = "✓✓" if fila["coincide_es_evento"] and fila["coincide_confianza"] else (
             "✓·" if fila["coincide_es_evento"] else "··"
         )
