@@ -124,9 +124,14 @@ de referencia. Nunca uses automáticamente el año actual. Sin año visible ni
 fecha de referencia, devolvé fechas null y anio_confirmado=false.
 Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
 Si el texto es un agradecimiento o resumen de algo que YA pasó (ej. "gracias
-a quienes vinieron", "quedó hermoso el taller del sábado"), sin invitar a una
-fecha futura concreta, marcá es_evento como false — no importa que hable de
+a quienes vinieron", "quedó hermoso el taller del sábado") y no menciona
+ningún evento futuro, marcá es_evento como false — no importa que hable de
 bioconstrucción, no hay nada que promocionar todavía.
+Pero si ese mismo texto TAMBIÉN anuncia un próximo evento concreto, aunque
+sea breve (ej. "gracias a quienes vinieron! ya estamos organizando el
+próximo para el 14 de noviembre"), marcá es_evento como true y extraé los
+datos de ESE evento futuro — no descartes el post entero solo porque
+empieza agradeciendo algo pasado.
 Marcá idioma con el idioma principal del texto del flyer/caption ("es",
 "en" u "otro").
 Marcá confianza según qué tan explícitos están los datos, no por impresión
