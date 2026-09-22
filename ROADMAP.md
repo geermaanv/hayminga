@@ -580,6 +580,81 @@ automatizar la importación y te asegura que lo publicamos
 rápidamente") en vez de solo pedirlo — la razón vende mejor que el
 pedido pelado.
 
+## Corrección: revisión del criterio de clasificación, y REVISION_MANUAL nunca frenó a HikerAPI (22/09)
+
+Repasando juntos (Germán y Claude) el criterio completo de qué se
+publica solo y qué no, salió a la luz un desfasaje entre la
+documentación y el código real: el `CLAUDE.md` decía que
+`REVISION_MANUAL=true` hacía que "everything lands as
+pendiente_confirmacion", pero eso solo era cierto para el camino de
+mail intake (`extract_event_data`, usado por `email_intake.py`).
+**`hiker_pipeline.py` — el canal de HikerAPI, que es el volumen
+real — nunca chequeó ese flag.** El único gate ahí siempre fue
+`confianza != "alta"`, así que cualquier evento de hashtag o cuenta
+seguida con confianza alta se viene publicando solo, sin pasar por
+`?pendientes`, desde que existe esa lógica — nadie lo notó porque
+nadie lo había auditado línea por línea contra la documentación.
+
+No es un bug a revertir: cuando `?pendientes` empezó a acumularse fue
+una decisión consciente dejar de depender de revisión manual — el
+código ya reflejaba esa decisión, solo que a medias y sin que el
+`CLAUDE.md` se enterara. La postura del proyecto de acá en adelante,
+dicha explícitamente: **el proceso de importación no puede depender
+del trabajo manual de Germán**, por volumen. Se aprovechó para
+prolijizar en vez de solo parchear:
+
+- **`CONFIANZA_PUBLICABLE = {"alta", "media"}`** en `processor.py`:
+  un solo criterio de publicación para todo el pipeline de Python.
+  Antes de esto, "alta y media publican" (pedido explícito — antes
+  solo alta lo hacía) hubiera sido un cambio a un umbral que nunca
+  se aplicaba parejo entre los dos canales.
+- **`REVISION_MANUAL` se borró** de `processor.py`. `extract_event_data()`
+  (mail intake) ahora usa el mismo `CONFIANZA_PUBLICABLE` que
+  `hiker_pipeline.py` — ya no hay dos criterios de publicación
+  distintos sin razón para que difieran.
+- El `REVISION_MANUAL` de `Code.gs` (formulario web `+ Nuevo Evento`)
+  es un flag distinto, en otro archivo, y queda como está: ese canal
+  no tiene `confianza` porque lo completa una persona a mano, no una IA.
+
+**Otros tres ajustes al criterio, del mismo repaso:**
+
+- **Idioma**: `_parece_ingles()` pasó a `_parece_extranjero()`,
+  sumando una lista de palabras distintivas de portugués (con
+  tildes/ortografía que no existen en español, para no confundir con
+  vocabulario romance compartido). Además, se implementó de verdad el
+  chequeo post-extracción que el `CLAUDE.md` decía que existía pero
+  no estaba en ningún lado: si la IA extrae `idioma` distinto de
+  `"es"`, se descarta — defensa en profundidad para cuando el caption
+  es muy corto para que el filtro barato lo detecte, pero la imagen sí
+  trae texto en otro idioma.
+- **Virtual sin país**: antes, un evento virtual donde nunca se pudo
+  determinar el país (ni el flyer, ni la cuenta) quedaba en
+  `pendiente_confirmacion` para siempre sin activarse nunca — el
+  filtro de "no-Argentina" solo disparaba cuando el país SÍ se sabía
+  y no coincidía. Ahora se descarta directo: solo se publican
+  virtuales de Argentina, y sin ninguna señal de país no hay forma de
+  confirmarlo.
+- **Agradecimiento post-evento**: el prompt de extracción no decía
+  nada sobre distinguir una invitación a algo futuro de un
+  agradecimiento/resumen de algo que ya pasó — un post tipo "¡Gracias
+  a quienes vinieron al taller del sábado!" podía colar `es_evento=true`
+  sin fecha futura y quedar dando vueltas en pendientes. Ahora el
+  prompt lo pide explícito.
+
+**Sobre `confianza`:** el campo existía en el schema hacía meses sin
+que el prompt le explicara al modelo qué significaba cada nivel — lo
+llenaba con criterio propio, sin instrucciones. Ahora el prompt define
+los tres niveles en términos de qué tan explícitos están los datos
+críticos (nombre, fecha con año, ubicación), no por impresión general —
+ver `CLAUDE.md` para el texto exacto.
+
+**Motivo de fondo de esta revisión:** evaluar si conviene clasificar
+eventos con Jev (TypeSafe AI, modelo "System One" — ver acceso
+confirmado el 21/09) en vez de o además de Gemini. Comparar Jev contra
+un prompt de Gemini con estos agujeros no hubiera dicho nada útil — el
+criterio tenía que quedar bien definido primero, para dárselo igual a
+los dos lados de la comparación.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

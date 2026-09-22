@@ -145,8 +145,9 @@ def generar(service=None, hoy: date | None = None) -> int:
     service = service or get_service()
     hoy = hoy or date.today()
 
-    # Solo eventos ya confirmados: mientras REVISION_MANUAL esté en true todo
-    # entra como pendiente, y no corresponde promocionar algo sin revisar.
+    # Solo eventos ya confirmados: los de confianza baja quedan en
+    # pendiente_confirmacion (ver CONFIANZA_PUBLICABLE en processor.py), y
+    # no corresponde promocionar algo sin publicar todavía.
     eventos = [e for e in proximos_eventos()
                if (e.get("estado") or "").strip().lower() == "confirmado"]
 

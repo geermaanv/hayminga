@@ -60,7 +60,8 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 
 **Active configuration flags:**
 
-- **`REVISION_MANUAL = true`** (in `processor.py` AND `Code.gs`) — everything lands as `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`. Flip both to `false` to enable auto-publish (`confianza=alta` only).
+- **`CONFIANZA_PUBLICABLE = {"alta", "media"}`** (`processor.py`) — the single publish-vs-review threshold for the whole Python pipeline: an extracted event with `activo=True` (name+date+location resolved) publishes straight away (`Estado=confirmado`) only if `confianza` is in this set; `"baja"` always lands in `pendiente_confirmacion` for review at `hayminga.org/?pendientes`. See "Corrección" entry, ROADMAP.md 22/09 — there used to be a `REVISION_MANUAL` flag documented as gating *everything*, but it only ever applied to the mail-intake path (`extract_event_data`, used by `email_intake.py`); the HikerAPI path (`hiker_pipeline.py`, the actual high-volume channel) never checked it and has been auto-publishing on high confidence in production regardless of what this doc said. `REVISION_MANUAL` is gone; both paths now share `CONFIANZA_PUBLICABLE`.
+- **`Code.gs`'s own `REVISION_MANUAL`** (web form `+ Nuevo Evento` only) is unrelated and unchanged — that channel has no AI/no confianza score (a person types the form), so it keeps its own manual-review gate.
 - **`HIKERAPI_KEY`** — required for production. Local: `.env`. CI: GitHub Actions secret.
 - **`GEMINI_MIN_INTERVAL_SECONDS`** — rate pacing. Default 4.5s (free tier: 15/min). Production: 0.5s (billing enabled).
 
@@ -71,21 +72,24 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 **Pre-AI filters (cheap, run before LLM):**
 - Dedup by Instagram shortcode (`/p/`, `/reel/`, `/reels/` → same post)
 - Blacklist (`config.json.cuentas_excluidas`)
-- Post age > 180 days (dropped from 270; see PATRONES.md)
-- Language: `_parece_ingles()` on caption (regex, reliable; LLM output unreliable on ambiguous flyers)
+- Post age > 180 days (dropped from 270; see PATRONES.md) — this is about when the *Instagram post* was published, a cost-control heuristic; it's separate from and looser than the post-extraction "event date already passed" check below, which is the actual correctness gate once a date is known.
+- Language: `_parece_extranjero()` on caption (regex word-lists for English **and Portuguese**, added 22/09) — blocklist, not allowlist: with <6 words to judge (common when all the real info is in the flyer image, not the caption) it lets the post through rather than guessing, because there's no human review downstream if this drops something wrong.
 
 **Extraction strategy:**
 1. Gemini text-only on caption (cheap, filters non-events)
 2. If ambiguous/event: Gemini + image (recovers more fields)
 3. Fallback to Claude if Gemini quota hit (capped by `MAX_CLAUDE_CALLS_PER_RUN`, Claude is paid)
 4. Timeout: `genai.Client` must set `timeout=30_000` (real incident: 44min hang)
+5. `es_evento` (22/09): the prompt also marks `false` for a post that thanks/recaps something already past ("gracias a quienes vinieron...") with no future date invited, even if it's clearly about bioconstrucción — otherwise these sat in `pendiente_confirmacion` forever with no date to filter on.
+6. `confianza` (22/09): the prompt now spells out what each level means instead of leaving it to the model's judgment — **alta**: name, date (year explicit, not inferred) and location all stated outright; **media**: real and clear event but something secondary is missing/imprecise, or the year was inferred from the reference date; **baja**: something critical is ambiguous (vague name, unclear date, unsure it's even a bioconstrucción event).
 
 **Coordinates** (priority, top wins): location tagged on the post → geocoding of the extracted `direccion` via Nominatim (free) → nothing, and the frontend falls back to the province centroid. Most posts carry no tagged location, so without geocoding ~70% of events landed in the middle of their province.
 
-**Post-extraction validation:**
+**Post-extraction validation** (`hiker_pipeline.py`'s `procesar_post`, deterministic, no AI):
 - Drop already-happened events (fecha_fin/inicio < today)
-- Drop non-Argentina
-- Drop non-Spanish (redundant with pre-AI filter, for defense in depth)
+- Drop non-Argentina (only once `pais` is actually resolved — see `_pais_desde_texto`/`_pais_desde_telefono` fallbacks)
+- Drop virtual events where `pais` was never resolved anywhere (flyer, contact, or account) — added 22/09; previously these just sat in `pendiente_confirmacion` forever without ever activating, since "virtual" alone was never enough to publish without knowing the country.
+- Drop non-Spanish (`idioma` extracted by the AI ≠ `"es"`) — added 22/09 as defense-in-depth alongside the pre-AI `_parece_extranjero()`; this was documented before but never actually implemented.
 
 **Write:** Dedup by `(nombre, fecha, provincia)`. Ambiguous match → `pendiente_confirmacion` with note linking to existing event (manual merge, no silent loss). `Activo` computed deterministically; never from LLM.
 
