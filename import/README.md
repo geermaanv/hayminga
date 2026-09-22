@@ -187,12 +187,20 @@ no terminado) — **nunca** se toma directo de lo que devuelve la IA.
 
 ## Flags activos
 
-- **`REVISION_MANUAL = true`** en `src/processor.py` y en
-  `apps-script/Code.gs` (mirror — hay que reimplementar en
-  script.google.com para que tome efecto en producción). Mientras esté en
-  `true`, nada se auto-publica: todo llega a `Activo=false` /
-  `Estado=pendiente_confirmacion` y se confirma a mano en `?pendientes`.
-  Detalle y motivo en `../ROADMAP.md`.
+- **`CONFIANZA_PUBLICABLE = {"alta", "media"}`** en `src/processor.py` —
+  criterio único de publicación para todo el pipeline de Python
+  (`hiker_pipeline.py` y `extract_event_data()` comparten el mismo).
+  `activo=True` (nombre/fecha/ubicación resueltos) + confianza en ese
+  conjunto → se publica directo. Confianza `"baja"` → siempre
+  `Estado=pendiente_confirmacion`, a confirmar a mano en `?pendientes`.
+  Reemplazó a `REVISION_MANUAL` el 22/09 (detalle en `../ROADMAP.md`) —
+  ese flag nunca frenó a `hiker_pipeline.py` en la práctica, solo al mail
+  intake, así que quedaba mal documentado como un freno global.
+- **`REVISION_MANUAL`** en `apps-script/Code.gs` (mirror — hay que
+  reimplementar en script.google.com para que tome efecto) sigue
+  existiendo, pero es un flag distinto: solo gatea el formulario web
+  (`+ Nuevo Evento`), que no tiene puntaje de confianza porque lo carga
+  una persona a mano.
 
 ## Fallback de IA ante fallas
 
