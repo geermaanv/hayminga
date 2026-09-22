@@ -1,10 +1,11 @@
-name: Test comparación Jev vs Gemini (temporal, con billing)
+name: Test comparación Jev vs Gemini (temporal, muestra ampliada + pendientes reales)
 
-# Corre src/comparar_jev_gemini.py con las API keys reales, ahora con
-# billing habilitado en el proyecto de GEMINI_API_KEY (ver ROADMAP.md,
-# 22/09) para evitar el 429 RESOURCE_EXHAUSTED de la primera corrida.
-# No toca la Sheet ni publica nada. Se borra después de usarla, mismo
-# patrón que los diagnósticos anteriores de este repo.
+# Corre src/comparar_jev_gemini.py con las API keys reales: primero los
+# 29 casos sintéticos ampliados, después --pendientes contra eventos
+# reales frenados en pendiente_confirmacion por confianza=baja (ver
+# ROADMAP.md, 22/09). No toca la Sheet ni publica nada (el modo
+# --pendientes solo lee). Se borra después de usarla, mismo patrón que
+# los diagnósticos anteriores de este repo.
 
 on:
   workflow_dispatch: {}
@@ -33,7 +34,7 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Correr comparación Jev vs Gemini
+      - name: Correr comparación Jev vs Gemini (29 casos sintéticos)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MIN_INTERVAL_SECONDS: "0.5"
@@ -41,10 +42,19 @@ jobs:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
         run: python -m src.comparar_jev_gemini --guardar resultado_comparacion.json
 
-      - name: Subir resultado como artifact
+      - name: Correr Jev contra pendientes reales (confianza baja)
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python -m src.comparar_jev_gemini --pendientes 20 --guardar resultado_pendientes.json
+
+      - name: Subir resultados como artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: resultado-comparacion-jev-gemini
-          path: import/resultado_comparacion.json
+          path: |
+            import/resultado_comparacion.json
+            import/resultado_pendientes.json
           retention-days: 7
