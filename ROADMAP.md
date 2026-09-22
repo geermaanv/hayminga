@@ -655,6 +655,38 @@ un prompt de Gemini con estos agujeros no hubiera dicho nada útil — el
 criterio tenía que quedar bien definido primero, para dárselo igual a
 los dos lados de la comparación.
 
+## Arnés de comparación Jev vs. Gemini (22/09)
+
+Con el criterio ya definido, se armó `src/comparar_jev_gemini.py` para
+correr el mismo texto contra los dos lados y ver si coinciden.
+
+**Alcance acotado a clasificación, no a extracción completa:** lo único
+que se probó funcionando de la API de Jev es preguntas tipo `choice`
+sobre un texto (`state`) — el diagnóstico del 21/09 nunca mandó una
+imagen. Las dos preguntas que se comparan (`es_evento`, `confianza`) son
+exactamente las que `SYSTEM_PROMPT` ya define para Gemini, copiadas
+palabra por palabra a los `criteria` de Jev — coherente con el motivo de
+la revisión de arriba. Nombre/fecha/dirección (extracción de campos) queda
+afuera: no hay evidencia de que Jev los soporte, y no es lo que dice el
+ROADMAP que se quería evaluar ("clasificar eventos").
+
+**Dataset, con una limitación real:** la Sheet no guarda el caption del
+post (solo los campos ya extraídos, ver PATRONES.md), así que no hay
+manera de recolectar una muestra histórica sin tocar el pipeline en vivo
+para loguearlos. Los 7 casos de `CASOS` son ilustrativos, a mano: los dos
+primeros son literalmente los captions del diagnóstico del 21/09, el
+resto cubre bordes ya documentados (año no escrito → confianza media,
+agradecimiento post-evento, evento vago, tema ajeno a bioconstrucción).
+Sirve para una primera lectura cualitativa, no para un porcentaje de
+acuerdo confiable — eso necesita captions reales, que quedan como
+pendiente si esta primera pasada justifica seguir.
+
+`src/jev_client.py` es el cliente mínimo (`TYPESAFE_API_KEY`, endpoint y
+payload confirmados en el diagnóstico ya borrado). Corre con
+`python -m src.comparar_jev_gemini` (`--guardar RUTA` para el JSON
+completo) — no toca la Sheet ni publica nada, solo gasta las llamadas a
+Gemini y Jev que hace.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
