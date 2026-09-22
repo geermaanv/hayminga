@@ -39,7 +39,7 @@ import anthropic
 
 from src.processor import (
     EVENT_SCHEMA, SYSTEM_PROMPT, GEMINI_MODEL, CLAUDE_MODEL,
-    validate_event_data, _pais_desde_texto, _pais_desde_telefono,
+    CONFIANZA_PUBLICABLE, validate_event_data, _pais_desde_texto, _pais_desde_telefono,
 )
 from src.geocodificar import geocodificar_direccion
 from src.sheets import (
@@ -619,15 +619,31 @@ _PALABRAS_EN = {
     "the", "and", "for", "with", "workshop", "course", "learn", "book",
     "now", "our", "your", "we", "you", "this", "join", "register", "class",
 }
+# Palabras elegidas por ser distintivas del portugués (con tilde/ortografía
+# que no existe en español) para no confundir con el español por vocabulario
+# romance compartido ("de", "para", "com"/"con") — mismo criterio que ya se
+# usaba para inglés.
+_PALABRAS_PT = {
+    "você", "não", "então", "também", "aqui", "vagas", "informações",
+    "inscrição", "inscrições", "confira", "está", "nós", "participar",
+    "oficina", "saiba",
+}
 
 
-def _parece_ingles(texto: str) -> bool:
-    palabras = re.findall(r"[a-záéíóúñ']+", (texto or "").lower())
+def _parece_extranjero(texto: str) -> bool:
+    """Descarta solo si claramente NO es español (inglés o portugués). Con
+    poco texto para juzgar (menos de 6 palabras — común cuando toda la
+    info real está en la imagen del flyer, no en el caption) deja pasar a
+    propósito: acá no hay revisión humana después si se descarta mal, así
+    que el costo de gastar la IA de más en un caso ambiguo es mucho menor
+    que el de perder un evento real de Argentina para siempre."""
+    palabras = re.findall(r"[a-záéíóúñãõçâêô']+", (texto or "").lower())
     if len(palabras) < 6:
         return False
-    en = sum(1 for p in palabras if p in _PALABRAS_EN)
     es = sum(1 for p in palabras if p in _PALABRAS_ES)
-    return en >= 3 and en > es
+    en = sum(1 for p in palabras if p in _PALABRAS_EN)
+    pt = sum(1 for p in palabras if p in _PALABRAS_PT)
+    return (en >= 3 and en > es) or (pt >= 3 and pt > es)
 
 
 def _detectar_pais_temprana(post: dict) -> str:
@@ -663,7 +679,7 @@ def procesar_post(
         if antiguedad.days > _MAX_ANTIGUEDAD_POST_DIAS:
             return None
 
-    if _parece_ingles(post.get("caption")):
+    if _parece_extranjero(post.get("caption")):
         return None
 
     pais_detectado = _detectar_pais_temprana(post)
@@ -718,6 +734,21 @@ def procesar_post(
     if data.get("pais") and data["pais"] != "Argentina":
         return None
 
+    # Un evento virtual sin ningún país determinado (ni el flyer, ni la
+    # cuenta) antes quedaba en pendientes para siempre sin activarse nunca
+    # — antes se descartaba solo cuando el país SÍ se sabía y no era
+    # Argentina. Ahora se descarta directo: solo publicamos virtuales de
+    # Argentina, y sin señal de país no hay forma de confirmarlo.
+    if data.get("es_virtual") and not data.get("pais"):
+        return None
+
+    # Defensa en profundidad además de _parece_extranjero() (que filtra
+    # antes de gastar la IA, con poco texto para decidir): si la IA, viendo
+    # también la imagen, extrajo un idioma explícito que no es español, se
+    # descarta. Antes esto estaba documentado pero no implementado.
+    if data.get("idioma") and data["idioma"] != "es":
+        return None
+
     # Ubicación real etiquetada por quien publicó > geocoding de texto
     if post.get("lat") and post.get("lng"):
         data["latitud"] = post["lat"]
@@ -734,15 +765,12 @@ def procesar_post(
             data["latitud"], data["longitud"] = punto
 
     confianza = str(data.get("confianza") or "baja").lower()
-    if data.get("activo") and confianza != "alta":
+    if data.get("activo") and confianza not in CONFIANZA_PUBLICABLE:
         data["activo"] = False
         data["estado"] = "pendiente_confirmacion"
-        # Métrica: ¿por qué entra a pendientes?
-        razon_pendiente = []
-        if confianza == "media":
-            razon_pendiente.append("confianza_media")
-        elif confianza == "baja":
-            razon_pendiente.append("confianza_baja")
+        # Métrica: ¿por qué entra a pendientes? Solo "baja" llega hasta acá
+        # (alta y media están en CONFIANZA_PUBLICABLE, arriba).
+        razon_pendiente = ["confianza_baja"]
         if not data.get("nombre"):
             razon_pendiente.append("sin_nombre")
         if not (data.get("fecha_inicio_iso") or data.get("es_virtual")):

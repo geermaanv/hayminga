@@ -407,6 +407,45 @@ class ProcessorTests(unittest.TestCase):
         self.assertEqual(event["fecha_inicio_iso"], "2025-11-24")
         self.assertFalse(event["activo"])
 
+    @patch("src.processor._get_raw_json")
+    def test_confianza_media_publica_directo_sin_revision_manual(self, get_raw_json):
+        """Ver ROADMAP.md, 22/09: REVISION_MANUAL se sacó de acá — el
+        criterio de publicación es CONFIANZA_PUBLICABLE (alta y media),
+        el mismo que usa hiker_pipeline.py."""
+        get_raw_json.return_value = (
+            '{"es_evento":true,"nombre":"Taller de Quincha",'
+            '"fecha_inicio":"10/12/2026","fecha_fin":null,'
+            '"anio_confirmado":true,"es_virtual":false,'
+            '"provincia":"Córdoba","pais":"Argentina","confianza":"media"}'
+        )
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"fake-image")
+            event = processor.extract_event_data(
+                Path(image.name),
+                {"source": "email", "discovered_at": "2026-09-01"},
+            )
+
+        self.assertTrue(event["activo"])
+        self.assertNotEqual(event.get("estado"), "pendiente_confirmacion")
+
+    @patch("src.processor._get_raw_json")
+    def test_confianza_baja_va_a_pendientes(self, get_raw_json):
+        get_raw_json.return_value = (
+            '{"es_evento":true,"nombre":"Taller de Quincha",'
+            '"fecha_inicio":"10/12/2026","fecha_fin":null,'
+            '"anio_confirmado":true,"es_virtual":false,'
+            '"provincia":"Córdoba","pais":"Argentina","confianza":"baja"}'
+        )
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"fake-image")
+            event = processor.extract_event_data(
+                Path(image.name),
+                {"source": "email", "discovered_at": "2026-09-01"},
+            )
+
+        self.assertFalse(event["activo"])
+        self.assertEqual(event["estado"], "pendiente_confirmacion")
+
 
 class CuentasPaisTests(unittest.TestCase):
     """PaisTelefono en CuentasIds: señal de país del perfil de Instagram
@@ -593,6 +632,155 @@ class CuentasEmailTests(unittest.TestCase):
         evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
 
         self.assertFalse(evento["ya_taggeado_hayminga"])
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_virtual_sin_pais_en_ningun_lado_se_descarta(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        """Ver ROADMAP.md, 22/09: antes un evento virtual sin país
+        determinado (ni flyer ni cuenta) quedaba en pendientes para
+        siempre sin activarse — ahora se descarta directo."""
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Curso Online de Permacultura",
+            "es_virtual": True, "fecha_inicio": "10/12/2026",
+            "provincia": None, "direccion": None, "contacto": None,
+            "pais": None, "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/EEE555/", "image_url": "https://x.test/i.jpg",
+                "caption": "Curso online de permacultura, empezá cuando quieras",
+                "username": "cuenta_sin_pais"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertIsNone(evento)
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_virtual_con_pais_de_cuenta_no_se_descarta(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Curso Online de Permacultura",
+            "es_virtual": True, "fecha_inicio": "10/12/2026",
+            "provincia": None, "direccion": None, "contacto": None,
+            "pais": None, "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/FFF666/", "image_url": "https://x.test/i.jpg",
+                "caption": "Curso online de permacultura, empezá cuando quieras",
+                "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="Argentina")
+
+        self.assertIsNotNone(evento)
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_idioma_extraido_distinto_de_espanol_se_descarta(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        """Defensa en profundidad además de _parece_extranjero(): si la IA
+        (que también ve la imagen) extrae un idioma explícito no-español,
+        se descarta — antes esto estaba documentado pero no implementado."""
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Bamboo Workshop",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": "Argentina",
+            "idioma": "en", "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/GGG777/", "image_url": "https://x.test/i.jpg",
+                "caption": "Bamboo Anatomy Workshop", "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertIsNone(evento)
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_confianza_media_publica_directo(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        """Ver ROADMAP.md, 22/09: alta Y media publican directo — antes
+        solo alta lo hacía."""
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Quincha",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": "Argentina",
+            "confianza": "media",
+        }
+        post = {"link": "https://www.instagram.com/p/HHH888/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de quincha en Córdoba", "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertTrue(evento["activo"])
+        self.assertNotEqual(evento.get("estado"), "pendiente_confirmacion")
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_confianza_baja_va_a_pendientes(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Quincha",
+            "fecha_inicio": "10/12/2026", "provincia": "Córdoba",
+            "direccion": None, "contacto": None, "pais": "Argentina",
+            "confianza": "baja",
+        }
+        post = {"link": "https://www.instagram.com/p/III999/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de quincha en Córdoba", "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertFalse(evento["activo"])
+        self.assertEqual(evento["estado"], "pendiente_confirmacion")
+
+
+class ParaceExtranjeroTests(unittest.TestCase):
+    """_parece_extranjero(): filtro barato pre-IA que descarta inglés y
+    portugués. Con poco texto para juzgar deja pasar a propósito — ver
+    ROADMAP.md, 22/09."""
+
+    def test_espanol_no_se_marca_como_extranjero(self):
+        from src import hiker_pipeline
+
+        texto = "Taller de bioconstrucción con barro y quincha, inscripción por DM, cupos limitados"
+        self.assertFalse(hiker_pipeline._parece_extranjero(texto))
+
+    def test_ingles_se_detecta(self):
+        from src import hiker_pipeline
+
+        texto = "Join our workshop and learn with the best course for your natural building journey"
+        self.assertTrue(hiker_pipeline._parece_extranjero(texto))
+
+    def test_portugues_se_detecta(self):
+        from src import hiker_pipeline
+
+        texto = "Você não pode perder essa oficina, vagas limitadas, confira as informações aqui"
+        self.assertTrue(hiker_pipeline._parece_extranjero(texto))
+
+    def test_texto_corto_deja_pasar_aunque_sea_ambiguo(self):
+        from src import hiker_pipeline
+
+        # Menos de 6 palabras: no hay suficiente texto para juzgar con
+        # confianza, así que se deja pasar (ante la duda, no descartar acá
+        # — no hay revisión humana después si nos equivocamos).
+        self.assertFalse(hiker_pipeline._parece_extranjero("Workshop info"))
 
 
 class DirectorioEmailsTests(unittest.TestCase):
@@ -2001,8 +2189,8 @@ class ContenidoInstagramTests(unittest.TestCase):
         self.assertEqual(n, 1)
 
     def test_ignora_eventos_sin_confirmar(self):
-        """Mientras REVISION_MANUAL esté en true todo entra como pendiente:
-        promocionar algo sin revisar sería peor que no promocionar nada."""
+        """Un evento de confianza baja queda en pendiente_confirmacion:
+        promocionar algo sin publicar sería peor que no promocionar nada."""
         n, _ = self._generar([self._evento(estado="pendiente_confirmacion")])
         self.assertEqual(n, 0)
 

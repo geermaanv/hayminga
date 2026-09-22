@@ -21,11 +21,15 @@ from src.state import save_hash, save_link, image_hash
 from src.scraper import fetch_caption
 from src import sheets
 
-# Cambio TEMPORAL para revisar la calidad de datos a mano: mientras esté en
-# True, ningún evento se auto-publica (activo queda en False y el estado en
-# "pendiente_confirmacion") aunque el extractor lo hubiera dado por bueno.
-# Para volver al comportamiento normal, poner en False.
-REVISION_MANUAL = True
+# Niveles de confianza con los que se publica directo, sin pasar por
+# pendiente_confirmacion — usado tanto acá (mail intake) como en
+# hiker_pipeline.py (HikerAPI), un solo criterio para todo el pipeline de
+# Python. "baja" siempre va a revisión. Ver ROADMAP.md, 22/09: antes había
+# dos criterios distintos (este archivo respetaba REVISION_MANUAL, que
+# nunca se chequeaba en hiker_pipeline.py) sin razón para que difirieran —
+# el proceso de importación no puede depender de que alguien lo revise a
+# mano, por volumen.
+CONFIANZA_PUBLICABLE = {"alta", "media"}
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 
@@ -119,8 +123,23 @@ contenido). Si el evento muestra día y mes sin año, usá el año de esa fecha
 de referencia. Nunca uses automáticamente el año actual. Sin año visible ni
 fecha de referencia, devolvé fechas null y anio_confirmado=false.
 Si no es un flyer de un evento de bioconstrucción, marcá es_evento como false.
+Si el texto es un agradecimiento o resumen de algo que YA pasó (ej. "gracias
+a quienes vinieron", "quedó hermoso el taller del sábado"), sin invitar a una
+fecha futura concreta, marcá es_evento como false — no importa que hable de
+bioconstrucción, no hay nada que promocionar todavía.
 Marcá idioma con el idioma principal del texto del flyer/caption ("es",
 "en" u "otro").
+Marcá confianza según qué tan explícitos están los datos, no por impresión
+general:
+- "alta": nombre, fecha (con año escrito, no inferido) y ubicación
+  (dirección concreta, o "virtual" sin ambigüedad) están LOS TRES escritos
+  en la imagen o el caption, sin que hayas tenido que inferir nada.
+- "media": es un evento real y se entiende bien, pero falta o es
+  impreciso algo secundario (dirección exacta, contacto), o el año no
+  estaba escrito y lo dedujiste de la fecha de referencia.
+- "baja": algo crítico es dudoso o ambiguo — el nombre es vago, la fecha
+  no es clara, o no estás seguro de que sea realmente un evento de
+  bioconstrucción y no algo tangencial.
 No determines si está activo: el sistema lo calcula después usando fecha y país.
 """
 
@@ -327,7 +346,7 @@ def _es_argentina(value: str | None) -> bool:
 
 # Heurística de reemplazo para cuando el modelo deja `pais` vacío en vez de
 # marcarlo explícitamente — mismo problema que ya se resolvió para idioma
-# con _parece_ingles(): la IA no es confiable marcando país si el flyer no
+# con _parece_extranjero(): la IA no es confiable marcando país si el flyer no
 # lo dice explícito, y un `pais` vacío no activa el filtro de
 # hiker_pipeline.py que descarta lo no-argentino (ese filtro solo dispara
 # si `pais` está seteado Y es distinto de Argentina). El síntoma real: un
@@ -644,7 +663,8 @@ def extract_event_data(image_path: Path, metadata: dict):
                 "queda en revisión"
             )
 
-    if REVISION_MANUAL and data.get("activo"):
+    confianza = str(data.get("confianza") or "baja").lower()
+    if data.get("activo") and confianza not in CONFIANZA_PUBLICABLE:
         data["activo"] = False
         data["estado"] = "pendiente_confirmacion"
 
