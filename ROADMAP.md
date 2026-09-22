@@ -811,6 +811,65 @@ primero corregir el hallazgo de `mixto_agradecimiento_y_proximo` en el
 prompt de Gemini, porque afecta a producción hoy, con o sin Jev de por
 medio.
 
+### Tercera corrida: muestra a 29 casos + prueba contra pendientes reales (22/09)
+
+Con el prompt ya corregido, `CASOS` ampliado de 11 a 29 (más variedad de
+técnicas, bordes de dominio, texto informal, datos críticos ausentes) y
+un modo nuevo `--pendientes` que corre Jev contra eventos reales de la
+Sheet. Sin fallas de cuota otra vez: 29/29 respondieron de los dos
+lados.
+
+**El fix del prompt funcionó:** `mixto_agradecimiento_y_proximo` ahora
+da `si/media` en Gemini, coincidiendo con Jev — el caso que antes se
+perdía entero ya se clasifica bien.
+
+**El patrón "año no escrito" resultó ser inconsistencia, no una regla
+rota siempre:** en esta corrida Gemini acertó `media` en 2 de 3 casos
+de ese borde (`virtual_sin_anio`, `festival_multidia_sin_anio`) y
+falló en el tercero (`diagnostico_evento`, otra vez `alta`). Sumado a
+las corridas anteriores (0/3 y 0/2), el panorama real es que Gemini
+aplica esta regla de forma no determinística, no que nunca la aplique
+— matiza la lectura de las corridas 1 y 2.
+
+**Hallazgo nuevo, y es una señal EN CONTRA de Jev:** en 3 casos sin
+nombre de evento claro o sin modalidad explícita
+(`nombre_vago_fecha_clara`, `virtual_lugar_generico_baja`,
+`domain_permacultura_adyacente`), Jev respondió `es_evento=no` con
+más convicción, mientras Gemini seguía diciendo `si` con confianza
+`baja`. `PATRONES.md` pide exactamente lo contrario para este dominio
+("blocklist, no allowlist, cuando no hay revisión humana después"): si
+Jev descarta más fácil ante señal débil, es más probable que pierda
+eventos reales en silencio, no menos.
+
+**Bordes de dominio, sin ganador:** `domain_borderline_arquitectura_
+sustentable` y `domain_permacultura_adyacente` prueban qué tan ancho
+lee cada modelo "bioconstrucción". No hay una respuesta correcta
+definida en `SYSTEM_PROMPT` hoy — si se quiere seguir esta línea habría
+que definirla primero, igual que se hizo con `confianza` el 22/09.
+
+**La prueba más importante — eventos reales frenados hoy:** `--pendientes
+20` encontró solo 4 eventos en `pendiente_confirmacion` con
+`confianza=baja` (cola chica, consistente con la meta de <10
+pendientes por corrida). **Jev no subiría ninguno: 0/4.** Peor para la
+hipótesis de adoptar Jev — en 3 de los 4, Jev directamente respondió
+`es_evento=no`, más conservador que Gemini (que los mantiene como
+evento, solo que con confianza baja). Contra los casos reales que hoy
+dependen de revisión manual, Jev no ofrece ninguna ventaja.
+
+**Conclusión, revisando las tres corridas juntas:** la señal optimista
+de la corrida 2 (muestra chica y limpia) no se sostiene al ampliar la
+muestra ni al probar contra datos reales. Con evidencia acumulada de
+29 casos sintéticos + los 4 casos reales existentes, no hay caso para
+adoptar Jev en el pipeline de producción por ahora: en el mejor de los
+casos es comparable a Gemini, y en el peor (señal débil, sin revisión
+humana después) es más propenso a descartar eventos reales, que es
+justo el riesgo que este proyecto más quiere evitar. El resultado de
+valor real de todo este ejercicio fue el bug de `SYSTEM_PROMPT`
+(`mixto_agradecimiento_y_proximo`, ya corregido) — no Jev en sí. Se
+frena la evaluación de Jev acá salvo que aparezca una razón nueva y
+concreta para retomarla (por ejemplo, extracción de campos en vez de
+solo clasificación, que Jev no soporta hoy).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
