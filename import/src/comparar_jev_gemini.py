@@ -158,6 +158,59 @@ CASOS = [
         "nota": "Evento real pero no es de bioconstrucción -> es_evento=no. "
                 "Prueba si el criterio de dominio se sostiene en Jev.",
     },
+    {
+        "id": "fecha_relativa_sin_dia",
+        "caption": (
+            "Se viene el próximo taller de bioconstrucción con tierra "
+            "cruda acá en el espacio, en dos semanas. Consultanos por acá "
+            "para más info y quedar anotado."
+        ),
+        "fecha_publicacion": "2026-09-14",
+        "nota": "Fecha relativa ('en dos semanas'), sin día/mes/año ni "
+                "lugar concretos -> nombre vago del evento y fecha no "
+                "verificable, debería ser confianza baja.",
+    },
+    {
+        "id": "festival_multidia_completo",
+        "caption": (
+            "Festival de Construcción Natural — del 20 al 22 de marzo de "
+            "2027 en el Predio Ferial, Villa General Belgrano, Córdoba. "
+            "Tres días de talleres de quincha, superadobe y techos vivos. "
+            "Entradas por Alternativa Tickets."
+        ),
+        "fecha_publicacion": "2026-09-10",
+        "nota": "Nombre, rango de fechas CON año y ubicación concreta, "
+                "los tres explícitos -> confianza alta, aunque el evento "
+                "dure varios días (no es un edge case de duración, sino "
+                "de completitud de datos).",
+    },
+    {
+        "id": "virtual_completo_con_anio",
+        "caption": (
+            "Curso online 'Introducción al bioconstrucción con adobe' — "
+            "arranca el 3 de noviembre de 2026, por Zoom, 4 clases en "
+            "vivo. Inscripción en el link de la bio, cupos limitados."
+        ),
+        "fecha_publicacion": "2026-09-21",
+        "nota": "Virtual con año explícito y modalidad sin ambigüedad "
+                "('por Zoom') -> confianza alta. Contrasta con "
+                "virtual_sin_anio (mismo tipo de evento, sin año).",
+    },
+    {
+        "id": "mixto_agradecimiento_y_proximo",
+        "caption": (
+            "¡Terminamos el taller de techos verdes del fin de semana, "
+            "gracias a todes los que vinieron! Y ya estamos organizando "
+            "el próximo para el 14 de noviembre, mismo lugar. Más info "
+            "pronto."
+        ),
+        "fecha_publicacion": "2026-09-21",
+        "nota": "Mezcla agradecimiento por algo pasado CON un anuncio de "
+                "evento futuro concreto (día y mes, año no escrito) -> "
+                "es_evento=si a pesar del agradecimiento inicial (el "
+                "SYSTEM_PROMPT exige 'sin invitar a fecha futura concreta' "
+                "para descartar); confianza media por año inferido.",
+    },
 ]
 
 
