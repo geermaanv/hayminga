@@ -771,7 +771,12 @@ lados**, primera corrida sin ruido de cuota.
   cubra explícitamente el caso mixto (agradecimiento + anuncio en el
   mismo texto) — tal como está, un post real con esta forma se
   descartaría en producción y el evento nunca llegaría a
-  `pendiente_confirmacion`.
+  `pendiente_confirmacion`. **Corregido** el mismo día: `SYSTEM_PROMPT`
+  ahora dice explícitamente que si el texto agradece algo pasado PERO
+  también anuncia un próximo evento concreto, `es_evento=true` con los
+  datos de ese evento futuro — no se descarta el post entero. Las
+  preguntas de Jev en este mismo script se actualizaron igual, para
+  seguir dándole el mismo criterio a los dos lados de la comparación.
 
 **`confianza`: 5/11 coinciden.** De las 6 discrepancias:
 - **3 confirman el patrón de la primera corrida**, ahora con más

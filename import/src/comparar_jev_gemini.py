@@ -44,18 +44,25 @@ PREGUNTAS_JEV = {
             "(taller, curso, minga, charla, festival) con fecha propia? Si el "
             "texto es un agradecimiento o resumen de algo que ya pasó (ej. "
             "'gracias a quienes vinieron', 'quedó hermoso el taller del "
-            "sábado') sin invitar a una fecha futura concreta, la respuesta "
-            "es 'no' aunque hable de bioconstrucción."
+            "sábado') y no menciona ningún evento futuro, la respuesta es "
+            "'no' aunque hable de bioconstrucción. Pero si ese mismo texto "
+            "TAMBIÉN anuncia un próximo evento concreto, aunque sea breve "
+            "(ej. 'gracias a quienes vinieron! ya estamos organizando el "
+            "próximo para el 14 de noviembre'), la respuesta es 'si' — no "
+            "descartes el texto entero solo porque empieza agradeciendo "
+            "algo pasado."
         ),
         "criteria": {
             "si": (
                 "Invita a un evento futuro y concreto de bioconstrucción, "
-                "con fecha (aunque sea aproximada) todavía no pasada."
+                "con fecha (aunque sea aproximada) todavía no pasada — "
+                "incluso si el mismo texto también agradece o resume algo "
+                "ya pasado."
             ),
             "no": (
                 "No es un evento de bioconstrucción, o es un "
-                "agradecimiento/resumen de algo que ya pasó sin invitar a "
-                "una fecha futura."
+                "agradecimiento/resumen de algo que ya pasó sin mencionar "
+                "ningún evento futuro."
             ),
         },
     },
