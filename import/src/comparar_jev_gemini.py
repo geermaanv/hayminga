@@ -18,24 +18,36 @@ el ROADMAP.
 
 Dataset: NO hay captions persistidas en ningún lado (la Sheet no guarda
 el texto del post, solo los campos ya extraídos — ver PATRONES.md, columna
-coupling). Los casos de abajo son ilustrativos: dos son los mismos
-captions del diagnóstico real del 21/09 (ver ROADMAP.md), el resto cubre
+coupling). Los 30 casos de CASOS son a mano/ilustrativos: dos son los
+captions reales del diagnóstico del 21/09 (ver ROADMAP.md), el resto cubre
 a mano los bordes documentados (año no escrito -> confianza media,
-agradecimiento post-evento, evento vago, tema ajeno a bioconstrucción).
-Para una medición real hace falta correr esto contra captions reales de
-una corrida — swapear CASOS por una carga desde un log/export cuando haya
-volumen suficiente para que valga la pena.
+agradecimiento post-evento, evento vago, tema ajeno/adyacente a
+bioconstrucción, texto informal/confuso, dato crítico ausente).
+
+`--pendientes N` es la aproximación más cercana a datos reales que se
+puede hacer sin loguear captions nuevos: toma hasta N eventos que HOY
+están frenados en `pendiente_confirmacion` por `confianza=baja` de
+Gemini, arma un texto proxy con los campos que Gemini ya extrajo
+(nombre, descripción, fecha, lugar — ver `_reconstruir_texto`), y le
+pregunta a Jev si los publicaría. No es el caption original (no se
+persiste), así que no mide si Jev "ve" algo que Gemini no vio — mide si,
+con la MISMA información, Jev es más o menos permisivo que Gemini. Solo
+llama a Jev (Gemini ya dio su veredicto real, guardado en la Sheet).
 
 Gratis salvo por las llamadas a Gemini/Jev que este mismo script hace
-(no toca la Sheet, no publica nada). Requiere GEMINI_API_KEY y
-TYPESAFE_API_KEY.
+(no toca la Sheet, no publica nada — ni siquiera en modo --pendientes,
+que solo lee). Requiere GEMINI_API_KEY y TYPESAFE_API_KEY para el modo
+default; --pendientes además requiere GOOGLE_SERVICE_ACCOUNT_JSON y
+GOOGLE_SPREADSHEET_ID (no requiere GEMINI_API_KEY, no vuelve a llamar a
+Gemini).
 """
 
 import argparse
 import json
 from datetime import datetime, timezone
 
-from src import hiker_pipeline, jev_client
+from src import hiker_pipeline, jev_client, sheets
+from src.processor import CONFIANZA_PUBLICABLE
 
 PREGUNTAS_JEV = {
     "es_evento": {
@@ -216,7 +228,221 @@ CASOS = [
                 "evento futuro concreto (día y mes, año no escrito) -> "
                 "es_evento=si a pesar del agradecimiento inicial (el "
                 "SYSTEM_PROMPT exige 'sin invitar a fecha futura concreta' "
-                "para descartar); confianza media por año inferido.",
+                "para descartar); confianza media por año inferido. "
+                "Corregido el 22/09 tras la segunda corrida (ver "
+                "ROADMAP.md) — antes Gemini lo descartaba entero.",
+    },
+    {
+        "id": "agradecimiento_con_futuro_vago_sin_fecha",
+        "caption": (
+            "¡Gracias a todes! Nos seguimos viendo pronto por acá, ya va "
+            "a haber más talleres."
+        ),
+        "fecha_publicacion": "2026-09-21",
+        "nota": "Contraprueba del fix de mixto_agradecimiento_y_proximo: "
+                "menciona 'más talleres' pero SIN fecha concreta -> tiene "
+                "que seguir siendo es_evento=no. Si esto da 'si', el fix "
+                "del 22/09 se pasó de permisivo.",
+    },
+    {
+        "id": "nombre_vago_fecha_clara",
+        "caption": (
+            "Nos vemos el sábado 10 de octubre de 2026 en la finca, va a "
+            "estar bueno."
+        ),
+        "fecha_publicacion": "2026-09-12",
+        "nota": "Fecha con año explícito, pero sin nombre de evento ni "
+                "lugar concreto ('la finca' no es una dirección) -> "
+                "nombre vago, debería ser confianza baja pese a la fecha "
+                "clara.",
+    },
+    {
+        "id": "sin_lugar_media",
+        "caption": (
+            "Taller de techos de paja — sábado 7 de noviembre de 2026, "
+            "en la zona, cupos limitados. Escribinos por acá para la "
+            "dirección exacta."
+        ),
+        "fecha_publicacion": "2026-09-13",
+        "nota": "Nombre y fecha con año explícitos, pero dirección "
+                "solo aproximada ('en la zona') -> falta/impreciso algo "
+                "secundario, confianza media.",
+    },
+    {
+        "id": "contacto_incompleto_alta",
+        "caption": (
+            "Curso de bahareque y quincha — 21 de noviembre de 2026, "
+            "Chapadmalal, Buenos Aires. Cupos limitados."
+        ),
+        "fecha_publicacion": "2026-09-11",
+        "nota": "Nombre, fecha con año y lugar concreto, los tres "
+                "explícitos; sin dato de contacto, que es secundario y no "
+                "forma parte del criterio de confianza -> alta.",
+    },
+    {
+        "id": "minga_alta_limpia",
+        "caption": (
+            "Minga comunitaria de construcción con adobe — domingo 5 de "
+            "julio de 2026, Escuela Rural N°12, Chubut. Se suma cualquiera "
+            "con ganas de aprender."
+        ),
+        "fecha_publicacion": "2026-06-20",
+        "nota": "Variante de caso limpio con otra técnica (minga/adobe) y "
+                "publicación con meses de anticipación -> confianza alta.",
+    },
+    {
+        "id": "domain_borderline_arquitectura_sustentable",
+        "caption": (
+            "Charla sobre arquitectura sustentable y eficiencia "
+            "energética en la vivienda — miércoles 4 de noviembre de "
+            "2026, Centro Cultural, Neuquén."
+        ),
+        "fecha_publicacion": "2026-09-17",
+        "nota": "Borde de dominio: 'arquitectura sustentable' es adyacente "
+                "a bioconstrucción pero no la nombra (puede ser eficiencia "
+                "energética convencional, no construcción natural) — sin "
+                "respuesta correcta definida, prueba si los dos lados "
+                "leen el dominio igual de ancho o angosto.",
+    },
+    {
+        "id": "post_evento_fotos_sin_futuro",
+        "caption": (
+            "Así quedó el techo verde que armamos ayer con el grupo, un "
+            "embole total pero valió la pena 😅🌱"
+        ),
+        "fecha_publicacion": "2026-09-20",
+        "nota": "Recap de algo pasado sin la palabra 'gracias' (frase más "
+                "informal) y sin ninguna mención de futuro -> es_evento=no, "
+                "prueba que la regla de recap no dependa de la palabra "
+                "'gracias' puntual.",
+    },
+    {
+        "id": "anuncio_fecha_ya_pasada",
+        "caption": (
+            "Vení al taller de bioconstrucción con superadobe, sábado 10 "
+            "de octubre de 2024, Escuela de Oficios, Río Negro."
+        ),
+        "fecha_publicacion": "2026-09-15",
+        "nota": "Anuncio con formato idéntico a un caso alta, pero el año "
+                "escrito (2024) ya pasó respecto a la fecha de publicación "
+                "(2026) — la clasificación de es_evento/confianza no "
+                "filtra por fecha pasada (eso lo hace procesar_post "
+                "después, ver CLAUDE.md), así que debería seguir dando "
+                "si/alta acá; solo prueba que el modelo no confunda 'año "
+                "viejo' con 'agradecimiento'.",
+    },
+    {
+        "id": "recurrente_todos_los_sabados",
+        "caption": (
+            "Talleres de bioconstrucción todos los sábados de octubre, "
+            "desde el 3, en la chacra, San Martín de los Andes, Neuquén."
+        ),
+        "fecha_publicacion": "2026-09-16",
+        "nota": "Evento recurrente (varias fechas, no una) con año no "
+                "escrito y lugar aproximado ('la chacra') -> al menos dos "
+                "cosas imprecisas a la vez, probablemente baja.",
+    },
+    {
+        "id": "sede_a_confirmar_media",
+        "caption": (
+            "Festival de Bioconstrucción Latinoamericano — del 10 al 15 "
+            "de enero de 2027, sede a confirmar."
+        ),
+        "fecha_publicacion": "2026-09-14",
+        "nota": "Nombre y fecha con año explícitos y claros, pero "
+                "ubicación explícitamente pendiente ('sede a confirmar') "
+                "-> falta un dato secundario, confianza media.",
+    },
+    {
+        "id": "caption_ultra_corto_vago",
+        "caption": "🔥🔥🔥 Octubre nos vemos 🔥🔥🔥",
+        "fecha_publicacion": "2026-09-18",
+        "nota": "Menos de 6 palabras reales, sin ningún dato verificable — "
+                "mismo espíritu que evento_vago pero más extremo. Prueba "
+                "el límite inferior de información.",
+    },
+    {
+        "id": "curso_alta_tecnica_distinta",
+        "caption": (
+            "Curso de construcción con fardos de paja — sábado 28 de "
+            "noviembre de 2026, Predio Municipal, El Bolsón, Río Negro. "
+            "Inscripción por mail, arancel solidario."
+        ),
+        "fecha_publicacion": "2026-09-10",
+        "nota": "Otro caso limpio (técnica distinta, fardos de paja) para "
+                "no sobre-representar 'alta' con un solo tipo de evento "
+                "en la muestra.",
+    },
+    {
+        "id": "virtual_lugar_generico_baja",
+        "caption": (
+            "Charla sobre bioconstrucción, se hace por internet, después "
+            "pasamos el link."
+        ),
+        "fecha_publicacion": "2026-09-19",
+        "nota": "Virtual pero sin fecha ninguna y modalidad dicha de forma "
+                "informal ('por internet', no 'Zoom' ni link) -> "
+                "confianza baja, más débil que virtual_sin_anio (que sí "
+                "tenía fecha).",
+    },
+    {
+        "id": "domain_permacultura_adyacente",
+        "caption": (
+            "Encuentro de permacultura y agroecología — sábado 24 de "
+            "octubre de 2026, La Plata, Buenos Aires. Habrá intercambio "
+            "de semillas y charlas sobre diseño de sistemas."
+        ),
+        "fecha_publicacion": "2026-09-12",
+        "nota": "Permacultura sin mención de construcción natural — "
+                "dominio adyacente pero no bioconstrucción en sentido "
+                "estricto. Igual que domain_borderline_arquitectura_"
+                "sustentable, sin respuesta correcta definida.",
+    },
+    {
+        "id": "festival_multidia_sin_anio",
+        "caption": (
+            "Festival de Construcción Natural — del 20 al 22 de marzo, "
+            "Predio Ferial, Villa General Belgrano, Córdoba. Talleres de "
+            "quincha, superadobe y techos vivos."
+        ),
+        "fecha_publicacion": "2026-09-10",
+        "nota": "Igual a festival_multidia_completo pero SIN año escrito "
+                "-> contraste directo, debería bajar de alta a media por "
+                "el mismo motivo que diagnostico_evento/virtual_sin_anio.",
+    },
+    {
+        "id": "texto_confuso_baja",
+        "caption": (
+            "che vengan el finde q hay algo de tierra y eso, en lo de "
+            "martín, después les paso bien la posta"
+        ),
+        "fecha_publicacion": "2026-09-19",
+        "nota": "Texto genuinamente confuso/informal: ni nombre de "
+                "evento, ni fecha exacta, ni dirección, ni claridad de que "
+                "sea bioconstrucción -> baja, prueba robustez ante texto "
+                "poco estructurado (más realista que un flyer prolijo).",
+    },
+    {
+        "id": "evento_con_solo_mes_sin_dia",
+        "caption": (
+            "Taller de quincha en noviembre de 2026, San Marcos Sierras, "
+            "Córdoba. Fecha exacta a confirmar según demanda."
+        ),
+        "fecha_publicacion": "2026-09-15",
+        "nota": "Año escrito pero sin día concreto ('fecha exacta a "
+                "confirmar') -> dato crítico (fecha) ambiguo pese al año "
+                "explícito, probablemente baja más que media.",
+    },
+    {
+        "id": "evento_hora_sin_fecha",
+        "caption": (
+            "Taller de bioconstrucción con tierra, arranca a las 10hs, "
+            "en el vivero municipal, Bariloche, Río Negro."
+        ),
+        "fecha_publicacion": "2026-09-20",
+        "nota": "Hora concreta pero SIN fecha (ni día ni mes) — dato "
+                "crítico ausente pese a que el resto suena específico -> "
+                "baja.",
     },
 ]
 
@@ -307,13 +533,118 @@ def imprimir_resumen(resultados: list[dict]) -> None:
         print(f"Coinciden confianza: {coinciden_confianza}/{len(validos)}")
 
 
+def _reconstruir_texto(row: list) -> str:
+    """Arma un texto proxy del caption original a partir de los campos ya
+    extraídos por Gemini (no hay caption crudo persistido, ver PATRONES.md
+    — columna coupling). No es el texto real que vio Gemini, así que no
+    sirve para re-evaluar a Gemini con justicia, pero sí para ver qué
+    clasificación le daría Jev a la misma información que ya tenemos."""
+    nombre, direccion, fecha_inicio = row[1], row[2], row[4]
+    es_virtual, provincia, descripcion = row[6], row[7], row[8]
+    tipo_evento, contacto = row[11], row[15]
+
+    partes = [p for p in (nombre, tipo_evento, descripcion) if p]
+    lugar = direccion or provincia or ("Virtual" if es_virtual == "TRUE" else "")
+    partes.append(f"Fecha: {fecha_inicio or 'sin especificar'}. Lugar: {lugar or 'sin especificar'}.")
+    if contacto:
+        partes.append(f"Contacto: {contacto}")
+    return " ".join(partes)
+
+
+def cargar_casos_reales_pendientes(limite: int = 20) -> list[dict]:
+    """Eventos reales frenados en pendiente_confirmacion por confianza baja
+    (no por duplicado ambiguo, que es la otra razón de llegar a ese estado
+    — ver CLAUDE.md). Son la cola de revisión manual que el proyecto
+    quiere reducir (ver ROADMAP.md 22/09: "el proceso de importación no
+    puede basarse en el trabajo manual de Germán")."""
+    service = sheets.get_service()
+    result = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=sheets.SPREADSHEET_ID, range=f"{sheets.SHEET_NAME}!A2:Y")
+        .execute()
+    )
+    casos = []
+    for row in result.get("values", []):
+        row = (row + [""] * len(sheets.COLUMNS))[:len(sheets.COLUMNS)]
+        estado = (row[16] or "").strip().lower()
+        confianza_real = (row[18] or "").strip().lower()
+        if estado != "pendiente_confirmacion" or confianza_real != "baja":
+            continue
+        texto = _reconstruir_texto(row)
+        if not texto.strip():
+            continue
+        casos.append({
+            "id": row[14] or f"fila_sin_id_{len(casos) + 1}",
+            "nombre": row[1] or "(sin nombre)",
+            "caption": texto,
+            "confianza_real": confianza_real,
+        })
+        if len(casos) >= limite:
+            break
+    return casos
+
+
+def correr_contra_pendientes(limite: int = 20) -> list[dict]:
+    casos = cargar_casos_reales_pendientes(limite)
+    resultados = []
+    for caso in casos:
+        try:
+            jev = _jev_clasificar(caso["caption"])
+        except Exception as e:
+            jev = {"error": str(e)}
+        resultados.append({
+            "id": caso["id"], "nombre": caso["nombre"],
+            "confianza_gemini_real": caso["confianza_real"], "jev": jev,
+        })
+    return resultados
+
+
+def imprimir_resumen_pendientes(resultados: list[dict]) -> None:
+    print("Eventos reales en pendiente_confirmacion por confianza_baja de Gemini:")
+    print(f"{'id':<14} {'nombre':<40} {'jev(evento/confianza)':<28} ¿Jev lo publicaría?")
+    print("-" * 110)
+    rescatables = 0
+    for fila in resultados:
+        j = fila["jev"]
+        nombre = fila["nombre"][:38]
+        if "error" in j:
+            print(f"{fila['id']:<14} {nombre:<40} ERROR: {j['error'][:50]}")
+            continue
+        j_txt = f"{j.get('es_evento')}({j.get('es_evento_confidence')})/{j.get('confianza')}({j.get('confianza_confidence')})"
+        publicaria = (j.get("es_evento") == "si" and j.get("confianza") in CONFIANZA_PUBLICABLE)
+        if publicaria:
+            rescatables += 1
+        print(f"{fila['id']:<14} {nombre:<40} {j_txt:<28} {'SI' if publicaria else 'no'}")
+
+    validos = [f for f in resultados if "error" not in f["jev"]]
+    print("-" * 110)
+    print(f"Eventos evaluados: {len(resultados)} | con respuesta de Jev: {len(validos)}")
+    if validos:
+        print(f"Jev los publicaría (es_evento=si y confianza en {CONFIANZA_PUBLICABLE}): {rescatables}/{len(validos)}")
+        print("Nota: el texto de entrada es reconstruido de los campos ya extraídos, "
+              "no el caption original (no se persiste, ver PATRONES.md) — esto mide "
+              "si Jev es más permisivo con la MISMA información que ya tiene Gemini, "
+              "no si vería algo que Gemini no vio en la imagen/caption real.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--guardar", help="Ruta para volcar el resultado completo en JSON")
+    parser.add_argument(
+        "--pendientes", type=int, metavar="N", default=None,
+        help="En vez de CASOS, corre Jev contra hasta N eventos reales en "
+             "pendiente_confirmacion con confianza=baja (requiere "
+             "GOOGLE_SERVICE_ACCOUNT_JSON/GOOGLE_SPREADSHEET_ID; no llama a "
+             "Gemini, compara contra la confianza ya registrada en la Sheet)",
+    )
     args = parser.parse_args()
 
-    resultados = correr_comparacion()
-    imprimir_resumen(resultados)
+    if args.pendientes is not None:
+        resultados = correr_contra_pendientes(args.pendientes)
+        imprimir_resumen_pendientes(resultados)
+    else:
+        resultados = correr_comparacion()
+        imprimir_resumen(resultados)
 
     if args.guardar:
         with open(args.guardar, "w", encoding="utf-8") as f:
