@@ -745,6 +745,67 @@ consistente que Gemini clasificando `confianza` en el borde "año no
 escrito". Antes de decidir habría que ampliar la muestra sin volver a
 pegarle a la cuota gratis de Gemini en el mismo día.
 
+### Segunda corrida, con billing habilitado y muestra ampliada (22/09)
+
+Con billing activado en el proyecto de `GEMINI_API_KEY` (decisión del
+mantenedor tras confirmar que el tope de Tier 1 es un límite de gasto,
+no un cargo — el costo real de esta corrida es centavos de dólar) y
+`CASOS` ampliado de 7 a 11, se corrió de nuevo el mismo workflow
+temporal. Sin ningún `429`: **los 11 casos respondieron de los dos
+lados**, primera corrida sin ruido de cuota.
+
+**`es_evento`: 9/11 coinciden.** Los 2 discordantes:
+- `evento_vago` — caso deliberadamente ambiguo, sin respuesta correcta
+  definida; Gemini descartó (`no`), Jev dejó pasar (`si`, confidence
+  0.61, la más baja de toda la corrida — el propio modelo "duda" en el
+  caso diseñado para dudar).
+- `mixto_agradecimiento_y_proximo` — **este es un hallazgo real, no
+  ambigüedad de diseño.** El caption agradece un evento pasado y anuncia
+  uno futuro concreto ("el próximo para el 14 de noviembre"). Gemini
+  clasificó `es_evento=false` con todos los campos en `null`, ignorando
+  la mención del evento futuro — justo el borde para el que se escribió
+  la instrucción de recap-vs-anuncio en `SYSTEM_PROMPT` (ver más arriba,
+  22/09). Jev clasificó `si` (confidence 0.77, `confianza=media` por el
+  año inferido). **Acción pendiente, independiente de la evaluación de
+  Jev:** revisar `SYSTEM_PROMPT` para que la regla de recap-vs-anuncio
+  cubra explícitamente el caso mixto (agradecimiento + anuncio en el
+  mismo texto) — tal como está, un post real con esta forma se
+  descartaría en producción y el evento nunca llegaría a
+  `pendiente_confirmacion`.
+
+**`confianza`: 5/11 coinciden.** De las 6 discrepancias:
+- **3 confirman el patrón de la primera corrida**, ahora con más
+  evidencia: en `diagnostico_evento` y `virtual_sin_anio` el propio
+  criterio de `SYSTEM_PROMPT` pide `media` cuando el año no está escrito
+  y hay que inferirlo — Jev acertó las dos veces (`media`), Gemini marcó
+  `alta` las dos veces, inconsistente con su propio criterio. Sumado a
+  la primera corrida, son **3 de 3 oportunidades** donde Jev aplicó
+  correctamente esa regla y Gemini no aplicó ninguna.
+- **3 son ambigüedad del criterio, no error de ningún lado:**
+  `diagnostico_no_evento`, `agradecimiento_post_evento` y `tema_ajeno`
+  son casos con `es_evento=no` en ambos lados — `confianza` no tiene un
+  significado definido en `SYSTEM_PROMPT` cuando no hay evento que
+  describir (el criterio habla de "nombre, fecha, ubicación", que no
+  aplican). Gemini tiende a `alta` (confianza en que no es un evento),
+  Jev tiende a `baja`/`media`. Ninguna de las dos lecturas está mal; el
+  criterio simplemente no cubre este caso y habría que definirlo si se
+  quiere que `confianza` sea comparable también cuando `es_evento=no`.
+
+**Lectura acumulada de las dos corridas:** la señal de la primera
+corrida se sostiene y se refuerza con datos limpios (sin fallas de
+cuota): en el borde "año no escrito", Jev es más fiel al criterio
+explícito que la propia definición le exige a Gemini. Además, esta
+corrida encontró un caso real de `es_evento` mal clasificado por Gemini
+que **sí importa para producción** más allá de la pregunta Jev-sí/no.
+Sigue sin alcanzar para decidir adoptar Jev — 11 casos a mano, no
+captions reales — pero ya no es ruido: es la segunda corrida seguida
+donde Jev es igual o más consistente que Gemini en el mismo tipo de
+borde. Antes de un tercer paso (dataset con captions reales, o
+adoptar Jev como segunda opinión en algún punto del pipeline) conviene
+primero corregir el hallazgo de `mixto_agradecimiento_y_proximo` en el
+prompt de Gemini, porque afecta a producción hoy, con o sin Jev de por
+medio.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
