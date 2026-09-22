@@ -41,9 +41,11 @@ Patrones que afectan decisiones de código y arquitectura.
 - If either alone, events slip through.
 
 **Language detection before image download** — text-only regex more reliable than LLM.
-- `_parece_ingles()` on caption: fast, free, no hallucinations.
-- LLM `idioma` field: unreliable when flyer is ambiguous, arrives late (costs time/money).
-- Trust regex first; use LLM output only as secondary confirmation (and only if needed).
+- `_parece_extranjero()` on caption (renamed 22/09, now also catches Portuguese, not just English): fast, free, no hallucinations.
+- LLM `idioma` field: unreliable when flyer is ambiguous. Used to be extracted but never actually checked anywhere (`CLAUDE.md` claimed it was — it wasn't, until 22/09). Now it's a real post-extraction drop (`idioma != "es"`) as defense-in-depth for what the caption-only regex missed — the LLM also sees the image, so it can catch foreign text the caption never mentioned.
+- Trust regex first (cheap, runs before any AI call); LLM check is the backstop, not the primary signal.
+
+**Blocklist, not allowlist, when there's no human review after.** `_parece_extranjero()` blocks known-foreign languages instead of requiring proof of Spanish (or worse, proof of *Argentine* Spanish) to pass. With short captions (<6 words — common when all the real info is in the flyer image) there isn't enough text to prove anything positive, but that's not evidence the post is foreign either. A filter that drops silently and permanently (no `?pendientes` safety net downstream) must treat "not enough signal" as "let it through," never as "guilty." Same reasoning applies to the pre-AI age filter and the country check below — a false negative (extra AI call on a foreign post) is cheap; a false positive (losing a real Argentine event) is unrecoverable.
 
 **Pre-AI filters = cost control** — every cheap filter before IA call saves money.
 - Dedup (shortcode), blacklist, age, language → run before download + extraction.
@@ -60,6 +62,10 @@ Patrones que afectan decisiones de código y arquitectura.
 4. Account profile (`pais_cuenta`, weakest — only if nothing else worked)
 
 Never let account profile override explicit country signals in caption or flyer.
+
+**A drop condition gated on "value is set" silently misses "value was never determined."** `pais != "Argentina"` only fires once `pais` actually has a value — a virtual event where no signal ever resolved a country (empty, not wrong) skipped that check entirely and sat in `pendiente_confirmacion` forever, never activating and never getting flagged as the reason why. Fixed 22/09 by adding an explicit `es_virtual and not pais` drop. When adding a "reject the wrong value" filter, separately consider whether "no value at all" needs its own rule — it's a different case, not a subset.
+
+**An enum field with no criteria in the prompt is decoration, not a signal.** `confianza` (alta/media/baja) sat in `EVENT_SCHEMA` for months with nothing in `SYSTEM_PROMPT` telling the model what distinguishes the levels — it filled the field on vibes, inconsistently between runs. Fixed 22/09 by defining each level in terms of which concrete fields (name/date/location) are explicit vs. inferred vs. ambiguous. Any enum an LLM has to self-assess needs its criteria spelled out where the model can read them, not just documented in code comments it never sees.
 
 ## Operations & Reliability
 
@@ -103,10 +109,11 @@ floor** — a floor alone doesn't bound blast radius.
 - `import/apps-script/Code.gs` is a mirror.
 - Changes only take effect after copying into script.google.com and deploying (Implementar → Gestionar implementaciones → Nueva versión).
 
-**REVISION_MANUAL flag gates auto-publish globally** — flip both places.
-- `import/src/processor.py` AND `import/apps-script/Code.gs`.
-- When true: everything lands as `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`.
-- When false: `confianza=alta` publishes directly, `media`/`baja` still goes to review.
+**`CONFIANZA_PUBLICABLE` gates auto-publish for the whole Python pipeline** (replaced `REVISION_MANUAL`, 22/09 — see ROADMAP.md).
+- `import/src/processor.py`: `CONFIANZA_PUBLICABLE = {"alta", "media"}`, checked identically in `hiker_pipeline.py` and `processor.py`'s own `extract_event_data()`.
+- `confianza` in that set + `activo=True` (name/date/location resolved) → publishes directly (`Estado=confirmado`).
+- `confianza="baja"` → always `Estado=pendiente_confirmacion`, waits for manual review at `hayminga.org/?pendientes`.
+- `import/apps-script/Code.gs` still has its own, separate `REVISION_MANUAL` — that one only gates the web form (`+ Nuevo Evento`), which has no `confianza` score since a person fills it in directly. Don't conflate the two; they're unrelated flags in unrelated files despite the similar-sounding old name.
 
 **Dedup signals must widen the review net, never the discard net.** Three layers now (shortcode, exact key, fuzzy) and none of them ever deletes: an ambiguous match is inserted anyway as `pendiente_confirmacion` with a note pointing at the other Id.
 - The fourth signal (same Instagram account + near-identical name, ignoring date and province) closes the gap left open in Etapa 9.8 — the account was the missing evidence and simply wasn't persisted.

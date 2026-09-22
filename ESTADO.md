@@ -64,18 +64,19 @@ workflows de GitHub Actions orquestan todo: `import-eventos.yml` (1x/día),
    pero el conteo de fuentes solo crece (auto-alta de cuentas vía
    `descubrir_candidatos()`), así que el costo real hay que vigilarlo, no
    asumirlo estable.
-5. **`REVISION_MANUAL=true` sigue activo**: mientras dure, ningún evento
-   se auto-publica — todo pasa por `?pendientes`. Es control de calidad
-   deliberado durante la estabilización, pero es trabajo manual recurrente
-   para Germán; no hay criterio documentado de cuándo se considera
-   "estable" para desactivarlo.
+5. ~~`REVISION_MANUAL=true` sigue activo~~ — **resuelto 22/09/2026**: se
+   definió el criterio que faltaba (`CONFIANZA_PUBLICABLE = {"alta",
+   "media"}` en `processor.py`, ver ROADMAP.md) y se sacó `REVISION_MANUAL`
+   del código Python. Descubrimiento en el camino: ese flag nunca había
+   frenado a `hiker_pipeline.py` (el canal de mayor volumen) en primer
+   lugar — solo al mail intake —, así que esto también corrigió una
+   documentación desactualizada, no solo definió el umbral pendiente.
 
 ## Recomendaciones, priorizadas
 
-1. **Definir un criterio explícito para apagar `REVISION_MANUAL`** (ej.
-   "N confirmaciones seguidas sin corrección manual" o "X semanas sin un
-   falso positivo"). Es el mayor punto de fricción operativa recurrente
-   ahora mismo y no depende de código nuevo, solo de una decisión.
+1. ~~Definir un criterio explícito para apagar `REVISION_MANUAL`~~ —
+   **resuelto 22/09/2026**: el criterio es `confianza` (alta/media
+   publican, baja va a revisión) — ver item 5 arriba y ROADMAP.md.
 2. **Atacar el duplicado por repost antes que el país vacío** — duplicados
    visibles en el sitio dañan la confianza del usuario final más que un
    evento con menos metadata. Una primera versión barata: comparar

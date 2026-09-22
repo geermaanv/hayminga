@@ -16,14 +16,14 @@ La bioconstrucción es dispersa (eventos anunciados en Instagram, profesionales 
 
 **Cómo funciona:**
 - **Eventos:** Importación 100% automática desde Instagram (HikerAPI + hashtags + cuentas seguidas)
-- **Validación:** TODO a revisión manual (`REVISION_MANUAL=true`)
+- **Validación:** automática por `confianza` (`CONFIANZA_PUBLICABLE = {"alta", "media"}` en `processor.py`, ver ROADMAP.md 22/09) — solo `confianza=baja` cae a revisión manual en `?pendientes`. El proceso de importación no puede depender del trabajo manual de Germán, por volumen; `REVISION_MANUAL` (ese nombre viejo) ya no gatea esto.
 - **Profesionales:** Directorio manual (formulario de alta con opt-in)
 
 **KPI principal:** Bajar cantidad de pendientes por corrida (menos ruido → menos revisión manual)
 
 **Trade-offs en esta fase:**
 - **Cobertura > Precisión:** Mejor tener un evento mediocre que ninguno
-- **Auto-descubrimiento > Control:** Aceptamos ruido porque filtro de revisión lo atrapa
+- **Auto-descubrimiento > Control:** Aceptamos ruido porque el criterio de confianza filtra antes de publicar, no una revisión manual después
 - **Rapidez de iteración > Perfección:** Cambios sin miedo (antigüedad, endpoints, etc.)
 
 ---
@@ -150,7 +150,7 @@ La bioconstrucción es dispersa (eventos anunciados en Instagram, profesionales 
 
 **3. Mantener reversibilidad**
 - Todo debería poder cambiar sin romper (flags, configs, no hardcode)
-- Ejemplo: `REVISION_MANUAL`, `USAR_TOP`, `config.json`
+- Ejemplo: `CONFIANZA_PUBLICABLE`, `USAR_TOP`, `config.json`
 
 **4. Documentar decisión + rationale**
 - No solo "qué hicimos" sino "por qué en ese momento"
