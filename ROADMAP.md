@@ -687,6 +687,64 @@ payload confirmados en el diagnóstico ya borrado). Corre con
 completo) — no toca la Sheet ni publica nada, solo gasta las llamadas a
 Gemini y Jev que hace.
 
+### Primera corrida real, con hallazgos (22/09)
+
+Se corrió dos veces contra las API keys reales (workflow de diagnóstico
+temporal, mismo patrón de siempre, ya borrado). La primera corrida
+destapó un bug real: la API de Jev no devuelve el string pelado que
+asumía el diagnóstico del 21/09, sino un objeto por pregunta
+(`{"type":"choice","choice":"si","confidence":0.99,"probabilities":{...}}`).
+El script comparaba el string de Gemini contra ese dict entero — nunca
+podían coincidir, el "0/3" de la primera corrida no significaba nada.
+Corregido (`_jev_clasificar` ahora extrae `choice`), confirmado en la
+segunda corrida.
+
+**Cuota de Gemini, un hallazgo aparte:** las dos corridas pegaron en
+`429 RESOURCE_EXHAUSTED` en la mayoría de los 7 casos (4/7 fallaron en la
+primera, 6/7 en la segunda) — la cuota gratis se agotó entre una corrida
+y la siguiente, unos minutos después. Este script comparte
+`GEMINI_API_KEY` con el pipeline de producción; correrlo más de una vez
+en poco tiempo (o el mismo día que ya corrió `hiker_pipeline`/
+`email_intake`) se come la cuota gratuita del día. Para una corrida más
+completa hace falta espaciarlo más, o correrlo con billing.
+
+**Con los datos válidos combinados de las dos corridas** (4 de 7 casos
+con respuesta de Gemini, los 7 con Jev — Jev nunca falló):
+
+| caso | Gemini | Jev | es_evento | confianza |
+|---|---|---|---|---|
+| `alta_confianza_completa` | si/alta | si/alta (0.77) | coincide | coincide |
+| `virtual_sin_anio` | si/media | si/media (0.92) | coincide | coincide |
+| `diagnostico_evento` | si/**alta** | si/**media** (0.99) | coincide | **discrepan** |
+| `diagnostico_no_evento` | no/alta | no/baja (0.78) | coincide | discrepan |
+
+`es_evento` coincidió en los 4 casos con datos de los dos lados — señal
+positiva, aunque la muestra es chica. `confianza` coincidió solo en los
+2 casos "limpios" (todo explícito, o virtual con año faltante — ambos
+géneros ya cubiertos por el criterio). Discrepa justo en el caso más
+interesante: `diagnostico_evento` es el mismo caption real del
+diagnóstico del 21/09 (sin año escrito) — por el criterio propio de
+`SYSTEM_PROMPT` ("año no escrito → media"), la respuesta correcta es
+media, y es la que dio Jev; Gemini dijo alta, inconsistente con su
+propio criterio (el caso `virtual_sin_anio`, con el mismo defecto de
+"sin año", sí le dio media). Es decir: en esta muestra chica, Jev aplicó
+el criterio de confianza de forma más consistente que Gemini en el
+mismo tipo de caso.
+
+**Algo que Gemini no da y Jev sí:** una probabilidad numérica por
+respuesta (`confidence`/`probabilities`). En `evento_vago` (el caption
+deliberadamente ambiguo) Jev contestó `si` con confidence 0.61 — mucho
+más bajo que el resto (0.97-1.0) — el propio modelo "duda" en el caso
+diseñado para ser dudoso, una señal que Gemini simplemente no expone.
+
+**No alcanza para decidir.** 4 comparaciones válidas de confianza es
+poquísimo, y el dataset sigue siendo a mano, no captions reales. Lo que
+sí queda: el arnés funciona, el parseo está corregido y confirmado, y
+hay una primera señal (no una conclusión) de que Jev podría ser más
+consistente que Gemini clasificando `confianza` en el borde "año no
+escrito". Antes de decidir habría que ampliar la muestra sin volver a
+pegarle a la cuota gratis de Gemini en el mismo día.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
