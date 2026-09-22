@@ -56,13 +56,21 @@ class ComparacionTests(unittest.TestCase):
         self.assertIn("error", resultado)
 
     @patch("src.jev_client.preguntar")
-    def test_jev_clasificar_maps_answers(self, preguntar):
-        preguntar.return_value = {"es_evento": "no", "confianza": "baja"}
+    def test_jev_clasificar_extracts_choice_from_nested_answer(self, preguntar):
+        # La API de Jev devuelve un objeto por pregunta, no el string pelado
+        # (confirmado corriendo el script real, ver ROADMAP.md) — este test
+        # fija ese contrato para que nadie vuelva a asumir un string plano.
+        respuestas = {
+            "es_evento": {"type": "choice", "choice": "no", "confidence": 1.0, "probabilities": {"si": 0.0, "no": 1.0}},
+            "confianza": {"type": "choice", "choice": "baja", "confidence": 0.84, "probabilities": {"alta": 0.0, "media": 0.11, "baja": 0.89}},
+        }
+        preguntar.return_value = respuestas
         resultado = comparar_jev_gemini._jev_clasificar("caption")
-        self.assertEqual(resultado, {
-            "es_evento": "no", "confianza": "baja",
-            "raw": {"es_evento": "no", "confianza": "baja"},
-        })
+        self.assertEqual(resultado["es_evento"], "no")
+        self.assertEqual(resultado["es_evento_confidence"], 1.0)
+        self.assertEqual(resultado["confianza"], "baja")
+        self.assertEqual(resultado["confianza_confidence"], 0.84)
+        self.assertEqual(resultado["raw"], respuestas)
 
     @patch.object(comparar_jev_gemini, "_jev_clasificar")
     @patch.object(comparar_jev_gemini, "_gemini_clasificar")
