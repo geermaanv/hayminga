@@ -1107,24 +1107,30 @@ class NotificarRunTests(unittest.TestCase):
             try:
                 if resumen is not None:
                     Path("run_summary.json").write_text(json.dumps(resumen))
-                with patch.object(notificar_run, "contar_estados") as contar_mock:
+                with patch.object(notificar_run, "contar_pendientes") as contar_mock:
                     if isinstance(contar, Exception):
                         contar_mock.side_effect = contar
                     else:
-                        contar_mock.return_value = contar or (0, 0)
+                        contar_mock.return_value = contar if contar is not None else 0
                     return notificar_run.armar_mensaje(estado_job)
             finally:
                 os.chdir(cwd)
 
-    def test_incluye_pendientes_y_publicados(self):
+    def test_incluye_pendientes_de_la_cola_total(self):
         mensaje = self._mensaje(
-            resumen={"eventos_insertados": 3, "error_cuentas_seguidas": "", "atribucion": {}},
-            contar=(7, 42),
+            resumen={"eventos_insertados": 3, "error_cuentas_seguidas": ""},
+            contar=7,
         )
-        self.assertIn("Eventos nuevos guardados: 3", mensaje)
-        self.assertIn("Pendientes de confirmar: 7", mensaje)
-        self.assertIn("Publicados (activos): 42", mensaje)
+        self.assertIn("Pendientes de confirmar (cola total): 7", mensaje)
         self.assertIn("?pendientes", mensaje)
+        self.assertNotIn("Publicados (activos)", mensaje)
+
+    def test_desglosa_confirmados_directo_y_pendientes_de_revision(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 5, "eventos_pendientes_insertados": 2},
+            contar=0,
+        )
+        self.assertIn("Eventos nuevos: 5 (3 confirmados directo, 2 pendientes de revisión)", mensaje)
 
     def test_incluye_llamadas_a_hikerapi(self):
         mensaje = self._mensaje(
@@ -1160,20 +1166,22 @@ class NotificarRunTests(unittest.TestCase):
         self.assertIn("org1@ejemplo.com — Taller de Barro", mensaje)
         self.assertIn("org2@ejemplo.com — Minga Comunitaria", mensaje)
 
-    def test_sin_avisos_no_agrega_linea(self):
+    def test_sin_avisos_muestra_cero(self):
+        # Antes se ocultaba la línea entera en 0, lo que se leía como que el
+        # conteo nunca llegaba — ahora se muestra siempre (ver ROADMAP.md).
         mensaje = self._mensaje(resumen={"eventos_insertados": 2})
-        self.assertNotIn("Avisos mandados", mensaje)
+        self.assertIn("Avisos mandados a organizadores hoy: 0", mensaje)
 
     def test_reporta_caida_de_cuentas_seguidas(self):
         mensaje = self._mensaje(
             resumen={"eventos_insertados": 0, "error_cuentas_seguidas": "EOF occurred in violation of protocol"},
-            contar=(1, 10),
+            contar=1,
         )
         self.assertIn("cuentas seguidas CAYÓ", mensaje)
 
     def test_sin_resumen_avisa_corrida_incompleta(self):
         # Caso timeout/cancelación: el pipeline nunca escribió run_summary.json.
-        mensaje = self._mensaje(estado_job="cancelled", resumen=None, contar=(2, 10))
+        mensaje = self._mensaje(estado_job="cancelled", resumen=None, contar=2)
         self.assertIn("no llegó a terminar", mensaje)
         self.assertIn("cancelled", mensaje)
 
@@ -1182,27 +1190,8 @@ class NotificarRunTests(unittest.TestCase):
             resumen={"eventos_insertados": 1},
             contar=RuntimeError("sheet caído"),
         )
-        self.assertIn("Eventos nuevos guardados: 1", mensaje)
-        self.assertIn("No se pudieron contar", mensaje)
-
-    def test_incluye_atribucion_recent_vs_top(self):
-        mensaje = self._mensaje(resumen={
-            "eventos_insertados": 1,
-            "atribucion": {"posts_recent": 700, "posts_top": 450, "top_activo": True,
-                           "solo_en_recent": 300, "eventos_solo_recent": 0},
-        })
-        self.assertIn("eventos que aportó solo recent: 0", mensaje)
-
-    def test_con_top_apagado_no_reporta_comparacion(self):
-        # Ya no hay contra qué comparar: informar "top: 0 posts" se leería
-        # como que top falló, cuando en realidad está apagado a propósito.
-        mensaje = self._mensaje(resumen={
-            "eventos_insertados": 1,
-            "atribucion": {"posts_recent": 850, "posts_top": 0, "top_activo": False,
-                           "solo_en_recent": 850, "eventos_solo_recent": 1},
-        })
-        self.assertIn("top apagado", mensaje)
-        self.assertNotIn("recent vs top", mensaje)
+        self.assertIn("Eventos nuevos: 1", mensaje)
+        self.assertIn("No se pudo contar", mensaje)
 
     def test_avisa_fuerte_si_la_mayoria_de_hikerapi_falla(self):
         # Regresión 12/09/2026: key rota -> 179/179 llamadas con 401,
