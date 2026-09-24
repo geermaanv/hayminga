@@ -24,23 +24,21 @@ def _formatear_duracion(segundos: float) -> str:
     return f"{minutos}m {seg}s" if minutos else f"{seg}s"
 
 
-def contar_estados() -> tuple[int, int]:
-    """(pendientes de confirmar, publicados). Publicado = Activo true, que es
-    exactamente lo que el sitio muestra."""
+def contar_pendientes() -> int:
+    """Tamaño total de la cola de revisión (?pendientes), no solo lo que
+    entró en esta corrida — para saber si hay que ir a revisar."""
     service = get_service()
     values = (
         service.spreadsheets().values()
         .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A2:U")
         .execute()
     ).get("values", [])
-    pendientes = publicados = 0
+    pendientes = 0
     for row in values:
         row = (row + [""] * len(COLUMNS))[:len(COLUMNS)]
         if (row[16] or "").strip().lower() == "pendiente_confirmacion":
             pendientes += 1
-        if (row[0] or "").strip().lower() == "true":
-            publicados += 1
-    return pendientes, publicados
+    return pendientes
 
 
 def armar_mensaje(estado_job: str) -> str:
@@ -55,7 +53,13 @@ def armar_mensaje(estado_job: str) -> str:
     lineas = [f"[hayminga] Corrida de import: {icono} ({estado_job})"]
 
     if resumen:
-        lineas.append(f"Eventos nuevos guardados: {resumen.get('eventos_insertados', 0)}")
+        insertados = resumen.get("eventos_insertados", 0)
+        pendientes_nuevos = resumen.get("eventos_pendientes_insertados", 0)
+        confirmados_nuevos = insertados - pendientes_nuevos
+        lineas.append(
+            f"Eventos nuevos: {insertados} "
+            f"({confirmados_nuevos} confirmados directo, {pendientes_nuevos} pendientes de revisión)"
+        )
         if "duracion_segundos" in resumen:
             lineas.append(f"Duración: {_formatear_duracion(resumen['duracion_segundos'])}")
         if "llamadas_hikerapi" in resumen:
@@ -80,42 +84,24 @@ def armar_mensaje(estado_job: str) -> str:
     else:
         lineas.append("El pipeline no llegó a terminar (sin resumen) — revisar Actions.")
 
-    try:
-        pendientes, publicados = contar_estados()
-        lineas.append(f"Pendientes de confirmar: {pendientes}")
-        lineas.append(f"Publicados (activos): {publicados}")
-        if pendientes:
-            lineas.append("Revisar: https://hayminga.org/?pendientes")
-    except Exception as e:
-        lineas.append(f"No se pudieron contar pendientes/publicados: {e}")
-
     # Aviso a organizadores vía mail (ver ROADMAP.md, 09/2026): el evento
     # ya se publicó solo, esto es cuántos avisos + CTA (Directorio, tag a
     # @hayminga) salieron hoy. Se lista el detalle (no solo el conteo) para
-    # poder revisar a mano si hace falta — ver ROADMAP.md, 14/09.
+    # poder revisar a mano si hace falta — ver ROADMAP.md, 14/09. Se muestra
+    # siempre, incluso en 0 — antes se ocultaba la línea entera y eso se leía
+    # como que el conteo nunca llegaba.
     detalle_avisos = (resumen or {}).get("avisos_organizador_detalle") or []
     enviadas_hoy = (resumen or {}).get("validaciones_organizador_enviadas", len(detalle_avisos))
-    if enviadas_hoy:
-        lineas.append(f"Avisos mandados a organizadores hoy: {enviadas_hoy}")
-        for aviso in detalle_avisos:
-            lineas.append(f"  · {aviso.get('email', '')} — {aviso.get('nombre', '')}")
+    lineas.append(f"Avisos mandados a organizadores hoy: {enviadas_hoy}")
+    for aviso in detalle_avisos:
+        lineas.append(f"  · {aviso.get('email', '')} — {aviso.get('nombre', '')}")
 
-    # Con /top apagado (15/08/2026) la comparación ya no existe: todos los
-    # posts vienen de /recent. Se informa el volumen a secas, que sigue
-    # sirviendo para notar si /recent se cae o devuelve de menos.
-    atribucion = (resumen or {}).get("atribucion") or {}
-    if atribucion:
-        if atribucion.get("top_activo"):
-            lineas.append(
-                f"recent vs top — recent: {atribucion.get('posts_recent', 0)} posts, "
-                f"top: {atribucion.get('posts_top', 0)} posts, "
-                f"solo en recent: {atribucion.get('solo_en_recent', 0)}, "
-                f"eventos que aportó solo recent: {atribucion.get('eventos_solo_recent', 0)}"
-            )
-        else:
-            lineas.append(
-                f"Posts por hashtag (recent): {atribucion.get('posts_recent', 0)} — top apagado"
-            )
+    try:
+        pendientes = contar_pendientes()
+        sufijo = " — revisar: https://hayminga.org/?pendientes" if pendientes else ""
+        lineas.append(f"Pendientes de confirmar (cola total): {pendientes}{sufijo}")
+    except Exception as e:
+        lineas.append(f"No se pudo contar la cola de pendientes: {e}")
 
     return "\n".join(lineas)
 

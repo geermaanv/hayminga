@@ -806,6 +806,11 @@ def run() -> int:
     print(f"[hiker_pipeline] {len(existing_links)} link(s) ya en el Sheet")
 
     eventos_totales_insertados = [0]  # lista para poder mutar desde dentro de los loops
+    # Desglose para el resumen de Telegram (ver ROADMAP.md): cuántos de los
+    # insertados quedaron pendiente_confirmacion vs confirmados directo.
+    # append_events() puede mutar evento["estado"] a pendiente_confirmacion
+    # por dedup ambiguo, así que se cuenta DESPUÉS de llamarlo, no antes.
+    eventos_pendientes_insertados = [0]
     fuentes_resultados = {}  # (tipo, nombre) -> hubo al menos 1 evento en esta corrida
     # `top` apagado (15/08/2026): la medición por endpoint dio 0 eventos
     # aportados por /top en 3 corridas contra 8 de /recent, y el solapamiento
@@ -901,6 +906,9 @@ def run() -> int:
             try:
                 inserted_hashtag = append_events(eventos_hashtag)
                 eventos_totales_insertados[0] += inserted_hashtag
+                eventos_pendientes_insertados[0] += sum(
+                    1 for e in eventos_hashtag if e.get("estado") == "pendiente_confirmacion"
+                )
             except Exception as e:
                 print(f"[hiker_pipeline] #{hashtag}: error guardando en el Sheet — {e}")
 
@@ -973,6 +981,9 @@ def run() -> int:
                 try:
                     inserted_cuenta = append_events(eventos_cuenta)
                     eventos_totales_insertados[0] += inserted_cuenta
+                    eventos_pendientes_insertados[0] += sum(
+                        1 for e in eventos_cuenta if e.get("estado") == "pendiente_confirmacion"
+                    )
                 except Exception as e:
                     print(f"[hiker_pipeline] @{username}: error guardando en el Sheet — {e}")
     except Exception as e:
@@ -997,6 +1008,7 @@ def run() -> int:
     try:
         Path("run_summary.json").write_text(json.dumps({
             "eventos_insertados": inserted,
+            "eventos_pendientes_insertados": eventos_pendientes_insertados[0],
             "error_cuentas_seguidas": error_cuentas,
             "atribucion": atribucion,
             "llamadas_hikerapi": _llamadas_hikerapi[0],
