@@ -2,12 +2,13 @@ name: Curar fuentes de descubrimiento (hashtags/cuentas)
 
 on:
   # Cron desactivado (12/09/2026): descubrir_candidatos() infló
-  # cuentas_seguidas de 137 a 3627 en dos corridas (ver ROADMAP.md). Con
-  # el tope MAX_ALTAS_POR_CORRIDA ya puesto en curar_fuentes.py, correrlo
-  # de nuevo por workflow_dispatch cuando se decida reactivarlo debería
-  # ser seguro — mientras tanto, solo manual.
-  # schedule:
-  #   - cron: "0 12 * * *"  # 09:00 hora Argentina
+  # cuentas_seguidas de 137 a 3627 en dos corridas (ver ROADMAP.md).
+  # Reactivado (25/09/2026) con MAX_ALTAS_POR_CORRIDA subido de 15 a 25
+  # (MIN_SUGERENCIAS_PARA_AGREGAR se deja en 3, el piso que salió del
+  # fix) — el tope sigue acotando el peor caso a algo revisable a ojo
+  # en el diff del commit automático de config.json.
+  schedule:
+    - cron: "0 12 * * *"  # 09:00 hora Argentina
   workflow_dispatch: {}
 
 permissions:
@@ -45,7 +46,7 @@ jobs:
           HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
         run: python -m src.curar_fuentes
 
-      - name: Commitear cambios si hubo bajas
+      - name: Commitear cambios si hubo bajas o altas
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -53,6 +54,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sin cambios en config.json"
           else
-            git commit -m "Curar fuentes: baja automática de hashtags/cuentas sin resultados (50+ intentos)"
+            git commit -m "Curar fuentes: baja automática (50+ intentos sin hit) y/o alta de candidatas nuevas"
             git push
           fi

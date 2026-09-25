@@ -47,7 +47,11 @@ MIN_SUGERENCIAS_PARA_AGREGAR = 3  # sugerida por al menos N cuentas nuestras
 # en común cuentas genéricas de "vida natural" que no son bioconstrucción.
 # Tope duro además del piso: toma como mucho las N más sugeridas por
 # corrida, prioriza calidad sobre volumen y mantiene la lista revisable.
-MAX_ALTAS_POR_CORRIDA = 15
+# Subido de 15 a 25 al reactivar el cron (25/09/2026, ver ROADMAP.md):
+# con MIN_SUGERENCIAS_PARA_AGREGAR=3 ya filtrando la calidad, el tope
+# solo pone el techo de volumen — 25 sigue siendo chico y revisable a
+# ojo en el diff del commit automático de config.json.
+MAX_ALTAS_POR_CORRIDA = 25
 
 CONFIG_PATH = Path("config.json")
 

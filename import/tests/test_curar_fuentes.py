@@ -42,10 +42,12 @@ class DescubrirCandidatosCapTest(unittest.TestCase):
     def test_caps_additions_even_when_many_candidates_pass_the_floor(
         self, mock_pk, mock_service, mock_consultadas, mock_ids, mock_marcar, mock_guardar
     ):
-        # Cada una de las 3 cuentas fuente sugiere las mismas 20 cuentas
-        # nuevas -> las 20 pasan MIN_SUGERENCIAS_PARA_AGREGAR (sugeridas
+        # Cada una de las 3 cuentas fuente sugiere las mismas 40 cuentas
+        # nuevas -> las 40 pasan MIN_SUGERENCIAS_PARA_AGREGAR (sugeridas
         # por las 3), pero el tope debe frenar en MAX_ALTAS_POR_CORRIDA.
-        candidatas_generico = [f"candidata_{i}" for i in range(20)]
+        # 40 > cualquier valor razonable del tope, para que la regresión
+        # siga probando algo aunque el tope se vuelva a ajustar.
+        candidatas_generico = [f"candidata_{i}" for i in range(40)]
         with patch(
             "src.curar_fuentes._sugeridas_para", return_value=candidatas_generico
         ):
