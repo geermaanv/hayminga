@@ -28,7 +28,7 @@ Guidance for Claude Code when working on hayminga.org.
 |----------|----------|------|
 | `import-eventos.yml` | ~08:07 daily | `python -m src.hiker_pipeline` — discovers events from HikerAPI (hashtags + followed accounts) |
 | `email-intake.yml` | every 3h | `python -m src.email_intake` — processes mail queue (HME tag), then refreshes the Instagram content queue (`contenido_instagram.generar()`). Split out (15/08/2026) so 1x/day import didn't delay mail. Cheap: reads Sheet, exits if empty, only calls LLM on real mail. Shares concurrency group with import-eventos to queue safely. |
-| `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=2`) |
+| `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=3`, capped at `MAX_ALTAS_POR_CORRIDA=25` per run). Was disabled 12/09–25/09/2026 after a runaway-addition incident (see ROADMAP.md) — reactivated with the cap in place. |
 | `enviar-resumen.yml` | Tue 09:00 | `src/enviar_resumen_telegram.py` — sends weekly digest to Telegram + Directorio email |
 
 **Legacy code (not used):** `main.py` and `src/scraper.py` (Google Images / SerpAPI). Kept for reference.

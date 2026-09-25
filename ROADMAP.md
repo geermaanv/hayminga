@@ -870,6 +870,29 @@ frena la evaluación de Jev acá salvo que aparezca una razón nueva y
 concreta para retomarla (por ejemplo, extracción de campos en vez de
 solo clasificación, que Jev no soporta hoy).
 
+## Reactivación de curar-fuentes.yml (25/09)
+
+Cron reactivado, dos semanas después de apagarlo por el incidente del
+12/09 (`descubrir_candidatos()` infló `cuentas_seguidas` de 137 a
+3627 en dos corridas — ver esa entrada más arriba). En esas dos
+semanas `cuentas_seguidas` se mantuvo estable en 137, confirmando que
+el apagado realmente frenó el problema y no era otra cosa.
+
+Antes de reactivar, se subió `MAX_ALTAS_POR_CORRIDA` de 15 a 25 —
+decisión del mantenedor: quería que el descubrimiento avance más
+rápido que 15 cuentas por corrida, pero sin volver a la falta de tope
+que causó el incidente. `MIN_SUGERENCIAS_PARA_AGREGAR` se dejó en 3
+(el piso que salió del fix post-incidente) a propósito: es el filtro
+de *calidad* temática, tocarlo era el riesgo real la vez pasada; el
+tope es solo el techo de *volumen*, y ahí hay margen para ir más
+rápido sin repetir el problema — con 25 el peor caso semanal sigue
+siendo chico y revisable a ojo en el diff del commit automático de
+`config.json`.
+
+De paso, corregido un desajuste menor de documentación: `CLAUDE.md`
+todavía decía `MIN_SUGERENCIAS_PARA_AGREGAR=2` (el valor pre-incidente,
+nunca actualizado tras el fix del 12/09 que lo subió a 3).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
