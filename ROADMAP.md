@@ -919,7 +919,9 @@ nada nuevo neto, lo poco que `descubrir_candidatos()` sumó se volvió a
 perder en las mismas bajas). Como restaurar `config.json` no toca el
 contador viejo en la Sheet, se corrió `resetear_fuentes_stats.py
 --escribir` para poner `IntentosSinHit=0` a todo lo restaurado — sin
-esto, la próxima corrida las volvía a dar de baja.
+esto, la próxima corrida las volvía a dar de baja. Corrida real
+(workflow de diagnóstico temporal, ya borrado): 177 fuentes reseteadas
+sin errores.
 
 **Dos redes de seguridad nuevas en `curar_fuentes.py`:**
 - `MAX_BAJAS_POR_CORRIDA=25`, simétrico a `MAX_ALTAS_POR_CORRIDA`: si
