@@ -893,6 +893,87 @@ De paso, corregido un desajuste menor de documentación: `CLAUDE.md`
 todavía decía `MIN_SUGERENCIAS_PARA_AGREGAR=2` (el valor pre-incidente,
 nunca actualizado tras el fix del 12/09 que lo subió a 3).
 
+## Incidente de bajas masivas + unificación del resumen semanal (07/10)
+
+**Dos problemas reportados juntos, dos causas distintas, ninguna de las
+dos del lado de Instagram/HikerAPI.**
+
+### 1. Por qué el descubrimiento cayó a ~1 evento/día o menos
+
+Al reactivar `curar-fuentes.yml` el 25/09 (ver entrada anterior), la
+corrida del 01/10 dio de baja **85 de 137 cuentas y varios hashtags en
+un solo saque** — `curar()` nunca tuvo un tope por corrida (a
+diferencia de `descubrir_candidatos()`, que sí lo tiene desde el
+incidente de altas de septiembre). La mayoría de esas fuentes se habían
+agregado en el mismo lote original y nunca produjeron un evento válido
+desde que arrancó el tracking (~mediados de agosto) — así que su
+contador de "intentos sin hit" corría en paralelo y cruzó las 50
+corridas casi al mismo tiempo para casi todas. En 11 días:
+`cuentas_seguidas` 137→43 (-69%), `hashtags` 42→23 (-45%). Eso explica
+toda la caída: menos fuentes, menos eventos — las corridas diarias no
+tuvieron errores nuevos.
+
+**Restaurado:** `config.json` vuelve a las 137 cuentas / 42 hashtags de
+antes de la reactivación (unión con lo agregado después — no había
+nada nuevo neto, lo poco que `descubrir_candidatos()` sumó se volvió a
+perder en las mismas bajas). Como restaurar `config.json` no toca el
+contador viejo en la Sheet, se corrió `resetear_fuentes_stats.py
+--escribir` para poner `IntentosSinHit=0` a todo lo restaurado — sin
+esto, la próxima corrida las volvía a dar de baja.
+
+**Dos redes de seguridad nuevas en `curar_fuentes.py`:**
+- `MAX_BAJAS_POR_CORRIDA=25`, simétrico a `MAX_ALTAS_POR_CORRIDA`: si
+  más de 25 cruzan el umbral en una corrida, se priorizan las que
+  tienen MÁS intentos sin hit (las más claramente muertas) y el resto
+  queda para la próxima — nunca más un 62% de la lista de un saque.
+- `hashtags_protegidos`/`cuentas_protegidas` en `config.json` (vacías
+  por ahora): fuentes que `curar()` nunca da de baja sin importar el
+  contador — para vocabulario de bajo volumen pero que vale la pena
+  mantener a criterio del mantenedor, no del algoritmo. Pendiente:
+  decidir qué entra ahí (el archivo con las 94 cuentas + 19 hashtags
+  que se habían ido se mandó para revisar a mano).
+
+### 2. El mail semanal al Directorio y el de Telegram no eran el mismo proceso
+
+Eran dos implementaciones independientes de la misma lógica: Python
+(`enviar_resumen_telegram.py`, vía `enviar-resumen.yml`) armaba y
+mandaba el mensaje de Telegram; `Code.gs` tenía su **propia** copia
+(`enviarResumenSemanalDirectorio`, con su propio trigger semanal) que
+volvía a leer los eventos y volvía a parsear `Fecha_Inicio` para mandar
+el mail al Directorio. Las dos copias se desincronizaron sin que nadie
+lo notara: el parser de Code.gs (`parsearFechaDDMMYYYY_`) solo entendía
+`DD/MM/YYYY`, pero Python escribe `Fecha_Inicio` en ISO (`YYYY-MM-DD`)
+desde el mismo commit que agregó el mail (15/08) — así que el mail al
+Directorio viene mostrando casi ningún evento real desde hace ~7
+semanas (solo los cargados a mano por el formulario web, que sí quedan
+en DD/MM/YYYY). Telegram nunca tuvo el problema porque usa
+`parse_fecha_flexible`, que ya entendía los dos formatos.
+
+**Corrección — unificar en vez de parchear el parser:** la lección de
+la corrección del 25/09 (REVISION_MANUAL/CONFIANZA_PUBLICABLE) y de
+este mismo incidente es la misma: dos copias de la misma lógica en dos
+lenguajes van a desincronizarse tarde o temprano. En vez de arreglar el
+parser de Code.gs para que entienda ambos formatos (lo que deja la
+duplicación intacta para la próxima vez), Python pasa a ser la única
+fuente de verdad del contenido: arma el texto una sola vez y se lo
+manda a Code.gs por el mismo canal de secreto compartido que ya usa
+`avisar_evento_publicado` (acción nueva `enviar_resumen_directorio`).
+Code.gs ya no vuelve a leer `Eventos` ni a parsear fechas — solo lee la
+lista de consentimiento del Directorio y manda el mail. Se borraron
+`enviarResumenSemanalDirectorio`, `proximosEventosActivos_`,
+`parsearFechaDDMMYYYY_`, `armarCuerpoResumen_` y el trigger semanal
+propio (`configurarTriggerResumenSemanal`) — el cron de GitHub Actions
+ya dispara los dos envíos en la misma corrida.
+
+**Pendiente manual:** el trigger viejo (`enviarResumenSemanalDirectorio`,
+instalado alguna vez desde el editor) sigue registrado en Apps Script
+hasta que alguien lo borre a mano desde Triggers (⏰) en
+script.google.com — el código ya no tiene esa función, así que de
+quedar el trigger solo fallaría en silencio sin romper nada, pero
+conviene limpiarlo. También falta desplegar `Code.gs` (Implementar →
+Gestionar implementaciones → Nueva versión) para que el canal nuevo
+quede activo.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

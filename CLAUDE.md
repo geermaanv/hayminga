@@ -28,8 +28,8 @@ Guidance for Claude Code when working on hayminga.org.
 |----------|----------|------|
 | `import-eventos.yml` | ~08:07 daily | `python -m src.hiker_pipeline` — discovers events from HikerAPI (hashtags + followed accounts) |
 | `email-intake.yml` | every 3h | `python -m src.email_intake` — processes mail queue (HME tag), then refreshes the Instagram content queue (`contenido_instagram.generar()`). Split out (15/08/2026) so 1x/day import didn't delay mail. Cheap: reads Sheet, exits if empty, only calls LLM on real mail. Shares concurrency group with import-eventos to queue safely. |
-| `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=3`, capped at `MAX_ALTAS_POR_CORRIDA=25` per run). Was disabled 12/09–25/09/2026 after a runaway-addition incident (see ROADMAP.md) — reactivated with the cap in place. |
-| `enviar-resumen.yml` | Tue 09:00 | `src/enviar_resumen_telegram.py` — sends weekly digest to Telegram + Directorio email |
+| `curar-fuentes.yml` | 09:00 daily | `src/curar_fuentes.py` — removes stale hashtags/accounts (50+ dry runs, capped at `MAX_BAJAS_POR_CORRIDA=25` removals per run — added 07/10 after a runaway-*removal* incident, see ROADMAP.md), adds new candidates from Instagram "sugeridas" (gated by `MIN_SUGERENCIAS_PARA_AGREGAR=3`, capped at `MAX_ALTAS_POR_CORRIDA=25` per run). `config.json`'s `hashtags_protegidos`/`cuentas_protegidas` are never auto-removed regardless of misses. Was disabled 12/09–25/09/2026 after the runaway-*addition* incident — reactivated with the altas cap in place; the bajas cap came later, after the removal incident. |
+| `enviar-resumen.yml` | Tue 09:00 | `src/enviar_resumen_telegram.py` — sends weekly digest to Telegram, then asks Code.gs (`enviar_resumen_directorio` action, same shared-secret channel as `avisar_evento_publicado`) to relay the identical text to the Directorio by email. Unified 07/10/2026 (see ROADMAP.md): Code.gs used to recompute the event list and parse dates itself, and that copy silently drifted (DD/MM/YYYY-only parser vs. Python's ISO-dated rows) — the Directorio email had been showing almost no real events for weeks. Code.gs now only reads the consented recipient list and sends; it never re-derives the content. |
 
 **Legacy code (not used):** `main.py` and `src/scraper.py` (Google Images / SerpAPI). Kept for reference.
 
@@ -54,6 +54,7 @@ python -m src.backfill_cuentas_email               # one-off, costs HikerAPI cal
 python -m src.avisar_organizadores_retroactivo     # one-off, costs HikerAPI calls + sends real email: notify organizers of already-published events that never got avisar_evento_publicado (e.g. hashtag events before 16/09) — dry-run by default, --escribir to send, --limite=N to cap, --desde=YYYY-MM-DD to widen the window (default: this week), --uno-por-cuenta to send only the most recent event per account (avoids bombarding an org with several mails in one batch)
 python -m src.comparar_jev_gemini                   # costs ~30 Gemini + Jev calls: compares es_evento/confianza classification between Gemini (production prompt) and Jev on a 29-case hand-curated caption set. Conclusion as of 22/09 (see ROADMAP.md): not adopting Jev — no advantage found on real pending events, and it drops ambiguous cases more readily than Gemini, which cuts against this project's "when in doubt, let it through" filtering stance (no human review downstream). --guardar RUTA to dump full JSON; needs TYPESAFE_API_KEY
 python -m src.comparar_jev_gemini --pendientes N     # free (Jev only, no Gemini call): tests Jev against up to N real events currently stuck in pendiente_confirmacion with confianza=baja, using a reconstructed proxy text (no raw caption is persisted); needs TYPESAFE_API_KEY + Sheet credentials
+python -m src.resetear_fuentes_stats               # one-off, free: resets FuentesStats IntentosSinHit to 0 for every source currently in config.json — needed after restoring a source that curar_fuentes.py had removed, since restoring config.json alone doesn't touch its stale counter in the Sheet (dry-run by default, --escribir to apply)
 python -m unittest discover -s tests -v           # tests (all external calls mocked)
 gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 ```
@@ -95,7 +96,7 @@ gh workflow run import-eventos.yml -R geermaanv/hayminga  # manual trigger
 
 **Write:** Dedup by `(nombre, fecha, provincia)`. Ambiguous match → `pendiente_confirmacion` with note linking to existing event (manual merge, no silent loss). `Activo` computed deterministically; never from LLM.
 
-**Curation:** `FuentesStats` sheet tracks hits/misses per source. `curar_fuentes.py` auto-removes stale sources (50+ dry runs), auto-adds new candidates from Instagram.
+**Curation:** `FuentesStats` sheet tracks hits/misses per source. `curar_fuentes.py` auto-removes stale sources (50+ dry runs, capped per run) and auto-adds new candidates from Instagram (also capped per run) — see `curar-fuentes.yml` above for both caps and the protected-list escape hatch.
 
 ## Data model
 
