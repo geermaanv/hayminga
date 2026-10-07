@@ -959,11 +959,13 @@ parser de hashtags (ej. exigir alguna palabra del dominio en el
 caption además del hashtag) antes de confiar en este hashtag para
 publicar sin revisión. No implementado todavía.
 
-**`cuentas_protegidas` sigue vacía:** quedan como candidatas a revisar
-(sonaban institucionales por el nombre, no verificado):
-`redprotierraargentina`, `red_biosip`, `redbioca`, `redkopora`,
+**`cuentas_protegidas` curado (07/10):** de las 9 candidatas que
+sonaban institucionales por el nombre, el mantenedor confirmó 6 como
+conocidas/activas: `redprotierraargentina`, `red_biosip`,
 `tabi.faud.unc`, `gaiauniversidadpermacultura`, `cooperativacaminantes`,
-`comunidadsustentable.red`, `germinarong`.
+`comunidadsustentable.red`. Las otras 3 (`redbioca`, `redkopora`,
+`germinarong`) quedan sin proteger — no son conocidas, siguen bajo el
+algoritmo normal de bajas.
 
 ### 2. El mail semanal al Directorio y el de Telegram no eran el mismo proceso
 
