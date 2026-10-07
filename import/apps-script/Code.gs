@@ -122,6 +122,8 @@ function doPost(e) {
       respuesta = { success: true, url: subirImagenADrive_(data) };
     } else if (data.accion === 'avisar_evento_publicado') {
       respuesta = { success: true, ok: avisarEventoPublicado_(data) };
+    } else if (data.accion === 'enviar_resumen_directorio') {
+      respuesta = { success: true, enviados: enviarResumenDirectorio_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -585,29 +587,35 @@ function notificarPendientes() {
 
 
 /**
- * Corré esta función UNA VEZ desde el editor para instalar el trigger
- * semanal del resumen de eventos por mail al Directorio. Se puede
- * volver a correr sin problema (borra el trigger viejo primero).
+ * Relay del resumen semanal al Directorio por mail (07/10, ver
+ * ROADMAP.md). Antes esta función recalculaba los próximos eventos y
+ * parseaba Fecha_Inicio ella misma (`proximosEventosActivos_` +
+ * `parsearFechaDDMMYYYY_`) — una segunda copia de la misma lógica que
+ * `enviar_resumen_telegram.py`, y las dos copias se desincronizaron sin
+ * que nadie lo notara: esta solo entendía fechas DD/MM/YYYY, pero Python
+ * escribe Fecha_Inicio en ISO desde hace semanas, así que el mail del
+ * Directorio venía vacío de eventos reales mientras Telegram los
+ * mostraba bien. Ahora Python (única fuente de verdad del texto) llama
+ * a esta acción con el mismo texto que ya mandó a Telegram — Code.gs
+ * solo lee la lista de consentimiento y manda, no vuelve a calcular
+ * nada. Ya no hace falta el trigger semanal propio (`configurarTrigger
+ * ResumenSemanal`, borrado): el cron de GitHub Actions
+ * (enviar-resumen.yml, martes 09:00 ARG) dispara los dos envíos juntos.
+ * Mismo secreto que "subir_imagen"/"avisar_evento_publicado": es solo
+ * para el pipeline, no para el público.
  */
-function configurarTriggerResumenSemanal() {
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'enviarResumenSemanalDirectorio') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('enviarResumenSemanalDirectorio')
-    .timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(9).create();
-}
+function enviarResumenDirectorio_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('Secreto inválido');
+  }
+  if (!data.texto) {
+    throw new Error('Falta texto');
+  }
 
-/**
- * Mismo resumen semanal que se manda por Telegram (ver
- * import/src/enviar_resumen_telegram.py), pero por mail a cada persona
- * del Directorio — todas dieron consentimiento explícito al anotarse
- * (checkbox "Autorizo a que me manden novedades y avisos de hayminga").
- */
-function enviarResumenSemanalDirectorio() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
   var dirSheet = ss.getSheetByName(DIRECTORIO_SHEET_NAME);
-  if (!dirSheet || dirSheet.getLastRow() < 2) return;
+  if (!dirSheet || dirSheet.getLastRow() < 2) return 0;
   // Columnas F..J = Email .. RecibeNovedades. Se respeta la baja: solo un
   // "false" explicito excluye, asi las filas viejas (anteriores a que la
   // columna existiera, con la celda vacia) siguen recibiendo como antes.
@@ -615,71 +623,13 @@ function enviarResumenSemanalDirectorio() {
     .filter(function(r) { return String(r[4] || '').trim().toLowerCase() !== 'false'; })
     .map(function(r) { return String(r[0] || '').trim(); })
     .filter(function(e) { return e; });
-  if (emails.length === 0) return;
+  if (emails.length === 0) return 0;
 
-  var eventos = proximosEventosActivos_();
-  var cuerpo = armarCuerpoResumen_(eventos);
-  var asunto = 'Nuevos cursos, talleres y eventos de bioconstrucción — hayminga.org';
-
+  var asunto = data.asunto || 'Novedades de hayminga.org';
   emails.forEach(function(email) {
-    MailApp.sendEmail({ to: email, subject: asunto, body: cuerpo });
+    MailApp.sendEmail({ to: email, subject: asunto, body: data.texto });
   });
-}
-
-var _CTA_RESUMEN = '¿Conocés un evento? Compartí la captura o el link por WhatsApp, ' +
-  'mandalo por mail, o si publicás vos en Instagram taggeá #hayminga.';
-
-function proximosEventosActivos_(diasHaciaAdelante, maxEventos) {
-  diasHaciaAdelante = diasHaciaAdelante || 60;
-  maxEventos = maxEventos || 15;
-
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(EVENTOS_SHEET_NAME);
-  var ultimaFila = sheet.getLastRow();
-  if (ultimaFila < 2) return [];
-
-  var filas = sheet.getRange(2, 1, ultimaFila - 1, 12).getValues(); // hasta columna L = Tipo_Evento
-  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  var limite = new Date(hoy.getTime() + diasHaciaAdelante * 24 * 60 * 60 * 1000);
-
-  var eventos = [];
-  filas.forEach(function(row) {
-    if (row[0] !== 'true') return; // columna A = Activo
-    var fecha = parsearFechaDDMMYYYY_(row[4]); // columna E = Fecha_Inicio
-    if (!fecha || fecha < hoy || fecha > limite) return;
-    eventos.push({
-      nombre: row[1], fecha: fecha, provincia: row[7],
-      esVirtual: row[6] === 'true', tipoEvento: row[11], link: row[10],
-    });
-  });
-
-  eventos.sort(function(a, b) { return a.fecha - b.fecha; });
-  return eventos.slice(0, maxEventos);
-}
-
-function parsearFechaDDMMYYYY_(valor) {
-  var m = String(valor || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!m) return null;
-  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-}
-
-function armarCuerpoResumen_(eventos) {
-  if (eventos.length === 0) {
-    return 'Esta semana no hay eventos nuevos confirmados para los próximos días.\n\n' + _CTA_RESUMEN;
-  }
-  var lineas = ['https://hayminga.org', '', _CTA_RESUMEN, ''];
-  eventos.forEach(function(ev) {
-    var fechaStr = Utilities.formatDate(ev.fecha, 'GMT-3', 'dd/MM');
-    var lugar = ev.esVirtual ? 'Virtual' : (ev.provincia || '');
-    var partes = [lugar, ev.tipoEvento].filter(function(p) { return p; });
-    var encabezado = partes.join(' - ');
-    var linea = fechaStr + (encabezado ? ' | ' + encabezado : '') + ' — ' + ev.nombre;
-    lineas.push(linea);
-    if (ev.link) lineas.push(ev.link);
-    lineas.push('');
-  });
-  lineas.push(_CTA_RESUMEN);
-  return lineas.join('\n');
+  return emails.length;
 }
 
 

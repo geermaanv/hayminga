@@ -3,12 +3,25 @@ enviar_resumen_telegram.py
 Arma un resumen semanal de los próximos eventos activos y lo manda por
 Telegram — pensado para que Germán lo reenvíe a mano por WhatsApp
 mientras no haya una Comunidad/API de WhatsApp Business armada (ver
-ROADMAP.md, Etapa 8).
+ROADMAP.md, Etapa 8) — y, con el mismo texto, al Directorio por mail.
 
 Corre aparte del pipeline de descubrimiento, vía su propio workflow
 semanal (enviar-resumen.yml).
+
+Única fuente de verdad del resumen (07/10, ver ROADMAP.md): hasta esa
+fecha Code.gs tenía su propia copia de esta lógica (`enviarResumenSemanalDirectorio`,
+con su propio fetch de eventos y su propio parser de fecha) para mandar
+el mismo resumen por mail al Directorio — y esa copia se desincronizó en
+silencio: parseaba solo DD/MM/YYYY mientras Python escribe Fecha_Inicio
+en ISO desde hace semanas, así que el mail del Directorio venía vacío de
+eventos reales. Ahora Python es la única fuente de verdad: arma el texto
+una vez y le pide a Code.gs (acción `enviar_resumen_directorio`, mismo
+canal de secreto compartido que `avisar_evento_publicado`) que lo mande
+a cada persona del Directorio con consentimiento — Code.gs ya no vuelve
+a leer eventos ni a parsear fechas, solo manda el mail.
 """
 
+import json
 import os
 from datetime import date, timedelta
 
@@ -107,6 +120,45 @@ def _formatear_mensaje(eventos: list[dict]) -> str:
     return "\n".join(lineas)
 
 
+_ASUNTO_EMAIL = "Nuevos cursos, talleres y eventos de bioconstrucción — hayminga.org"
+
+
+def _enviar_email_directorio(texto: str) -> bool:
+    """Le pide a Code.gs que mande el mismo texto por mail a cada persona
+    del Directorio con consentimiento — Code.gs solo relay (lee la lista
+    de emails y manda), no vuelve a calcular eventos ni a parsear fechas.
+    Best-effort: si falla, el envío a Telegram ya salió y no se pierde
+    nada — solo no hay mail esta semana, igual que cualquier otro fallo
+    de Apps Script en el pipeline (ver avisar_evento_publicado)."""
+    apps_script_url = os.environ.get("APPS_SCRIPT_URL")
+    secreto = os.environ.get("APPS_SCRIPT_SHARED_SECRET")
+    if not apps_script_url or not secreto:
+        print("[enviar_resumen_telegram] APPS_SCRIPT_URL/APPS_SCRIPT_SHARED_SECRET no configurados — sin mail al Directorio")
+        return False
+    try:
+        resp = requests.post(
+            apps_script_url,
+            headers={"Content-Type": "text/plain"},
+            data=json.dumps({
+                "accion": "enviar_resumen_directorio",
+                "secreto": secreto,
+                "asunto": _ASUNTO_EMAIL,
+                "texto": texto,
+            }),
+            timeout=30,
+        )
+        data = resp.json()
+        ok = bool(data.get("success"))
+        if ok:
+            print(f"[enviar_resumen_telegram] mail al Directorio enviado a {data.get('enviados', '?')} persona(s)")
+        else:
+            print(f"[enviar_resumen_telegram] Code.gs respondió error mandando el mail al Directorio — {data.get('error')}")
+        return ok
+    except Exception as e:
+        print(f"[enviar_resumen_telegram] error pidiéndole a Code.gs el mail al Directorio — {e}")
+        return False
+
+
 def enviar_resumen():
     eventos = proximos_eventos()
     mensaje = _formatear_mensaje(eventos)
@@ -124,6 +176,8 @@ def enviar_resumen():
     )
     resp.raise_for_status()
     print(f"[enviar_resumen_telegram] {len(eventos)} evento(s) — mensaje enviado")
+
+    _enviar_email_directorio(mensaje)
 
 
 if __name__ == "__main__":

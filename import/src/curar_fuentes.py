@@ -6,7 +6,14 @@ hoja FuentesStats que hiker_pipeline.py actualiza en cada corrida.
 
 Regla de baja: 50 intentos seguidos sin ningún evento nuevo -> se saca
 de config.json. Bajo riesgo y fácilmente reversible (agregar la fuente
-de nuevo a mano).
+de nuevo a mano) — PERO ver MAX_BAJAS_POR_CORRIDA: un lote grande de
+fuentes agregadas en la misma fecha original acumula el contador en
+paralelo, así que puede cruzar el umbral casi al mismo tiempo (real
+incidente 01/10/2026: 85 de 137 cuentas de un saque al reactivar el
+cron tras dos semanas apagado — ver ROADMAP.md). `config.json` también
+puede tener `hashtags_protegidos`/`cuentas_protegidas`: fuentes que
+nunca se dan de baja sin importar `intentos_sin_hit`, para vocabulario
+que se sabe de bajo volumen pero vale la pena mantener igual.
 
 También descubre candidatas nuevas y las agrega directo a config.json:
 usa v2/user/suggested/profiles de HikerAPI — las cuentas que Instagram
@@ -53,6 +60,16 @@ MIN_SUGERENCIAS_PARA_AGREGAR = 3  # sugerida por al menos N cuentas nuestras
 # ojo en el diff del commit automático de config.json.
 MAX_ALTAS_POR_CORRIDA = 25
 
+# Simétrico a MAX_ALTAS_POR_CORRIDA, agregado después del incidente del
+# 01/10/2026 (ver ROADMAP.md): curar() no tenía NINGÚN tope — un lote
+# grande de fuentes con el contador corriendo en paralelo desde la misma
+# fecha puede cruzar el umbral casi junto, y en una sola corrida se fue
+# el 62% de cuentas_seguidas (137→43) de un saque. Si se supera el tope,
+# se priorizan las que tienen MÁS intentos sin hit (las más claramente
+# muertas) y el resto queda para la próxima corrida — mismo criterio que
+# "priorizar calidad sobre volumen" del lado de las altas.
+MAX_BAJAS_POR_CORRIDA = 25
+
 CONFIG_PATH = Path("config.json")
 
 
@@ -60,15 +77,30 @@ def curar() -> list[tuple[str, str]]:
     service = get_service()
     stats = cargar_fuentes_stats(service)
 
-    a_dar_de_baja = [
-        (tipo, nombre) for (tipo, nombre), info in stats.items()
-        if info["intentos_sin_hit"] >= UMBRAL_INTENTOS_SIN_HIT
-    ]
-    if not a_dar_de_baja:
+    config = json.loads(CONFIG_PATH.read_text())
+    protegidos = {("hashtag", h) for h in (config.get("hashtags_protegidos") or [])}
+    protegidos |= {("cuenta", c) for c in (config.get("cuentas_protegidas") or [])}
+
+    candidatas_baja = sorted(
+        (
+            (tipo, nombre) for (tipo, nombre), info in stats.items()
+            if info["intentos_sin_hit"] >= UMBRAL_INTENTOS_SIN_HIT
+            and (tipo, nombre) not in protegidos
+        ),
+        key=lambda tn: stats[tn]["intentos_sin_hit"], reverse=True,
+    )
+    if not candidatas_baja:
         print("[curar_fuentes] Nada para dar de baja")
         return []
 
-    config = json.loads(CONFIG_PATH.read_text())
+    a_dar_de_baja = candidatas_baja[:MAX_BAJAS_POR_CORRIDA]
+    if len(candidatas_baja) > MAX_BAJAS_POR_CORRIDA:
+        print(
+            f"[curar_fuentes] {len(candidatas_baja)} fuentes cruzaron el umbral, "
+            f"tope de {MAX_BAJAS_POR_CORRIDA} por corrida — quedan "
+            f"{len(candidatas_baja) - MAX_BAJAS_POR_CORRIDA} para la próxima corrida"
+        )
+
     hashtags = set(config.get("hashtags") or [])
     cuentas = set(config.get("cuentas_seguidas") or [])
 
