@@ -928,12 +928,42 @@ sin errores.
   más de 25 cruzan el umbral en una corrida, se priorizan las que
   tienen MÁS intentos sin hit (las más claramente muertas) y el resto
   queda para la próxima — nunca más un 62% de la lista de un saque.
-- `hashtags_protegidos`/`cuentas_protegidas` en `config.json` (vacías
-  por ahora): fuentes que `curar()` nunca da de baja sin importar el
-  contador — para vocabulario de bajo volumen pero que vale la pena
-  mantener a criterio del mantenedor, no del algoritmo. Pendiente:
-  decidir qué entra ahí (el archivo con las 94 cuentas + 19 hashtags
-  que se habían ido se mandó para revisar a mano).
+- `hashtags_protegidos`/`cuentas_protegidas` en `config.json`: fuentes
+  que `curar()` nunca da de baja sin importar el contador — para
+  vocabulario de bajo volumen pero que vale la pena mantener a
+  criterio del mantenedor, no del algoritmo.
+
+**`hashtags_protegidos` curado (07/10):** 25 hashtags, en tres grupos —
+técnicas constructivas específicas (`adobe`, `tapial`, `quincha`,
+`superadobe`, `earthbag`, `cob`, `bta`, `bloquedetierraalivianada`,
+`fardosdepaja`, `pajaencofrada`, `pajabarro`, `revoquesnaturales`,
+`pinturasnaturales`, `techovivo` — bajo volumen pero alta intención,
+no es spam decorativo), paraguas de "construcción en tierra"
+normalizados (`construccionentierra`, `construccioncontierra`,
+`arquitecturadetierra`) y convocatorias/eventos directos
+(`tallerbioconstruccion`, `cursobioconstruccion`, `minga`,
+`obrascuela`, `voluntariadobioconstruccion`, `tallerdebarro`,
+`cursodebarro`), más la marca propia (`hayminga`). 13 de los 25 no
+estaban en `hashtags` todavía — se agregaron ahí también (si no,
+"protegido" no significa nada: nunca se busca). Variantes con tilde de
+lo mismo (`construcciónentierra`, `tallerbioconstrucción`, etc.) y
+`barro` solo quedaron sin proteger a propósito — compitieron en la
+curaduría y se descartaron por demasiado genéricas/redundantes.
+
+**Pendiente, señalado al curar la lista:** `minga` es ambiguo en
+español rioplatense (uso coloquial = "nada"/"ni en pedo", no tiene que
+ver con la convocatoria comunitaria de construcción) — protegerlo
+evita que se dé de baja, pero no evita que seleccione posts ruidosos
+mientras esté activo. Falta un filtro secundario de keywords en el
+parser de hashtags (ej. exigir alguna palabra del dominio en el
+caption además del hashtag) antes de confiar en este hashtag para
+publicar sin revisión. No implementado todavía.
+
+**`cuentas_protegidas` sigue vacía:** quedan como candidatas a revisar
+(sonaban institucionales por el nombre, no verificado):
+`redprotierraargentina`, `red_biosip`, `redbioca`, `redkopora`,
+`tabi.faud.unc`, `gaiauniversidadpermacultura`, `cooperativacaminantes`,
+`comunidadsustentable.red`, `germinarong`.
 
 ### 2. El mail semanal al Directorio y el de Telegram no eran el mismo proceso
 
