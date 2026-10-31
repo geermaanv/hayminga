@@ -1190,6 +1190,16 @@ tiene el mismo riesgo.
   quedan por la protección explícita) — **cuentas_seguidas queda en
   ~50**, el resto (~460) se sacó.
 
+**Incidente real al correrlo (31/10):** la primera corrida del workflow
+temporal imprimió "quedan 50 cuentas_seguidas" y terminó en verde, pero
+el workflow tenía `permissions: contents: read` y ningún paso de
+commit/push — escribió `config.json` en el runner efímero y el cambio
+se perdió al terminar el job. `main` seguía con las 510 cuentas.
+Detectado al verificar el archivo real en GitHub después (no asumir
+que "corrida exitosa" implica "cambio guardado"). Corregido agregando
+el mismo paso de commit que ya usa `curar-fuentes.yml`; confirmado en
+la segunda corrida: `cuentas_seguidas` en 50 real en `main`.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
