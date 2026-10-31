@@ -303,4 +303,12 @@ def descubrir_candidatos() -> list[str]:
 
 if __name__ == "__main__":
     curar()
-    descubrir_candidatos()
+    # descubrir_candidatos() apagado (31/10/2026, ver ROADMAP.md): la
+    # corrida real instrumentada mostró que cuentas_seguidas (6.051
+    # posts, 678 cuentas) no mandó ni un evento a la IA, y 170/680
+    # cuentas (25%) resultaron ser de nutrición sin relación al tema.
+    # _parece_relevante() ya corrige el filtro para la próxima vez que
+    # se reactive, pero hasta no ver evidencia real de que este canal
+    # aporta, no tiene sentido seguir agregándole cuentas. curar() (las
+    # bajas) sigue corriendo — esa limpieza no tiene ese riesgo.
+    # descubrir_candidatos()

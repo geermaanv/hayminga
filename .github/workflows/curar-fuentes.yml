@@ -7,6 +7,8 @@ on:
   # (MIN_SUGERENCIAS_PARA_AGREGAR se deja en 3, el piso que salió del
   # fix) — el tope sigue acotando el peor caso a algo revisable a ojo
   # en el diff del commit automático de config.json.
+  # descubrir_candidatos() apagado del lado de Python (31/10/2026, ver
+  # ROADMAP.md) — este cron ahora solo corre curar() (bajas).
   schedule:
     - cron: "0 12 * * *"  # 09:00 hora Argentina
   workflow_dispatch: {}
@@ -39,14 +41,14 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Dar de baja fuentes sin resultados y descubrir candidatas
+      - name: Dar de baja fuentes sin resultados (altas apagadas, ver ROADMAP.md)
         env:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           HIKERAPI_KEY: ${{ secrets.HIKERAPI_KEY }}
         run: python -m src.curar_fuentes
 
-      - name: Commitear cambios si hubo bajas o altas
+      - name: Commitear cambios si hubo bajas
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -54,6 +56,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sin cambios en config.json"
           else
-            git commit -m "Curar fuentes: baja automática (50+ intentos sin hit) y/o alta de candidatas nuevas"
+            git commit -m "Curar fuentes: baja automática (50+ intentos sin hit)"
             git push
           fi
