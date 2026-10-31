@@ -33,6 +33,7 @@ registra en la hoja CuentasConsultadas cuándo se consultó cada cuenta
 
 import json
 import os
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -155,6 +156,49 @@ def _sugeridas_para(username: str, pk: int | None = None) -> list[str]:
     return [u["username"] for u in resp.json().get("users", []) if u.get("username")]
 
 
+def _normalizar(texto: str | None) -> str:
+    texto = unicodedata.normalize("NFKD", (texto or "").lower())
+    return "".join(c for c in texto if not unicodedata.combining(c))
+
+
+def _vocabulario_relevante(config: dict) -> set[str]:
+    """Reusa los hashtags ya curados como vocabulario de "esto es del
+    tema" — si se agrega un hashtag nuevo, automáticamente suma como
+    señal de relevancia también, sin mantener una lista aparte. Se
+    descartan palabras muy cortas (ej. "bta", "cob") para no matchear
+    por casualidad dentro de texto no relacionado."""
+    return {p for h in (config.get("hashtags") or []) if len(p := _normalizar(h)) >= 5}
+
+
+def _biografia_de(username: str) -> str:
+    resp = requests.get(
+        "https://api.hikerapi.com/v1/user/by/username",
+        params={"username": username}, headers=_hiker_headers(), timeout=20,
+    )
+    if resp.status_code != 200:
+        return ""
+    data = resp.json()
+    return " ".join(filter(None, [data.get("full_name"), data.get("biography"), data.get("category_name")]))
+
+
+def _parece_relevante(username: str, vocabulario: set[str]) -> bool:
+    """Antes de sumar una cuenta "sugerida" por Instagram (que no es
+    puramente temática — ver docstring del módulo: un incidente real
+    dejó pasar 900+ cuentas de surf/acroyoga/etc.) se chequea su bio
+    contra el vocabulario de hashtags ya curado. Al revés que
+    _parece_extranjero() en hiker_pipeline.py (que deja pasar en caso de
+    duda porque perder un evento real cuesta más que una llamada de
+    más): acá agregar una cuenta mala es gasto recurrente todos los días
+    hasta que curar() la detecte (mínimo 50 corridas — caso real 31/10:
+    170 de 680 cuentas resultaron ser de nutrición/cocina sin relación
+    al tema). Por eso se exige señal positiva explícita; sin ella, no
+    se agrega."""
+    bio = _normalizar(_biografia_de(username))
+    if not bio:
+        return False
+    return any(palabra in bio for palabra in vocabulario)
+
+
 def descubrir_candidatos() -> list[str]:
     """Consulta 'sugeridas' de Instagram para cada cuenta que ya seguimos
     (salteando las consultadas hace menos de _DIAS_ANTES_DE_RECONSULTAR)
@@ -217,13 +261,38 @@ def descubrir_candidatos() -> list[str]:
         return []
 
     candidatas.sort(key=lambda u: conteo[u], reverse=True)
-    nuevas = set(candidatas[:MAX_ALTAS_POR_CORRIDA])
-    if len(candidatas) > MAX_ALTAS_POR_CORRIDA:
+
+    vocabulario = _vocabulario_relevante(config)
+    nuevas = set()
+    descartadas_por_tema = []
+    for u in candidatas:
+        if len(nuevas) >= MAX_ALTAS_POR_CORRIDA:
+            break
+        try:
+            relevante = _parece_relevante(u, vocabulario)
+        except Exception as e:
+            print(f"[curar_fuentes] @{u}: error chequeando bio, no se agrega sin confirmar — {e}")
+            relevante = False
+        if relevante:
+            nuevas.add(u)
+        else:
+            descartadas_por_tema.append(u)
+
+    if descartadas_por_tema:
         print(
-            f"[curar_fuentes] {len(candidatas)} candidatas pasaron el piso, "
-            f"tope de {MAX_ALTAS_POR_CORRIDA} por corrida — quedan "
-            f"{len(candidatas) - MAX_ALTAS_POR_CORRIDA} para revisar a mano o la próxima corrida"
+            f"[curar_fuentes] {len(descartadas_por_tema)} candidata(s) descartada(s) "
+            f"por bio sin relación al tema: " + ", ".join(descartadas_por_tema)
         )
+    restantes = len(candidatas) - len(nuevas) - len(descartadas_por_tema)
+    if restantes > 0:
+        print(
+            f"[curar_fuentes] tope de {MAX_ALTAS_POR_CORRIDA} alcanzado — quedan "
+            f"{restantes} candidata(s) para revisar a mano o la próxima corrida"
+        )
+
+    if not nuevas:
+        print("[curar_fuentes] Ninguna candidata pasó el chequeo de relevancia esta vez")
+        return []
 
     config["cuentas_seguidas"] = sorted(cuentas_actuales | nuevas)
     CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")

@@ -98,6 +98,7 @@ class DescubrirCandidatosCapTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(lambda: Path(self.config_file.name).unlink(missing_ok=True))
 
+    @patch("src.curar_fuentes._parece_relevante", return_value=True)
     @patch("src.curar_fuentes.guardar_cuentas_ids")
     @patch("src.curar_fuentes.marcar_cuentas_consultadas")
     @patch("src.curar_fuentes.cargar_cuentas_ids", return_value={})
@@ -105,13 +106,16 @@ class DescubrirCandidatosCapTest(unittest.TestCase):
     @patch("src.curar_fuentes.get_service", return_value=Mock())
     @patch("src.curar_fuentes._pk_de", return_value=123)
     def test_caps_additions_even_when_many_candidates_pass_the_floor(
-        self, mock_pk, mock_service, mock_consultadas, mock_ids, mock_marcar, mock_guardar
+        self, mock_pk, mock_service, mock_consultadas, mock_ids, mock_marcar, mock_guardar, mock_relevante
     ):
         # Cada una de las 3 cuentas fuente sugiere las mismas 40 cuentas
         # nuevas -> las 40 pasan MIN_SUGERENCIAS_PARA_AGREGAR (sugeridas
         # por las 3), pero el tope debe frenar en MAX_ALTAS_POR_CORRIDA.
         # 40 > cualquier valor razonable del tope, para que la regresión
         # siga probando algo aunque el tope se vuelva a ajustar.
+        # _parece_relevante mockeado a True: esta prueba cubre el tope de
+        # volumen, no el filtro de relevancia (que tiene su propia clase
+        # de pruebas, RelevanciaDeCandidatosTest).
         candidatas_generico = [f"candidata_{i}" for i in range(40)]
         with patch(
             "src.curar_fuentes._sugeridas_para", return_value=candidatas_generico
@@ -144,6 +148,77 @@ class DescubrirCandidatosCapTest(unittest.TestCase):
             nuevas = curar_fuentes.descubrir_candidatos()
 
         self.assertEqual(nuevas, [])
+
+
+class RelevanciaDeCandidatosTest(unittest.TestCase):
+    """Regresión del hallazgo del 31/10/2026 (ver ROADMAP.md): 170 de 680
+    cuentas_seguidas resultaron ser de nutrición/cocina/salud, sin
+    relación al tema — "sugerida por 3+ cuentas nuestras" no alcanza
+    para filtrar esto (ya lo decía el docstring del módulo: ni siquiera
+    es puramente temático). Ahora se exige señal positiva en la bio."""
+
+    def test_normaliza_acentos_y_mayusculas(self):
+        self.assertEqual(curar_fuentes._normalizar("Bioconstrucción"), "bioconstruccion")
+
+    def test_vocabulario_descarta_palabras_cortas(self):
+        vocabulario = curar_fuentes._vocabulario_relevante({"hashtags": ["bta", "cob", "permacultura"]})
+        self.assertEqual(vocabulario, {"permacultura"})
+
+    @patch("src.curar_fuentes._biografia_de", return_value="Nutricionista. Recetas veganas y vida sana")
+    def test_bio_sin_palabra_del_vocabulario_no_es_relevante(self, mock_bio):
+        relevante = curar_fuentes._parece_relevante("nutri_x", {"bioconstruccion", "permacultura"})
+        self.assertFalse(relevante)
+
+    @patch("src.curar_fuentes._biografia_de", return_value="Talleres de Bioconstrucción y permacultura en el sur")
+    def test_bio_con_palabra_del_vocabulario_es_relevante(self, mock_bio):
+        relevante = curar_fuentes._parece_relevante("org_x", {"bioconstruccion", "permacultura"})
+        self.assertTrue(relevante)
+
+    @patch("src.curar_fuentes._biografia_de", return_value="")
+    def test_bio_vacia_no_es_relevante(self, mock_bio):
+        """Al revés que _parece_extranjero() en hiker_pipeline.py: ahí la
+        duda deja pasar (perder un evento real cuesta más). Acá agregar
+        una cuenta mala es gasto recurrente diario, así que sin bio para
+        juzgar, no se agrega."""
+        relevante = curar_fuentes._parece_relevante("sin_bio", {"bioconstruccion"})
+        self.assertFalse(relevante)
+
+    @patch("src.curar_fuentes._parece_relevante")
+    @patch("src.curar_fuentes.guardar_cuentas_ids")
+    @patch("src.curar_fuentes.marcar_cuentas_consultadas")
+    @patch("src.curar_fuentes.cargar_cuentas_ids", return_value={})
+    @patch("src.curar_fuentes.cargar_cuentas_consultadas", return_value={})
+    @patch("src.curar_fuentes.get_service", return_value=Mock())
+    @patch("src.curar_fuentes._pk_de", return_value=123)
+    def test_descubrir_candidatos_no_agrega_las_irrelevantes(
+        self, mock_pk, mock_service, mock_consultadas, mock_ids, mock_marcar, mock_guardar, mock_relevante
+    ):
+        self.config_file2 = tempfile.NamedTemporaryFile(
+            suffix=".json", mode="w", delete=False, encoding="utf-8"
+        )
+        json.dump(
+            {
+                "cuentas_seguidas": ["fuente_a", "fuente_b", "fuente_c"],
+                "cuentas_excluidas": [],
+                "hashtags": ["bioconstruccion"],
+            },
+            self.config_file2,
+        )
+        self.config_file2.close()
+        self.addCleanup(lambda: Path(self.config_file2.name).unlink(missing_ok=True))
+
+        # "buena" tiene señal en la bio, "nutri_mala" no — ambas pasan el
+        # piso de sugerencias (las 3 cuentas fuente sugieren ambas).
+        mock_relevante.side_effect = lambda u, vocab: u == "buena"
+
+        with patch.object(curar_fuentes, "CONFIG_PATH", Path(self.config_file2.name)), \
+             patch("src.curar_fuentes._sugeridas_para", return_value=["buena", "nutri_mala"]):
+            nuevas = curar_fuentes.descubrir_candidatos()
+
+        self.assertEqual(nuevas, ["buena"])
+        config = json.loads(Path(self.config_file2.name).read_text())
+        self.assertIn("buena", config["cuentas_seguidas"])
+        self.assertNotIn("nutri_mala", config["cuentas_seguidas"])
 
 
 if __name__ == "__main__":
