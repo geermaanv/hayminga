@@ -1200,6 +1200,45 @@ que "corrida exitosa" implica "cambio guardado"). Corregido agregando
 el mismo paso de commit que ya usa `curar-fuentes.yml`; confirmado en
 la segunda corrida: `cuentas_seguidas` en 50 real en `main`.
 
+## Pedido de referidos al Directorio — "crecer en profesionales" (31/10)
+
+A pedido del mantenedor: en vez de (o además de) que el pipeline
+encuentre eventos, usar a la gente que ya está en el Directorio para
+que ayude a sumar más gente. Texto revisado varias veces con el
+mantenedor antes de tocar código — tenía que ser simple ("gente muy
+sencilla", sin la palabra "Directorio", sin listar profesiones) y
+amigable, no corporativo.
+
+**Hecho:**
+- `Code.gs`: nueva acción `pedir_referido_directorio` (mismo secreto
+  que `avisar_evento_publicado`/`enviar_resumen_directorio`). A
+  diferencia de `enviarResumenDirectorio_`, manda a TODOS sin filtrar
+  por `RecibeNovedades` — decisión explícita: esto no es "novedades",
+  es un pedido puntual. Columna nueva `UltimoPedidoReferido` al final
+  del Directorio (misma regla de siempre: nuevas columnas al final,
+  `getOrCreateSheetWithHeaders_` ya sabe extender el header de una
+  hoja existente). Un solo GET + como mucho un SET para toda la
+  columna, no uno por fila — aprendida la lección del incidente de
+  cuota de Sheets del mismo día (ver más arriba, `limpiar_pendientes_vencidos.py`).
+- `pedir_referido_directorio.py`: dry-run por default (vista previa de
+  cuántas personas recibirían el mail, de solo lectura — Python nunca
+  escribe el Directorio, lo escribe solo Code.gs), `--escribir` le
+  pide a Code.gs que mande de verdad. `MESES_COOLDOWN_REFERIDO = 2` en
+  ambos lados (Python solo para la vista previa, Code.gs para la
+  regla real) — una futura corrida no le repite el pedido a quien ya
+  se le pidió hace menos de 2 meses.
+
+**Pendiente:** `Code.gs` necesita el despliegue manual de siempre
+(script.google.com) antes de que la acción nueva funcione. No se
+mandó ningún mail todavía — falta la corrida real con `--escribir`.
+
+**Idea del mismo día, todavía sin evaluar:** además de pedirle a la
+gente ya en el Directorio, revisar cuántas de las cuentas de Instagram
+que seguimos (o las 50 que quedaron después de la poda) ya tienen
+email público cacheado (`CuentasIds!EmailPublico`) y mandarles un
+mail parecido invitándolas a sumarse o a reenviarlo — mismo cuidado de
+no repetirle a alguien que ya esté en el Directorio.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
