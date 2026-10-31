@@ -1155,6 +1155,16 @@ sacar sin perder nada.
   piso de `MIN_SUGERENCIAS_PARA_AGREGAR` (acotado, no por cada
   sugerida cruda).
 
+**Apagado (31/10, a pedido del mantenedor):** con la última corrida
+real mostrando que `cuentas_seguidas` (6.051 posts, 678 cuentas) no
+aportó ni un evento, y sin evidencia todavía de que `_parece_relevante()`
+alcance para que valga la pena seguir sumando cuentas, se apagó el
+llamado a `descubrir_candidatos()` desde `curar_fuentes.py` (queda
+comentado, no borrado — fácil de reactivar si en algún momento hay
+evidencia de que aporta). `curar()` (las bajas por 50+ intentos sin
+hit) sigue corriendo en el cron diario sin cambios — esa limpieza no
+tiene el mismo riesgo.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
