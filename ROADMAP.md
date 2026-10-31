@@ -1064,6 +1064,58 @@ pendiente investigar aparte si hay más margen ahí (fuentes nuevas,
 umbrales de confianza, etc.) — no se tocó nada de esto en esta misma
 sesión.
 
+## Revisión del embudo de descubrimiento: dónde se pierde el volumen (31/10)
+
+Siguiendo el hallazgo de arriba, se revisó un log real completo
+(`import-eventos.yml`, corrida del 30/10, run #41091644078, ~70 min de
+pipeline real tras descontar el test suite del mismo job): **6.548
+posts crudos** (981 de hashtags + 5.567 de `cuentas_seguidas`) → solo
+**2** llegaron a loguearse en `extraer_evento()` (ambos descartados
+como solo-texto) → **0** eventos nuevos. El embudo no se rompe en la
+IA — se rompe antes, en los filtros deterministas de `procesar_post()`
+(duplicado, cuenta excluida, antigüedad >180 días, idioma), que hasta
+ahora no tenían ningún contador propio: era imposible saber cuál de
+los cuatro se estaba comiendo el 99,97% restante.
+
+**Aparte, sin relación de causa confirmada:** `cuentas_seguidas` pasó
+de 137 (restauradas el 07/10) a 655 en `config.json` al 30/10 —
+consistente con `MAX_ALTAS_POR_CORRIDA=25`/día acumulando sin pausa
+desde la reactivación (25×~21≈518). No es un bug: `UMBRAL_INTENTOS_SIN_HIT=50`
+(`curar_fuentes.py`) significa que ninguna cuenta agregada en esas
+~3 semanas pudo todavía acumular 50 intentos sin resultado, así que
+`curar()` no tuvo forma de depurar nada de ese lote. Queda como
+sospecha razonable, no como hallazgo verificado, que ese crecimiento
+esté diluyendo el pipeline sin aportar eventos.
+
+**Descartada (31/10):** la idea de pedirle a la comunidad/Directorio
+que refiera eventos manualmente — el mantenedor señaló que hoy no hay
+nadie para gestionar esas respuestas y que el proyecto todavía no
+tiene el volumen/reconocimiento para que la gente se acuerde de
+avisar. Como alternativa se investigaron las 6 `cuentas_protegidas`
+"institucionales" (redprotierraargentina, red_biosip, tabi.faud.unc,
+gaiauniversidadpermacultura, cooperativacaminantes,
+comunidadsustentable.red) por si mantienen una agenda propia
+scrapeable. Búsqueda web genérica: ninguna aparece (SEO nulo para
+este nicho). Chequeo real vía HikerAPI (`revisar_perfiles_protegidos.py`,
+corrida única en workflow de diagnóstico temporal, borrado después):
+**5 de 6 sí tienen link externo** que la búsqueda web no encontró
+(`linktr.ee/redprotierra`, `redbiosip.com`, `gaia.org.ar`, un
+Google Form de `cooperativacaminantes`, `comunidadsustentable.com.ar`).
+Ninguno es un calendario estructurado, pero `linktr.ee/redprotierra`
+linkeaba en vivo al formulario de inscripción del 12° Encuentro
+Nacional de Epuyén 2026 — señal real de que estas cuentas anuncian su
+evento insignia fuera de Instagram, fuera del radar actual del
+pipeline. Sin resolver todavía cómo (o si) integrar esto.
+
+**Hecho (31/10):** se instrumentó `procesar_post()` con un contador
+por motivo (`_descartes_pre_ia`: `duplicado`, `cuenta_excluida`,
+`post_antiguo`, `idioma_extranjero`, `pais_no_argentina_temprano`),
+logueado al final de `run()` y volcado en `run_summary.json`. No
+cambia ningún comportamiento — es puramente diagnóstico, para que la
+próxima corrida real diga con datos cuál de los cuatro filtros
+pre-IA es el que está colapsando el embudo, en vez de seguir
+adivinando.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

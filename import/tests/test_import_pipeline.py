@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 from google.genai import types
@@ -1277,6 +1277,91 @@ class HikerApiCostTests(unittest.TestCase):
         hiker_pipeline._hiker_get("https://api.hikerapi.com/v1/algo")
 
         self.assertEqual(hiker_pipeline._errores_hikerapi[0], 0)
+
+
+class DescartesPreIaTests(unittest.TestCase):
+    """Regresión del hallazgo del 31/10/2026 (ver ROADMAP.md): una corrida
+    real analizó 6.548 posts crudos y solo 2 llegaron a loguearse en
+    extraer_evento, sin ningún contador que dijera cuál de los filtros
+    previos a la IA (duplicado, cuenta excluida, post viejo, idioma,
+    país temprano) se comía el resto."""
+
+    def setUp(self):
+        from src import hiker_pipeline
+        hiker_pipeline._descartes_pre_ia.clear()
+
+    def test_duplicado_por_shortcode(self):
+        from src import hiker_pipeline
+
+        post = {"link": "https://www.instagram.com/p/DUP111/", "image_url": "https://x.test/i.jpg",
+                "caption": "", "username": "cuenta_x"}
+        evento = hiker_pipeline.procesar_post(post, {"DUP111"})
+
+        self.assertIsNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {"duplicado": 1})
+
+    def test_cuenta_excluida(self):
+        from src import hiker_pipeline
+
+        post = {"link": "https://www.instagram.com/p/EXC222/", "image_url": "https://x.test/i.jpg",
+                "caption": "", "username": "cuenta_mala"}
+        evento = hiker_pipeline.procesar_post(post, set(), cuentas_excluidas={"cuenta_mala"})
+
+        self.assertIsNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {"cuenta_excluida": 1})
+
+    def test_post_antiguo(self):
+        from src import hiker_pipeline
+
+        hace_200_dias = (datetime.now(timezone.utc) - timedelta(days=200)).timestamp()
+        post = {"link": "https://www.instagram.com/p/OLD333/", "image_url": "https://x.test/i.jpg",
+                "caption": "", "username": "cuenta_x", "taken_at_ts": hace_200_dias}
+        evento = hiker_pipeline.procesar_post(post, set())
+
+        self.assertIsNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {"post_antiguo": 1})
+
+    def test_idioma_extranjero(self):
+        from src import hiker_pipeline
+
+        post = {"link": "https://www.instagram.com/p/ENG444/", "image_url": "https://x.test/i.jpg",
+                "caption": "Join our amazing workshop now, register today for this class",
+                "username": "cuenta_x"}
+        evento = hiker_pipeline.procesar_post(post, set())
+
+        self.assertIsNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {"idioma_extranjero": 1})
+
+    def test_pais_no_argentina_temprano(self):
+        from src import hiker_pipeline
+
+        post = {"link": "https://www.instagram.com/p/URU555/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de bioconstrucción en Montevideo, Uruguay",
+                "username": "cuenta_x"}
+        evento = hiker_pipeline.procesar_post(post, set())
+
+        self.assertIsNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {"pais_no_argentina_temprano": 1})
+
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_post_que_pasa_los_filtros_no_cuenta_descarte(self, extraer_evento, download_image, subir_imagen):
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Minga de quincha", "fecha_inicio": "10/12/2026",
+            "provincia": "Córdoba", "direccion": None, "contacto": None,
+            "pais": "Argentina", "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/OK666/", "image_url": "https://x.test/i.jpg",
+                "caption": "Minga de quincha en Córdoba, vení con herramientas",
+                "username": "cuenta_x"}
+
+        evento = hiker_pipeline.procesar_post(post, set())
+
+        self.assertIsNotNone(evento)
+        self.assertEqual(hiker_pipeline._descartes_pre_ia, {})
 
 
 class AvisarEventoPublicadoTests(unittest.TestCase):
