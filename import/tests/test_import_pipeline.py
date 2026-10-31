@@ -2093,7 +2093,7 @@ class LimpiarPendientesVencidosTests(unittest.TestCase):
         ])
         vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
 
-        self.assertEqual(vencidos, [(2, "Viejo")])
+        self.assertEqual(vencidos, [(2, "Viejo", "")])
 
     def test_usa_fecha_inicio_si_no_hay_fecha_fin(self):
         from src import limpiar_pendientes_vencidos as lpv
@@ -2103,7 +2103,7 @@ class LimpiarPendientesVencidosTests(unittest.TestCase):
         ])
         vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
 
-        self.assertEqual(vencidos, [(2, "Viejo sin fin")])
+        self.assertEqual(vencidos, [(2, "Viejo sin fin", "")])
 
     def test_no_marca_eventos_futuros(self):
         from src import limpiar_pendientes_vencidos as lpv
@@ -2137,6 +2137,28 @@ class LimpiarPendientesVencidosTests(unittest.TestCase):
         vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
 
         self.assertEqual(vencidos, [])
+
+    def test_escribir_hace_un_solo_get_sin_importar_la_cantidad_de_filas(self):
+        """Regresión real del 31/10/2026: limpiar(escribir=True) pedía la
+        Descripción de cada fila vencida con un GET aparte — con 80
+        filas agotó la cuota de lectura de Sheets (60/min) y la corrida
+        murió con 429 antes de escribir nada. Todo tiene que salir del
+        único GET de rango que ya hace encontrar_vencidos."""
+        from src import limpiar_pendientes_vencidos as lpv
+
+        filas = [
+            self._fila(nombre=f"Viejo {i}", fecha_inicio="01/09/2026")
+            for i in range(80)
+        ]
+        service = self._service_con(filas)
+
+        with patch("src.limpiar_pendientes_vencidos.get_service", return_value=service), \
+             patch("src.limpiar_pendientes_vencidos.date") as mock_date:
+            mock_date.today.return_value = date(2026, 10, 31)
+            lpv.limpiar(escribir=True)
+
+        self.assertEqual(service.spreadsheets.return_value.values.return_value.get.call_count, 1)
+        service.spreadsheets.return_value.values.return_value.batchUpdate.assert_called_once()
 
 
 class UsernameColumnTests(unittest.TestCase):
