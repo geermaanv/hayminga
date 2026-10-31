@@ -31,14 +31,8 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Candidatos de hashtags (gratis, solo lee el Sheet)
+      - name: Corregir duplicado del Encuentro Protierra 2026
         env:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python -m src.candidatos_hashtags
-
-      - name: Cargar 12° Encuentro Nacional Red Protierra como pendiente_confirmacion
-        env:
-          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python -m src.agregar_encuentro_protierra_2026 --escribir
+        run: python -m src.corregir_duplicado_protierra --escribir
