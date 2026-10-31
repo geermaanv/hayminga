@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   achicar:
@@ -36,3 +36,15 @@ jobs:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python -m src.achicar_cuentas_sin_aporte --escribir
+
+      - name: Commitear config.json si hubo cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add config.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en config.json"
+          else
+            git commit -m "Achicar cuentas_seguidas a solo las que aportaron (one-off)"
+            git push
+          fi
