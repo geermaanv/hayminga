@@ -126,6 +126,8 @@ function doPost(e) {
       respuesta = { success: true, enviados: enviarResumenDirectorio_(data) };
     } else if (data.accion === 'pedir_referido_directorio') {
       respuesta = { success: true, enviados: pedirReferidoDirectorio_(data) };
+    } else if (data.accion === 'enviar_mail_lista') {
+      respuesta = { success: true, enviados: enviarMailLista_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -689,6 +691,37 @@ function pedirReferidoDirectorio_(data) {
   if (enviados > 0) {
     sheet.getRange(2, idxUltimo + 1, nFilas, 1).setValues(columnaActualizada);
   }
+  return enviados;
+}
+
+
+/**
+ * Relay puro: manda el mismo texto a una lista de emails que Python ya
+ * calculó (filtrado, dedup contra el Directorio y registro de "ya se
+ * le pidió" — ver pedir_referido_cuentas_instagram.py). A diferencia
+ * de pedirReferidoDirectorio_/enviarResumenDirectorio_, esta acción no
+ * lee ni escribe ninguna hoja: Python ya tiene todo lo que necesita
+ * (CuentasIds es de Python, ver CLAUDE.md) y solo le pide a Code.gs
+ * que mande, porque MailApp no existe del lado de Python. Mismo
+ * secreto que el resto de las acciones del pipeline.
+ */
+function enviarMailLista_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('Secreto inválido');
+  }
+  if (!data.texto || !data.emails || !data.emails.length) {
+    throw new Error('Falta texto o emails');
+  }
+
+  var asunto = data.asunto || 'hayminga.org';
+  var enviados = 0;
+  data.emails.forEach(function(email) {
+    email = String(email || '').trim();
+    if (!email) return;
+    MailApp.sendEmail({ to: email, subject: asunto, body: data.texto });
+    enviados++;
+  });
   return enviados;
 }
 
