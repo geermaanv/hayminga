@@ -96,7 +96,7 @@ var DIRECTORIO_SHEET_NAME = 'Directorio';
 // RecibeNovedades se guarda como texto "true"/"false" y no como booleano
 // nativo: Apps Script escribiendo booleanos rompe el parseo de GViz del
 // frontend (ver PATRONES.md).
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades', 'OfreceServicios'];
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades', 'OfreceServicios', 'UltimoPedidoReferido'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -124,6 +124,8 @@ function doPost(e) {
       respuesta = { success: true, ok: avisarEventoPublicado_(data) };
     } else if (data.accion === 'enviar_resumen_directorio') {
       respuesta = { success: true, enviados: enviarResumenDirectorio_(data) };
+    } else if (data.accion === 'pedir_referido_directorio') {
+      respuesta = { success: true, enviados: pedirReferidoDirectorio_(data) };
     } else {
       // accion === 'evento' o sin especificar (compatibilidad con el form viejo)
       respuesta = { success: true, id: crearEventoManual_(data) };
@@ -630,6 +632,64 @@ function enviarResumenDirectorio_(data) {
     MailApp.sendEmail({ to: email, subject: asunto, body: data.texto });
   });
   return emails.length;
+}
+
+
+/**
+ * Pide a cada persona del Directorio que ayude a sumar más gente —
+ * "crecer en profesionales" (31/10/2026, ver ROADMAP.md). A diferencia
+ * de enviarResumenDirectorio_, manda a TODOS sin filtrar por
+ * RecibeNovedades: decisión explícita del mantenedor, esto no es
+ * "novedades", es un pedido puntual de ayuda. Para no repetirle el
+ * mismo pedido a la misma persona en corridas futuras, guarda la
+ * fecha del envío en UltimoPedidoReferido y saltea a quien ya se le
+ * pidió hace menos de MESES_COOLDOWN_REFERIDO. Un solo GET + como
+ * mucho un SET para toda la columna (no uno por fila).
+ */
+var MESES_COOLDOWN_REFERIDO = 2;
+
+function pedirReferidoDirectorio_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('Secreto inválido');
+  }
+  if (!data.texto) {
+    throw new Error('Falta texto');
+  }
+
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  if (sheet.getLastRow() < 2) return 0;
+
+  var idxEmail = DIRECTORIO_HEADERS.indexOf('Email');
+  var idxUltimo = DIRECTORIO_HEADERS.indexOf('UltimoPedidoReferido');
+  var nFilas = sheet.getLastRow() - 1;
+  var filas = sheet.getRange(2, 1, nFilas, DIRECTORIO_HEADERS.length).getValues();
+
+  var hoy = new Date();
+  var limite = new Date(hoy.getFullYear(), hoy.getMonth() - MESES_COOLDOWN_REFERIDO, hoy.getDate());
+  var hoyStr = Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var asunto = data.asunto || 'hayminga.org';
+
+  var columnaActualizada = filas.map(function(fila) { return [fila[idxUltimo]]; });
+  var enviados = 0;
+
+  for (var i = 0; i < filas.length; i++) {
+    var email = String(filas[i][idxEmail] || '').trim();
+    if (!email) continue;
+    var ultimoStr = String(filas[i][idxUltimo] || '').trim();
+    if (ultimoStr) {
+      var ultimo = new Date(ultimoStr);
+      if (!isNaN(ultimo.getTime()) && ultimo > limite) continue; // ya se le pidió hace poco
+    }
+    MailApp.sendEmail({ to: email, subject: asunto, body: data.texto });
+    columnaActualizada[i] = [hoyStr];
+    enviados++;
+  }
+
+  if (enviados > 0) {
+    sheet.getRange(2, idxUltimo + 1, nFilas, 1).setValues(columnaActualizada);
+  }
+  return enviados;
 }
 
 
