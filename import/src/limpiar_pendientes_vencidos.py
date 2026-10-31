@@ -40,9 +40,15 @@ def _vencido(row: list, hoy: date) -> bool:
     return fecha is not None and fecha < hoy
 
 
-def encontrar_vencidos(service, hoy: date | None = None) -> list[tuple[int, str]]:
-    """Devuelve [(fila, nombre), ...] de pendientes vencidos. Fila ya
-    incluye el offset de header (fila 2 = primer evento)."""
+def encontrar_vencidos(service, hoy: date | None = None) -> list[tuple[int, str, str]]:
+    """Devuelve [(fila, nombre, descripcion_actual), ...] de pendientes
+    vencidos. Fila ya incluye el offset de header (fila 2 = primer
+    evento). Devuelve también la Descripción ya leída en esta misma
+    llamada (un solo GET para todo el rango) para que limpiar() no
+    tenga que pedirla de nuevo fila por fila — eso fue justamente el
+    bug real del 31/10/2026: un GET individual por fila agotó la cuota
+    de lectura de Sheets (60/min) a mitad de las 80 filas vencidas y
+    la corrida murió con 429 antes de escribir nada."""
     hoy = hoy or date.today()
     values = (
         service.spreadsheets().values()
@@ -56,11 +62,11 @@ def encontrar_vencidos(service, hoy: date | None = None) -> list[tuple[int, str]
         if row[IDX_ESTADO] != "pendiente_confirmacion":
             continue
         if _vencido(row, hoy):
-            vencidos.append((i + 2, row[IDX_NOMBRE]))
+            vencidos.append((i + 2, row[IDX_NOMBRE], row[IDX_DESCRIPCION]))
     return vencidos
 
 
-def limpiar(escribir: bool = False) -> list[tuple[int, str]]:
+def limpiar(escribir: bool = False) -> list[tuple[int, str, str]]:
     service = get_service()
     vencidos = encontrar_vencidos(service)
 
@@ -68,7 +74,7 @@ def limpiar(escribir: bool = False) -> list[tuple[int, str]]:
         print("[limpiar_pendientes_vencidos] Sin pendientes vencidos")
         return []
 
-    for fila, nombre in vencidos:
+    for fila, nombre, _ in vencidos:
         print(f"[limpiar_pendientes_vencidos] Fila {fila}: '{nombre}' -> descartado{'' if escribir else ' (dry-run)'}")
 
     if not escribir:
@@ -83,12 +89,7 @@ def limpiar(escribir: bool = False) -> list[tuple[int, str]]:
         "publicarse como evento próximo.\n\n"
     )
     data = []
-    for fila, _ in vencidos:
-        descripcion_actual = (
-            service.spreadsheets().values()
-            .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!{col_desc}{fila}")
-            .execute()
-        ).get("values", [[""]])[0][0]
+    for fila, _, descripcion_actual in vencidos:
         data.append({"range": f"{SHEET_NAME}!{col_estado}{fila}", "values": [["descartado"]]})
         data.append({"range": f"{SHEET_NAME}!{col_desc}{fila}", "values": [[nota + descripcion_actual]]})
 
