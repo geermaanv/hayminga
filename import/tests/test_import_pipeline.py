@@ -2064,6 +2064,81 @@ class CandidatosTecnicasTests(unittest.TestCase):
         self.assertEqual(sin_clasificar, ["Geometrías Orgánicas en Techos"])
 
 
+class LimpiarPendientesVencidosTests(unittest.TestCase):
+    """Regresión del hallazgo del 31/10/2026 (ver ROADMAP.md): de 133
+    pendiente_confirmacion reales, 80 (60%) ya tenían fecha pasada sin
+    que nada los sacara de la cola de revisión."""
+
+    def _fila(self, estado="pendiente_confirmacion", nombre="Evento", fecha_inicio="", fecha_fin=""):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[COLUMNS.index("Nombre")] = nombre
+        fila[COLUMNS.index("Fecha_Inicio")] = fecha_inicio
+        fila[COLUMNS.index("Fecha_Fin")] = fecha_fin
+        fila[COLUMNS.index("Estado")] = estado
+        return fila
+
+    def _service_con(self, filas):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": filas
+        }
+        return service
+
+    def test_detecta_vencido_por_fecha_fin(self):
+        from src import limpiar_pendientes_vencidos as lpv
+
+        service = self._service_con([
+            self._fila(nombre="Viejo", fecha_inicio="01/09/2026", fecha_fin="05/09/2026"),
+        ])
+        vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(vencidos, [(2, "Viejo")])
+
+    def test_usa_fecha_inicio_si_no_hay_fecha_fin(self):
+        from src import limpiar_pendientes_vencidos as lpv
+
+        service = self._service_con([
+            self._fila(nombre="Viejo sin fin", fecha_inicio="01/09/2026"),
+        ])
+        vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(vencidos, [(2, "Viejo sin fin")])
+
+    def test_no_marca_eventos_futuros(self):
+        from src import limpiar_pendientes_vencidos as lpv
+
+        service = self._service_con([
+            self._fila(nombre="Futuro", fecha_inicio="03/11/2026", fecha_fin="07/11/2026"),
+        ])
+        vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(vencidos, [])
+
+    def test_ignora_eventos_no_pendientes(self):
+        from src import limpiar_pendientes_vencidos as lpv
+
+        service = self._service_con([
+            self._fila(estado="confirmado", nombre="Viejo confirmado", fecha_inicio="01/09/2026"),
+            self._fila(estado="descartado", nombre="Viejo descartado", fecha_inicio="01/09/2026"),
+        ])
+        vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(vencidos, [])
+
+    def test_sin_fecha_no_se_marca(self):
+        """Sin ninguna fecha no hay forma de saber si ya pasó — se deja
+        como estaba, no se asume vencido."""
+        from src import limpiar_pendientes_vencidos as lpv
+
+        service = self._service_con([
+            self._fila(nombre="Sin fecha"),
+        ])
+        vencidos = lpv.encontrar_vencidos(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(vencidos, [])
+
+
 class UsernameColumnTests(unittest.TestCase):
     """El username de la cuenta de origen ya venía en la respuesta de HikerAPI
     y solo vivía en memoria (filtro de cuentas_excluidas). Persistirlo no cuesta
