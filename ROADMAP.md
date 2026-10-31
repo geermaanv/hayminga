@@ -1165,6 +1165,31 @@ evidencia de que aporta). `curar()` (las bajas por 50+ intentos sin
 hit) sigue corriendo en el cron diario sin cambios — esa limpieza no
 tiene el mismo riesgo.
 
+**Hecho (31/10):**
+- 20 hashtags nuevos agregados a `config.json` (revisados a mano con
+  los datos reales de `candidatos_hashtags.py`, no todos los 54
+  candidatos): `regeneracion`/`regeneración`, `sanmarcossierras`,
+  `diseñoregenerativo`, `encuentroconstructivo`, `jorgebelanko`,
+  `formacionesmatria`, `matriapermacultura`, `bambu`/`bambú`,
+  `earthship`, `cubiertaverde`, `diseñocontierra`,
+  `diseñopermacultural`, `agroecologia`/`agroecología`,
+  `barromundial`, `ahisearmolaescuela`, `arquitecturaregenerativa`,
+  `tinyhouse`. Quedaron afuera los genéricos (`arquitectura`,
+  `comunidad`, `construccion` suelto, `taller`, `tierra`, `diseño`,
+  `diplomatura`, `huerta`) y el cluster de hongos ya conocido
+  (`cultivodehongos`, `fungi`, `fungo`, `girgolas`, `hongos`,
+  `micelio`).
+- `achicar_cuentas_sin_aporte.py` (one-off): a pedido del mantenedor,
+  en vez de investigar el punto ciego de la aritmética de cuentas, se
+  achicó directo la lista a solo lo que ya demostró aportar. De 510
+  `cuentas_seguidas`, apenas **48** aparecían alguna vez como
+  `Username` en todo el historial de Eventos (cualquier Estado —
+  confirmado, pendiente o descartado). Se mantienen esas 48 más las 6
+  `cuentas_protegidas` (2 de las cuales, `gaiauniversidadpermacultura`
+  y `comunidadsustentable.red`, tampoco habían aportado nunca, pero
+  quedan por la protección explícita) — **cuentas_seguidas queda en
+  ~50**, el resto (~460) se sacó.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
