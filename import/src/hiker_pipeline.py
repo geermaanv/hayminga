@@ -80,6 +80,20 @@ _llamadas_hikerapi = [0]
 # escenario es indistinguible de un día real sin eventos nuevos.
 _errores_hikerapi = [0]
 
+# Hasta 31/10/2026 los descartes previos a la IA (duplicado, cuenta
+# excluida, post viejo, idioma extranjero, país no-Argentina detectado
+# temprano) no tenían ningún contador: una corrida real de ese día
+# analizó 6.548 posts crudos y solo 2 llegaron a loguearse en
+# extraer_evento — sin este desglose era imposible saber cuál de los 5
+# filtros se estaba comiendo el resto (ver ROADMAP.md). Reseteado en
+# run(), incrementado desde procesar_post() en cada punto de descarte
+# anterior a la llamada a la IA.
+_descartes_pre_ia: dict[str, int] = {}
+
+
+def _contar_descarte_pre_ia(razon: str) -> None:
+    _descartes_pre_ia[razon] = _descartes_pre_ia.get(razon, 0) + 1
+
 
 def _hiker_get(url: str, **kwargs):
     _llamadas_hikerapi[0] += 1
@@ -663,6 +677,7 @@ def procesar_post(
     pais_cuenta: str = "",
 ) -> dict | None:
     if post.get("username") and post["username"] in cuentas_excluidas:
+        _contar_descarte_pre_ia("cuenta_excluida")
         return None
 
     # Comparar por shortcode (código del posteo), no por link exacto: el
@@ -670,20 +685,25 @@ def procesar_post(
     # comparta (ej. carga manual vs. lo que arma esta función más abajo).
     shortcode = instagram_shortcode(post["link"])
     if shortcode and shortcode in existing_links:
+        _contar_descarte_pre_ia("duplicado")
         return None
     if post["link"] in existing_links:
+        _contar_descarte_pre_ia("duplicado")
         return None
 
     if post.get("taken_at_ts"):
         antiguedad = datetime.now(timezone.utc) - datetime.fromtimestamp(post["taken_at_ts"], tz=timezone.utc)
         if antiguedad.days > _MAX_ANTIGUEDAD_POST_DIAS:
+            _contar_descarte_pre_ia("post_antiguo")
             return None
 
     if _parece_extranjero(post.get("caption")):
+        _contar_descarte_pre_ia("idioma_extranjero")
         return None
 
     pais_detectado = _detectar_pais_temprana(post)
     if pais_detectado and pais_detectado != "Argentina":
+        _contar_descarte_pre_ia("pais_no_argentina_temprano")
         return None
 
     data = extraer_evento(post, post["image_url"])
@@ -787,6 +807,7 @@ def run() -> int:
     _inicio = time.time()
     _llamadas_hikerapi[0] = 0  # por si run() se llama más de una vez en el mismo proceso (tests)
     _errores_hikerapi[0] = 0
+    _descartes_pre_ia.clear()
     config = json.loads(Path("config.json").read_text())
     hashtags = config.get("hashtags") or []
     if not hashtags:
@@ -993,6 +1014,9 @@ def run() -> int:
     inserted = eventos_totales_insertados[0]
     print(f"[hiker_pipeline] {inserted} evento(s) nuevo(s) escrito(s) en total")
     print(f"[hiker_pipeline] {_llamadas_hikerapi[0]} llamada(s) a HikerAPI en esta corrida")
+    total_descartes_pre_ia = sum(_descartes_pre_ia.values())
+    desglose = ", ".join(f"{razon}: {n}" for razon, n in sorted(_descartes_pre_ia.items(), key=lambda kv: -kv[1]))
+    print(f"[hiker_pipeline] {total_descartes_pre_ia} post(s) descartado(s) antes de la IA — {desglose or 'ninguno'}")
     atribucion["top_activo"] = USAR_TOP
     if USAR_TOP:
         print(f"[hiker_pipeline] atribución hashtags — recent: {atribucion['posts_recent']} post(s), "
@@ -1013,6 +1037,7 @@ def run() -> int:
             "atribucion": atribucion,
             "llamadas_hikerapi": _llamadas_hikerapi[0],
             "errores_hikerapi": _errores_hikerapi[0],
+            "descartes_pre_ia": dict(_descartes_pre_ia),
             "validaciones_organizador_enviadas": validaciones_enviadas[0],
             "avisos_organizador_detalle": avisos_organizador_detalle,
             "duracion_segundos": round(time.time() - _inicio, 1),
