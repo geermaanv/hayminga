@@ -760,14 +760,16 @@ function cargarDatos() {
       poblarProvinciasMob();
       poblarPeriodos();
       // Antes arrancaba con el chip del mes actual preseleccionado, para
-      // no mostrar el rango completo de 6 meses sin filtrar. Pero "mes
-      // calendario" es un corte arbitrario: a fin de mes casi no queda
-      // nada en el mes actual aunque haya eventos confirmados a un día de
-      // distancia (caso real: 31/10, un solo evento ese día, 17 más entre
-      // el 1/11 y abril — ver ROADMAP.md). Ningún mes preseleccionado =
-      // mismo comportamiento que "Limpiar": se ven todos los próximos
-      // eventos activos, sin el corte de calendario.
-      aplicarFiltros();
+      // no mostrar el rango completo sin filtrar. Pero "mes calendario"
+      // es un corte arbitrario: a fin de mes casi no queda nada en el mes
+      // actual aunque haya eventos confirmados a un día de distancia
+      // (caso real: 31/10, un solo evento ese día, 17 más entre el 1/11 y
+      // abril — ver ROADMAP.md). Default ahora: mes actual + el próximo,
+      // sin chip marcado (el selector de mes sigue disponible para
+      // filtrar a mano) — cubre lo inminente sin el corte de fin de mes,
+      // y sin mostrar sin límite a medida que se acumulen más eventos a
+      // futuro. "Limpiar" sigue mostrando todo, sin este tope.
+      aplicarFiltros(2);
       iniciarRevisionSiCorresponde();
       abrirDirectorioSiCorresponde();
     })
@@ -1069,13 +1071,20 @@ function parseFechaEvento(valor) {
   return null;
 }
 
-function aplicarFiltros() {
+function aplicarFiltros(limiteMesesDefault) {
   var busq = document.getElementById('busqueda').value.toLowerCase().trim();
   var tipo = document.getElementById('filtro-tipo').value;
   var prov = document.getElementById('filtro-provincia').value;
   var periodo = document.getElementById('filtro-periodo').value;
   var modal = document.getElementById('filtro-modalidad').value;
   var mostrarPasados = document.getElementById('mostrar-pasados').checked;
+  // Solo se usa en la carga inicial (ver más abajo), nunca al tocar un
+  // filtro a mano — "Limpiar" sigue mostrando todo, sin tope de meses.
+  var limiteFecha = null;
+  if (limiteMesesDefault) {
+    var hoyLimite = new Date();
+    limiteFecha = new Date(hoyLimite.getFullYear(), hoyLimite.getMonth() + limiteMesesDefault, 1);
+  }
 
   eventosFiltrados = todosLosEventos.filter(function(ev) {
     if (tipo && ev['Tipo_Evento'] !== tipo) return false;
@@ -1091,6 +1100,10 @@ function aplicarFiltros() {
       var hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
       if (fechaEv && fechaEv < hoy) return false;
+    }
+    if (limiteFecha) {
+      var fechaInicio = parseFechaEvento(ev['Fecha_Inicio']) || parseFechaEvento(ev['Fecha_Fin']);
+      if (fechaInicio && fechaInicio >= limiteFecha) return false;
     }
     if (busq) {
       var txt = [ev['Nombre'],ev['Descripción'],ev['Organizador'],ev['Dirección'],ev['Provincia'],ev['Tipo_Evento']].join(' ').toLowerCase();

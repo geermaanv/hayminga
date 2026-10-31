@@ -1042,6 +1042,28 @@ a ojo") y solo se nota en producción, en el peor momento del ciclo.
 Verificado en vivo con Playwright (Chromium headless) antes y después
 del fix, no solo leyendo el código.
 
+**Ajuste (mismo día):** "mostrar todo" como default tenía el problema
+simétrico — crece sin límite a medida que se acumulen eventos lejanos
+en el tiempo (el ejemplo real ya incluía uno de abril 2027). Default
+revisado a **mes actual + el próximo** (`aplicarFiltros(2)`, tope por
+`Fecha_Inicio` sumado al filtro de `mostrar-pasados` existente, sin
+chip marcado): nunca tiene el borde vacío de fin de mes porque siempre
+entra el mes completo que sigue, y no se dispara sin límite si la
+agenda crece a futuro. "Limpiar" sigue mostrando todo, sin este tope —
+solo cambió el default de carga. 13 eventos visibles de los 18
+activos totales con este criterio.
+
+**Hallazgo aparte, mientras se investigaba esto:** el volumen real de
+descubrimiento es bajo — 5 eventos nuevos en los últimos 10 días de
+`import-eventos.yml` (0,0,0,2,0,0,0,0,3,0), muy por debajo de la meta
+de 50+ eventos activos de más abajo. No es un problema de este bug de
+UI (que solo afectaba qué se mostraba de lo ya descubierto) — es la
+cantidad real que hashtags/cuentas_seguidas están trayendo, aun con
+las 137 cuentas restauradas el 07/10 (ver entrada de ese día). Queda
+pendiente investigar aparte si hay más margen ahí (fuentes nuevas,
+umbrales de confianza, etc.) — no se tocó nada de esto en esta misma
+sesión.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
