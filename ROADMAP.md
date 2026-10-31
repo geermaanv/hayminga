@@ -1116,6 +1116,45 @@ próxima corrida real diga con datos cuál de los cuatro filtros
 pre-IA es el que está colapsando el embudo, en vez de seguir
 adivinando.
 
+**Resultado de la primera corrida instrumentada (31/10, run #162,
+~75 min):** 0 eventos nuevos otra vez. 7.186 posts crudos (1.135
+hashtags + 6.051 de 678 cuentas_seguidas). De eso, 1.711 descartados
+pre-IA (`post_antiguo`: 1.382 — 81% —, `pais_no_argentina_temprano`:
+161, `duplicado`: 111, `idioma_extranjero`: 56, `cuenta_excluida`: 1).
+Solo 11 posts llegaron a loguearse en `extraer_evento()`, y los 11
+vinieron del canal de **hashtags** — el canal de **cuentas_seguidas
+(6.051 posts) no mandó ni un solo post a la IA**. La aritmética no
+cierra del todo (quedan ~5.460 posts de cuentas sin explicación clara
+en los 5 motivos instrumentados ni en METRICA/errores) — queda
+pendiente investigar ese punto ciego específico del canal de cuentas,
+posible relación con el campo de fecha del posteo en ese endpoint.
+
+**Hallazgo al revisar por qué (31/10):** `cuentas_seguidas` tenía
+**170 de 680 cuentas (25%) de nutrición/cocina/recetas/salud** sin
+ninguna relación con bioconstrucción (`victoria_veggie`,
+`nutrite.uy`, `romina.nutricion`, etc. — una sin postear hace 1.491
+días). Entraron vía `descubrir_candidatos()`: "sugerida por 3+ cuentas
+nuestras" no es señal temática (el propio docstring del módulo ya
+documentaba un incidente de surf/acroyoga por el mismo motivo).
+Verificado antes de tocar nada: ninguna de las 170 produjo jamás un
+evento en el Sheet (confirmado, pendiente o descartado) — se podían
+sacar sin perder nada.
+
+**Hecho (31/10):**
+- `quitar_cuentas_nutricion.py` (one-off, dry-run por default) sacó las
+  170 de `config.json` — quedan 510 `cuentas_seguidas`.
+- `curar_fuentes.py`: `descubrir_candidatos()` ahora exige señal
+  positiva en la bio antes de agregar una candidata (`_parece_relevante()`,
+  vocabulario derivado directo de `config.json["hashtags"]` — no hay
+  lista aparte para mantener). Al revés que `_parece_extranjero()` en
+  `hiker_pipeline.py` (que deja pasar en caso de duda porque perder un
+  evento real cuesta más que una llamada de más): acá agregar una
+  cuenta mala es gasto recurrente todos los días hasta que `curar()`
+  la detecte (mínimo 50 corridas), así que sin bio o sin señal, no se
+  agrega. Costo: una llamada a HikerAPI por candidata que ya pasó el
+  piso de `MIN_SUGERENCIAS_PARA_AGREGAR` (acotado, no por cada
+  sugerida cruda).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
