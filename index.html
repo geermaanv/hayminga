@@ -759,11 +759,15 @@ function cargarDatos() {
       poblarProvincias();
       poblarProvinciasMob();
       poblarPeriodos();
-      // Por defecto, arrancar mostrando solo el mes actual (con su chip
-      // seleccionado) en vez del rango completo de 6 meses.
-      var hoyInicio = new Date();
-      var mesActualKey = hoyInicio.getFullYear() + '-' + String(hoyInicio.getMonth() + 1).padStart(2, '0');
-      seleccionarMes(mesActualKey);
+      // Antes arrancaba con el chip del mes actual preseleccionado, para
+      // no mostrar el rango completo de 6 meses sin filtrar. Pero "mes
+      // calendario" es un corte arbitrario: a fin de mes casi no queda
+      // nada en el mes actual aunque haya eventos confirmados a un día de
+      // distancia (caso real: 31/10, un solo evento ese día, 17 más entre
+      // el 1/11 y abril — ver ROADMAP.md). Ningún mes preseleccionado =
+      // mismo comportamiento que "Limpiar": se ven todos los próximos
+      // eventos activos, sin el corte de calendario.
+      aplicarFiltros();
       iniciarRevisionSiCorresponde();
       abrirDirectorioSiCorresponde();
     })
@@ -820,6 +824,7 @@ function poblarPeriodos() {
   var mobile = document.getElementById('meses-mobile');
   if (desktop) desktop.innerHTML = meses.map(function(m){ return mesHTML(m,'d'); }).join('');
   if (mobile) mobile.innerHTML = meses.map(function(m){ return mesHTML(m,'m'); }).join('');
+  return meses;
 }
 
 function seleccionarMes(key, el) {

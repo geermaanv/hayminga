@@ -1008,6 +1008,40 @@ conviene limpiarlo. También falta desplegar `Code.gs` (Implementar →
 Gestionar implementaciones → Nueva versión) para que el canal nuevo
 quede activo.
 
+## Frontend mostraba casi ningún evento a fin de mes (31/10)
+
+**Reporte:** "no se ven eventos" en hayminga.org. No era un problema de
+datos ni del pipeline — la Sheet tenía 18 eventos activos y futuros
+(confirmado leyendo el GViz directo), y `import-eventos.yml` venía
+corriendo sin errores.
+
+**Causa real:** `index.html` arrancaba preseleccionando el chip del
+"mes actual" (`seleccionarMes(mesActualKey)` al cargar, agregado en
+algún momento sin dejar rastro en estos docs — "para no mostrar el
+rango completo de 6 meses sin filtrar"). "Mes calendario" es un corte
+arbitrario: el 31/10, el mes actual tenía un solo evento (el de ese
+mismo día) mientras había 17 más entre el 1/11 y abril — todos
+invisibles por defecto detrás de un chip de mes que nadie toca al
+entrar. Confirmado con Playwright real (`https://hayminga.org`):
+1 card visible por defecto, 18 al limpiar filtros.
+
+**Fix:** sacar el preseleccionado de mes al cargar — la vista por
+defecto ya no fuerza ningún chip de mes, equivalente a tocar
+"Limpiar" (mismo filtro de `mostrar-pasados` de siempre, por
+`Fecha_Fin`/`Fecha_Inicio`). El selector de mes sigue funcionando
+igual si el usuario lo usa a propósito; solo cambió qué se ve al
+entrar. `poblarPeriodos()` ahora devuelve el array de conteos por mes
+que ya calculaba (antes se descartaba), en vez de agregar una
+segunda pasada de cálculo para decidir el default.
+
+**Lección:** un filtro "inteligente" por defecto que corta por
+calendario (día/semana/mes) tiene un borde que se rompe solo con el
+paso del tiempo, sin que nadie toque el código — exactamente el tipo
+de bug que no aparece en desarrollo (cualquier día del mes "funciona
+a ojo") y solo se nota en producción, en el peor momento del ciclo.
+Verificado en vivo con Playwright (Chromium headless) antes y después
+del fix, no solo leyendo el código.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
