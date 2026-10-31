@@ -1232,12 +1232,24 @@ amigable, no corporativo.
 (script.google.com) antes de que la acción nueva funcione. No se
 mandó ningún mail todavía — falta la corrida real con `--escribir`.
 
-**Idea del mismo día, todavía sin evaluar:** además de pedirle a la
-gente ya en el Directorio, revisar cuántas de las cuentas de Instagram
-que seguimos (o las 50 que quedaron después de la poda) ya tienen
-email público cacheado (`CuentasIds!EmailPublico`) y mandarles un
-mail parecido invitándolas a sumarse o a reenviarlo — mismo cuidado de
-no repetirle a alguien que ya esté en el Directorio.
+**Hecho (31/10):** de las 50 `cuentas_seguidas` + `cuentas_protegidas`,
+**28 ya tenían email público cacheado** (gratis, de corridas
+anteriores) y de esas, solo 1 ya estaba en el Directorio (que hoy
+tiene apenas 5 personas) — **27 son contactos nuevos**. Se armó
+`pedir_referido_cuentas_instagram.py`: a diferencia del script del
+Directorio (donde Code.gs lee y filtra, porque esa hoja es suya),
+acá Python ya tiene todo lo necesario (`CuentasIds` es de Python) y
+calcula la lista final de emails (con email, no ya en el Directorio,
+sin pedido reciente) — Code.gs solo la manda (acción nueva
+`enviar_mail_lista`, relay puro sin leer ni escribir ninguna hoja).
+Columna nueva `UltimoPedidoReferido` en `CuentasIds` (columna E),
+mismo cooldown de 2 meses. Texto distinto al del Directorio — estos
+contactos todavía no son miembros, así que el pedido es doble: sumarse
+o compartirlo.
+
+**Pendiente:** mismo deploy manual de `Code.gs` que la campaña
+anterior. Ningún mail real mandado todavía para ninguna de las dos
+campañas.
 
 ## Métricas a monitorear
 
