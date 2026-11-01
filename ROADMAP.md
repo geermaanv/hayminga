@@ -1252,6 +1252,107 @@ emails reales) antes de mandar — corrida real con `--escribir` mandó
 el mail a las 27 y actualizó `CuentasIds!E` para las 27 en un solo
 `batchUpdate`.
 
+## Reintento de hashtags con error al final de la corrida (01/11)
+
+Una corrida real tiró error en 13 de 75 hashtags al consultar `recent`
+en HikerAPI — incluidos `#bioconstruccion` y `#minga`, que vienen
+andando bien hace meses, así que no era que el hashtag dejó de existir
+sino intermitencia puntual de la API. Antes, un hashtag que fallaba se
+perdía esa corrida entera (`continue` sin registrar el motivo).
+
+**Hecho:** el loop de hashtags de `hiker_pipeline.py`'s `run()` se
+extrajo a una closure `_procesar_hashtag(hashtag) -> bool` que devuelve
+si falló el fetch de `recent`. Al terminar la primera pasada sobre
+todos los hashtags, se reintentan una sola vez los que fallaron. No es
+un backoff ni reintento infinito — una sola pasada extra al final,
+suficiente para la intermitencia observada.
+
+## "Publicar y que reporten" — invertir la moderación de pendientes (31/10-01/11)
+
+Pregunta del mantenedor: ¿qué pasa si publicamos los pendientes
+directamente y agregamos un mecanismo para que cualquiera los reporte
+si están mal, en vez de frenarlos en revisión manual que a veces no
+llega? Postura explícita: "lo máximo que puede pasar es que no sea
+correcto y no pasa nada" — poner la depuración del lado del usuario,
+no del filtro previo.
+
+**Alcance acordado:** se publican todos los pendientes salvo
+`confianza=baja` (duplicados y país no resuelto ahora publican si la
+confianza es alta/media). Los reportes no requieren identificarse —
+solo un motivo (ej. "no es de Argentina", "evento duplicado") y texto
+libre opcional.
+
+**Hecho (gate de publicación, esta entrada):**
+- `processor.py`: `validate_event_data()` ahora calcula
+  `activo_salvo_pais` — la misma fórmula de `activo` pero sin exigir
+  país resuelto. `extract_event_data()` (canal de mail intake) publica
+  igual (`activo=True`, `estado=confirmado`) cuando falta solo el país,
+  `activo_salvo_pais` es true y `confianza` está en
+  `CONFIANZA_PUBLICABLE` — mismo cambio espejado en
+  `hiker_pipeline.py`'s `procesar_post()`, después de los filtros
+  duros existentes (evento virtual sin país, país confirmado no
+  Argentina), que siguen teniendo prioridad.
+- `sheets.py`'s `append_events()`: las dos ramas de duplicado (clave
+  exacta y match probable/difuso) ya no fuerzan
+  `pendiente_confirmacion` sin condición — solo lo hacen si la
+  confianza NO es publicable. Con confianza alta/media se publica
+  igual, manteniendo siempre la nota de contexto en la descripción
+  (el duplicado sigue siendo visible para quien lo revise después).
+- No se tocó nada para `confianza=baja`: sigue yendo 100% a
+  `pendiente_confirmacion`, sin excepciones.
+
+**Mecanismo de reporte construido (01/11):** sin hoja nueva —
+reutiliza `Eventos`/`?pendientes` tal cual ya existían, a pedido
+explícito del mantenedor ("es más de lo mismo, no generar otra hoja").
+
+- 3 columnas nuevas al final de `Eventos` (`Reportes_Cantidad`,
+  `Reportes_Tokens`, `Reportes_Motivos`), agregadas a `COLUMNS` en
+  `sheets.py` solo para que `ensure_header()` no marque desincronizado
+  — Python nunca las lee ni las escribe, son enteramente de `Code.gs`.
+- `Code.gs`: nueva acción pública `reportar_evento` (sin secreto, como
+  `directorio_alta`) en `reportarEvento_()`. Motivos fijos (6, con
+  "No es un evento real" y "No es de bioconstrucción" fusionados en
+  uno solo por decisión del mantenedor): país, duplicado, fecha,
+  ubicación, no es de bioconstrucción, otro (con texto libre).
+- **Sin identificación de quien reporta** (decisión explícita, ver
+  pregunta original del mantenedor). Se consideró filtrar por IP
+  distinta, pero Apps Script no expone la IP del caller en
+  doPost/doGet (confirmado contra la documentación oficial de Web
+  Apps: `e` solo trae `queryString`/`parameter`/`parameters`/
+  `pathInfo`/`postData`) — en cambio, el frontend genera un token
+  random guardado en `localStorage` la primera vez, así un solo click
+  repetido no cuenta como varios reportes. Débil (se resetea borrando
+  storage o en ventana privada) pero alcanza como disuasivo liviano,
+  consistente con el resto del sitio (sin login, sin fricción).
+- **Al tercer reporte de tokens distintos** el evento se suspende solo
+  (`Activo=false`, `Estado=pendiente_confirmacion`) y entra a la cola
+  de revisión de siempre — ningún código nuevo de revisión. La nota
+  con los motivos se prepende a `Descripción`, mismo patrón que ya usa
+  el aviso de duplicado en `sheets.py`.
+- `notificarPendientes()` solo mira filas nuevas desde la última
+  corrida (pensado para altas en la cola, no para una fila vieja que
+  recién ahora pasa a pendiente) — por eso la suspensión manda un mail
+  directo a `germanv@gmail.com` en el momento, en vez de depender de
+  ese trigger.
+- Frontend: botón discreto "¿Algo no está bien con este evento?" en
+  el modal de detalle (no en cada card de la grilla, para no tentar a
+  reportar sin abrir el evento primero) → mini-form con el selector de
+  motivos + comentario libre opcional, mismo patrón de modal que
+  "Quiero contactar" del Directorio.
+
+**Migración del backlog construida (01/11):** `migrar_pendientes_publicables.py`
+— mismo patrón que `limpiar_pendientes_vencidos.py` (un solo GET de rango,
+dry-run por default, `--escribir` para aplicar, nunca borra filas).
+Publica (`Activo=true`, `Estado=confirmado`) todo `pendiente_confirmacion`
+con confianza alta/media que además pase los mismos filtros duros que ya
+aplica `procesar_post()` a eventos nuevos: país confirmado no-Argentina,
+virtual sin país resuelto, fecha ya vencida, o rango de fechas inválido
+quedan tal cual estaban (no es un retroceso, solo no se adelantan). Sin
+`anio_confirmado` disponible en el backlog (es una señal solo de
+extracción, no se persiste) — no se puede replicar esa parte exacta de
+`activo_salvo_pais`, pero el resto de los filtros alcanza para no
+publicar nada que la política nueva no publicaría igual.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

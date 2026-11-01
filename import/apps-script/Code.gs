@@ -22,6 +22,12 @@
  *    de presentación a los dos. El email nunca se expone directo en el
  *    sitio, solo se comparte si la persona da el OK.
  *
+ * 4) Reporte público de eventos: doPost() con accion="reportar_evento"
+ *    (sin identificarse) suma un reporte a la fila del evento en
+ *    "Eventos". Al tercer reporte de navegadores distintos el evento se
+ *    suspende solo y entra a la cola de revisión de siempre
+ *    (?pendientes) — ver reportarEvento_ para el detalle.
+ *
  * IMPORTANTE sobre la casilla monitoreada / remitente: Apps Script
  * siempre usa la cuenta de Google dueña de este proyecto de script (para
  * leer Gmail Y para mandar mail con MailApp). Hoy corre bajo
@@ -79,6 +85,22 @@ var DIAS_ATRAS_MAX = 3; // red de seguridad extra: nunca mirar mail más viejo q
 var QUEUE_HEADERS = ['Timestamp', 'Remitente', 'Asunto', 'CodigoReferencia', 'CuerpoTexto', 'ImagenDriveUrl', 'Procesado'];
 var EVENTOS_SHEET_NAME = 'Eventos';
 var MAX_IMAGEN_BYTES = 8 * 1024 * 1024; // 8MB
+// Mismo orden que COLUMNS en import/src/sheets.py — las primeras 25 ya
+// existen desde siempre; las últimas 3 son el mecanismo de reporte
+// público (01/11, ver ROADMAP.md). Solo se usa para que
+// getOrCreateSheetWithHeaders_ pueda completar el header si falta, igual
+// que ya hace con Directorio/Tecnicas-AnioDesde (ver PATRONES.md) — el
+// resto de las funciones de este archivo sigue usando índices de columna
+// fijos porque la hoja ya existe de antes.
+var EVENTOS_HEADERS = [
+  'Activo', 'Nombre', 'Dirección', 'Periodo', 'Fecha_Inicio', 'Fecha_Fin',
+  'Es_Virtual', 'Provincia', 'Descripción', 'Organizador',
+  'Link_Promocion', 'Tipo_Evento', 'img', 'procesado',
+  'Id', 'Contacto', 'Estado', 'Pais',
+  'Confianza', 'Fuente', 'Fecha_Descubrimiento',
+  'Latitud', 'Longitud', 'Hashtags_Post', 'Username',
+  'Reportes_Cantidad', 'Reportes_Tokens', 'Reportes_Motivos',
+];
 
 var DIRECTORIO_SHEET_NAME = 'Directorio';
 // El formulario dejo de pedir Tecnicas y AnioDesde (se simplifico a un
@@ -118,6 +140,8 @@ function doPost(e) {
       respuesta = { success: true, id: confirmarEvento_(data) };
     } else if (data.accion === 'descartar_evento') {
       respuesta = { success: true, id: descartarEvento_(data) };
+    } else if (data.accion === 'reportar_evento') {
+      respuesta = { success: true, id: reportarEvento_(data) };
     } else if (data.accion === 'subir_imagen') {
       respuesta = { success: true, url: subirImagenADrive_(data) };
     } else if (data.accion === 'avisar_evento_publicado') {
@@ -482,6 +506,101 @@ function descartarEvento_(data) {
 
   sheet.getRange(filaEncontrada, 1).setNumberFormat('@').setValue('false');
   sheet.getRange(filaEncontrada, 17).setNumberFormat('@').setValue('descartado');
+  return data.id;
+}
+
+
+// ---- Reporte público de eventos ("publicar y que reporten", 01/11) ----
+//
+// Antes de esto, un evento con confianza alta/media se publicaba o
+// quedaba en pendiente_confirmacion sin que nadie fuera de Germán
+// pudiera corregirlo. Decisión del mantenedor: publicar todo lo que no
+// sea confianza baja (eso lo decide el pipeline de Python, no esto) y
+// dejar que cualquiera reporte si algo está mal, SIN identificarse — el
+// reporte es la red de seguridad, no un filtro previo.
+//
+// No hay hoja nueva: se reutiliza Eventos/pendientes tal cual ya
+// existen. Al tercer reporte de navegadores distintos, el evento se
+// suspende (Activo=false, Estado=pendiente_confirmacion) y entra solo a
+// la cola de revisión de siempre (?pendientes). Apps Script no expone la
+// IP de quien llama (confirmado contra la documentación oficial de Web
+// Apps: el objeto `e` de doPost/doGet solo trae queryString/parameter/
+// parameters/pathInfo/postData, nada de IP) — como alternativa, el
+// frontend genera un token random en el primer reporte y lo guarda en
+// localStorage, así un solo click repetido no cuenta como 3 reportes.
+var MOTIVOS_REPORTE_VALIDOS = [
+  'No es de Argentina',
+  'Es un evento duplicado',
+  'La fecha está mal',
+  'La ubicación está mal',
+  'No es un evento de bioconstrucción',
+  'Otro',
+];
+var UMBRAL_REPORTES_SUSPENSION = 3;
+
+function reportarEvento_(data) {
+  if (!data.id || !data.motivo || !data.token) {
+    throw new Error('Faltan campos requeridos (id, motivo, token)');
+  }
+  if (MOTIVOS_REPORTE_VALIDOS.indexOf(data.motivo) === -1) {
+    throw new Error('Motivo inválido');
+  }
+
+  var sheet = getOrCreateSheetWithHeaders_(EVENTOS_SHEET_NAME, EVENTOS_HEADERS);
+  var ultimaFila = sheet.getLastRow();
+  var ids = sheet.getRange(2, 15, ultimaFila - 1, 1).getValues(); // columna O = Id
+  var filaEncontrada = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(data.id)) { filaEncontrada = i + 2; break; }
+  }
+  if (filaEncontrada === -1) throw new Error('No se encontró el evento ' + data.id);
+
+  var idxCantidad = EVENTOS_HEADERS.indexOf('Reportes_Cantidad') + 1;
+  var idxTokens = EVENTOS_HEADERS.indexOf('Reportes_Tokens') + 1;
+  var idxMotivos = EVENTOS_HEADERS.indexOf('Reportes_Motivos') + 1;
+  var token = String(data.token).trim();
+
+  var tokens = String(sheet.getRange(filaEncontrada, idxTokens).getValue() || '')
+    .split(';').map(function(t) { return t.trim(); }).filter(function(t) { return t; });
+  if (tokens.indexOf(token) !== -1) {
+    return data.id; // ya contado desde este navegador, no es error
+  }
+  tokens.push(token);
+
+  var motivoTexto = data.motivo;
+  if (data.motivo === 'Otro' && data.comentario) {
+    motivoTexto += ' (' + String(data.comentario).trim().substring(0, 300) + ')';
+  }
+  var motivos = String(sheet.getRange(filaEncontrada, idxMotivos).getValue() || '')
+    .split(';').map(function(m) { return m.trim(); }).filter(function(m) { return m; });
+  motivos.push(motivoTexto);
+
+  sheet.getRange(filaEncontrada, idxCantidad).setNumberFormat('@').setValue(String(tokens.length));
+  sheet.getRange(filaEncontrada, idxTokens).setNumberFormat('@').setValue(tokens.join('; '));
+  sheet.getRange(filaEncontrada, idxMotivos).setNumberFormat('@').setValue(motivos.join('; '));
+
+  // Suspender justo al llegar al umbral (no de nuevo en cada reporte
+  // siguiente, por si se sigue acumulando sin que nadie lo revise aún).
+  if (tokens.length === UMBRAL_REPORTES_SUSPENSION) {
+    var descActual = String(sheet.getRange(filaEncontrada, 9).getValue() || ''); // columna I = Descripción
+    var nombreEvento = String(sheet.getRange(filaEncontrada, 2).getValue() || '(sin nombre)');
+    var nota = '⚠️ Reportado ' + tokens.length + ' veces — ' + motivos.join('; ') + '\n\n';
+    sheet.getRange(filaEncontrada, 9).setNumberFormat('@').setValue(nota + descActual);
+    sheet.getRange(filaEncontrada, 1).setNumberFormat('@').setValue('false'); // Activo
+    sheet.getRange(filaEncontrada, 17).setNumberFormat('@').setValue('pendiente_confirmacion'); // Estado
+
+    // notificarPendientes() solo mira filas nuevas desde la última corrida
+    // (pensado para altas, no para un evento viejo que recién ahora pasa a
+    // pendiente) — así que este aviso va directo, no por ese mecanismo.
+    MailApp.sendEmail({
+      to: MAIL_REVISION,
+      subject: 'hayminga — evento reportado 3 veces: ' + nombreEvento,
+      body: '"' + nombreEvento + '" recibió 3 reportes y se suspendió automáticamente.\n\n' +
+        'Motivos:\n' + motivos.map(function(m) { return '• ' + m; }).join('\n') +
+        '\n\nRevisalo acá: https://hayminga.org/?pendientes'
+    });
+  }
+
   return data.id;
 }
 

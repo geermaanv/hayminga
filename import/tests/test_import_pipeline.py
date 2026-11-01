@@ -325,6 +325,35 @@ class ProcessorTests(unittest.TestCase):
 
         self.assertTrue(event["activo"])
 
+    def test_activo_salvo_pais_true_cuando_solo_falta_el_pais(self):
+        """Regresión del 31/10/2026 (ver ROADMAP.md, "publicar y que
+        reporten"): activo_salvo_pais debe dar True cuando todo lo demás
+        (nombre, fecha, rango, no vencido) está resuelto y lo único que
+        falta es el país — el llamador usa esto para publicar igual
+        cuando la confianza es alta/media."""
+        event = processor.validate_event_data(
+            {"nombre": "Taller de Bambú", "fecha_inicio": "10/08/2026", "pais": None},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(event["activo"])
+        self.assertTrue(event["activo_salvo_pais"])
+
+    def test_activo_salvo_pais_false_cuando_falta_otra_cosa(self):
+        """No se "rescata" un evento al que directamente le falta el
+        nombre o la fecha — activo_salvo_pais solo es True si país es lo
+        único que falta."""
+        sin_nombre = processor.validate_event_data(
+            {"nombre": "", "fecha_inicio": "10/08/2026", "pais": "Argentina"},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(sin_nombre["activo_salvo_pais"])
+
+        sin_fecha = processor.validate_event_data(
+            {"nombre": "Taller", "fecha_inicio": None, "pais": "Argentina"},
+            today=date(2026, 7, 20),
+        )
+        self.assertFalse(sin_fecha["activo_salvo_pais"])
+
     def test_virtual_event_without_date_gets_import_date(self):
         event = processor.validate_event_data(
             {
@@ -445,6 +474,28 @@ class ProcessorTests(unittest.TestCase):
 
         self.assertFalse(event["activo"])
         self.assertEqual(event["estado"], "pendiente_confirmacion")
+
+    @patch("src.processor._get_raw_json")
+    def test_confianza_alta_publica_aunque_falte_el_pais(self, get_raw_json):
+        """"Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con
+        nombre/fecha resueltos y confianza alta, no se frena solo porque
+        no se pudo determinar el país — se publica, con el botón de
+        reportar como red de seguridad en vez de revisión manual."""
+        get_raw_json.return_value = (
+            '{"es_evento":true,"nombre":"Taller de Bambú",'
+            '"fecha_inicio":"10/12/2026","fecha_fin":null,'
+            '"anio_confirmado":true,"es_virtual":false,'
+            '"provincia":null,"pais":null,"confianza":"alta"}'
+        )
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image:
+            Path(image.name).write_bytes(b"fake-image")
+            event = processor.extract_event_data(
+                Path(image.name),
+                {"source": "email", "discovered_at": "2026-09-01"},
+            )
+
+        self.assertTrue(event["activo"])
+        self.assertEqual(event["estado"], "confirmado")
 
 
 class CuentasPaisTests(unittest.TestCase):
@@ -750,6 +801,31 @@ class CuentasEmailTests(unittest.TestCase):
         self.assertFalse(evento["activo"])
         self.assertEqual(evento["estado"], "pendiente_confirmacion")
 
+    @patch("src.hiker_pipeline.subir_imagen_a_drive")
+    @patch("src.hiker_pipeline._download_image", return_value=False)
+    @patch("src.hiker_pipeline.extraer_evento")
+    def test_confianza_alta_publica_aunque_falte_el_pais(
+        self, extraer_evento, download_image, subir_imagen,
+    ):
+        """"Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con
+        confianza alta y todo lo demás resuelto, no se frena solo porque
+        no se pudo determinar el país."""
+        from src import hiker_pipeline
+
+        extraer_evento.return_value = {
+            "es_evento": True, "nombre": "Taller de Bambú",
+            "fecha_inicio": "10/12/2026", "provincia": None,
+            "direccion": None, "contacto": None, "pais": None,
+            "confianza": "alta",
+        }
+        post = {"link": "https://www.instagram.com/p/JJJ000/", "image_url": "https://x.test/i.jpg",
+                "caption": "Taller de bambú", "username": "cuenta_ar"}
+
+        evento = hiker_pipeline.procesar_post(post, set(), pais_cuenta="")
+
+        self.assertTrue(evento["activo"])
+        self.assertEqual(evento["estado"], "confirmado")
+
 
 class ParaceExtranjeroTests(unittest.TestCase):
     """_parece_extranjero(): filtro barato pre-IA que descarta inglés y
@@ -964,6 +1040,93 @@ class SheetsTests(unittest.TestCase):
         self.assertEqual(fila_escrita[0], "false")  # Activo
         self.assertEqual(fila_escrita[16], "pendiente_confirmacion")  # Estado
         self.assertIn("abc123", fila_escrita[8])  # Descripción menciona el id existente
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events")
+    @patch("src.sheets.get_service")
+    def test_append_events_publishes_probable_duplicate_when_confianza_alta(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        """"Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con
+        confianza alta/media se publica igual aunque sea un posible
+        duplicado — el reporte ("es un evento duplicado") es la red de
+        seguridad, no la revisión manual. La nota de contexto se
+        mantiene en la descripción para quien lo revise."""
+        load_processed_events.return_value = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Formación Práctica en Arquitectura Biológica",
+                "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "shortcode": "AAA111", "id": "abc123",
+            "nombre": "Formación Práctica en Arquitectura Biológica",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Formación en Arquitectura Biológica y Bioconstrucción",
+            "fecha_inicio_iso": "2026-09-08", "provincia": "Córdoba",
+            "activo": True, "confianza": "alta",
+            "link_promocional": "https://www.instagram.com/p/BBB222/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "true")  # Activo
+        self.assertIn("abc123", fila_escrita[8])  # la nota de contexto se mantiene
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events")
+    @patch("src.sheets.get_service")
+    def test_append_events_flags_exact_key_duplicate_when_confianza_baja(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        """Rama de clave exacta (mismo nombre/fecha/provincia, link
+        distinto) — sin test directo hasta ahora. Confianza baja sigue
+        yendo a revisión, igual que el resto del pipeline."""
+        load_processed_events.return_value = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Taller de Quincha", "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "shortcode": "AAA111", "id": "abc123",
+            "nombre": "Taller de Quincha", "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Taller de Quincha", "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            "activo": True, "confianza": "baja",
+            "link_promocional": "https://www.instagram.com/p/DDD444/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "false")  # Activo
+        self.assertEqual(fila_escrita[16], "pendiente_confirmacion")  # Estado
+        self.assertIn("abc123", fila_escrita[8])
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events")
+    @patch("src.sheets.get_service")
+    def test_append_events_publishes_exact_key_duplicate_when_confianza_alta(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        load_processed_events.return_value = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Taller de Quincha", "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "shortcode": "AAA111", "id": "abc123",
+            "nombre": "Taller de Quincha", "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Taller de Quincha", "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            "activo": True, "confianza": "alta",
+            "link_promocional": "https://www.instagram.com/p/EEE555/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "true")  # Activo
+        self.assertIn("abc123", fila_escrita[8])
 
     @patch("src.sheets.ensure_header")
     @patch("src.sheets.load_processed_events", return_value=[])
@@ -2161,6 +2324,136 @@ class LimpiarPendientesVencidosTests(unittest.TestCase):
         service.spreadsheets.return_value.values.return_value.batchUpdate.assert_called_once()
 
 
+class MigrarPendientesPublicablesTests(unittest.TestCase):
+    """Migración retroactiva de "publicar y que reporten" (31/10-01/11/2026,
+    ver ROADMAP.md) al backlog de pendiente_confirmacion que ya existía
+    antes del cambio de política."""
+
+    def _fila(self, estado="pendiente_confirmacion", nombre="Evento", confianza="alta",
+              fecha_inicio="03/11/2026", fecha_fin="", pais="Argentina", es_virtual=""):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[COLUMNS.index("Nombre")] = nombre
+        fila[COLUMNS.index("Fecha_Inicio")] = fecha_inicio
+        fila[COLUMNS.index("Fecha_Fin")] = fecha_fin
+        fila[COLUMNS.index("Estado")] = estado
+        fila[COLUMNS.index("Confianza")] = confianza
+        fila[COLUMNS.index("Pais")] = pais
+        fila[COLUMNS.index("Es_Virtual")] = es_virtual
+        return fila
+
+    def _service_con(self, filas):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": filas
+        }
+        return service
+
+    def test_publica_confianza_alta_o_media(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(nombre="Alta", confianza="alta"),
+            self._fila(nombre="Media", confianza="media"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [(2, "Alta"), (3, "Media")])
+
+    def test_no_toca_confianza_baja(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Dudoso", confianza="baja")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_ignora_eventos_no_pendientes(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(estado="confirmado", nombre="Ya confirmado"),
+            self._fila(estado="descartado", nombre="Ya descartado"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_evento_ya_vencido(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Viejo", fecha_inicio="01/09/2026")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_pais_confirmado_no_argentina(self):
+        """País confirmado distinto de Argentina nunca se publica — mismo
+        hard filter que procesar_post() aplica a eventos nuevos."""
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Uruguayo", pais="Uruguay")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_publica_sin_pais_resuelto(self):
+        """Sin país resuelto (ni confirmado ni descartado) sí se publica
+        ahora — ese es justamente el cambio de política."""
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Sin país", pais="")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [(2, "Sin país")])
+
+    def test_no_publica_virtual_sin_pais_resuelto(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Virtual sin país", pais="", es_virtual="true")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_rango_de_fechas_invalido(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(nombre="Rango invertido", fecha_inicio="10/11/2026", fecha_fin="05/11/2026"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_escribir_hace_un_solo_get_y_actualiza_activo_y_estado(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Publicable")])
+
+        with patch("src.migrar_pendientes_publicables.get_service", return_value=service), \
+             patch("src.migrar_pendientes_publicables.date") as mock_date:
+            mock_date.today.return_value = date(2026, 10, 31)
+            mpp.migrar(escribir=True)
+
+        self.assertEqual(service.spreadsheets.return_value.values.return_value.get.call_count, 1)
+        batch_body = service.spreadsheets.return_value.values.return_value.batchUpdate.call_args.kwargs["body"]
+        self.assertEqual(
+            {(d["range"], d["values"][0][0]) for d in batch_body["data"]},
+            {(f"{mpp.SHEET_NAME}!A2", "true"), (f"{mpp.SHEET_NAME}!Q2", "confirmado")},
+        )
+
+    def test_dry_run_no_escribe(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Publicable")])
+        with patch("src.migrar_pendientes_publicables.get_service", return_value=service), \
+             patch("src.migrar_pendientes_publicables.date") as mock_date:
+            mock_date.today.return_value = date(2026, 10, 31)
+            mpp.migrar(escribir=False)
+
+        service.spreadsheets.return_value.values.return_value.batchUpdate.assert_not_called()
+
+
 class UsernameColumnTests(unittest.TestCase):
     """El username de la cuenta de origen ya venía en la respuesta de HikerAPI
     y solo vivía en memoria (filtro de cuentas_excluidas). Persistirlo no cuesta
@@ -2168,7 +2461,7 @@ class UsernameColumnTests(unittest.TestCase):
 
     def test_event_to_row_guarda_el_username_normalizado(self):
         fila = sheets.event_to_row({"nombre": "Taller", "username": "@ElAbrazal"})
-        self.assertEqual(len(fila), len(sheets.COLUMNS))
+        self.assertEqual(len(fila), sheets.COLUMNS.index("Username") + 1)
         self.assertEqual(fila[-1], "elabrazal")
 
     def test_event_to_row_sin_username_deja_la_celda_vacia(self):
@@ -2176,10 +2469,16 @@ class UsernameColumnTests(unittest.TestCase):
         fila = sheets.event_to_row({"nombre": "Taller"})
         self.assertEqual(fila[-1], "")
 
-    def test_username_es_la_ultima_columna(self):
-        # Va al final a propósito: mover posiciones existentes rompe al
-        # frontend, que lee por GViz (ver PATRONES.md).
-        self.assertEqual(sheets.COLUMNS[-1], "Username")
+    def test_username_es_la_ultima_columna_que_escribe_python(self):
+        # Va al final de lo que Python escribe a propósito: mover posiciones
+        # existentes rompe al frontend, que lee por GViz (ver PATRONES.md).
+        # Las columnas de Reportes_* después de Username son del mecanismo
+        # de reporte público (01/11, ver ROADMAP.md) — las escribe solo
+        # Code.gs, event_to_row() nunca las toca.
+        fila = sheets.event_to_row({"nombre": "x", "username": "elabrazal"})
+        self.assertEqual(len(fila), sheets.COLUMNS.index("Username") + 1)
+        self.assertEqual(sheets.COLUMNS[len(fila) - 1], "Username")
+        self.assertEqual(sheets.COLUMNS[-1], "Reportes_Motivos")
 
     def test_procesar_post_propaga_el_username_del_post(self):
         from src import hiker_pipeline
