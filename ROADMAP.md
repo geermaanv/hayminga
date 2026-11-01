@@ -1353,6 +1353,30 @@ extracción, no se persiste) — no se puede replicar esa parte exacta de
 `activo_salvo_pais`, pero el resto de los filtros alcanza para no
 publicar nada que la política nueva no publicaría igual.
 
+**Corrida real (01/11):** el dry-run contra la planilla encontró 12
+pendientes publicables, pero 4 eran reposts del mismo evento que otras
+2 filas del lote (el propio pipeline ya los había marcado "posible
+duplicado"/"repost" en su Descripción al descubrirlos: "12° Encuentro
+Nacional en Patagonia - Red Protierra Argentina" x3, "Manos a la Tierra
+- Taller de Bioconstrucción" x3). Publicar los 3 de cada grupo hubiera
+puesto cards repetidas del mismo evento en el sitio a la vez — a
+diferencia del resto del backlog, acá ya se sabía de antemano que eran
+duplicados, no hacía falta esperar un reporte. Se armó
+`descartar_duplicados_migracion_pendientes.py` (one-off, mismo patrón
+dry-run/`--escribir`) para descartar los 4 reposts por Id antes de
+migrar — **resultado: 4 descartados, 8 publicados**.
+
+Esto también mostró un gap real en `find_probable_duplicate()`
+(`sheets.py`): el score de solapamiento de nombre ya existe (ratio de
+palabras compartidas, umbral 0.6 o 0.99 según si es la misma cuenta),
+pero hoy solo sirve para marcar y mandar a revisión, nunca para
+descartar solo — así es como terminaron existiendo 3 filas separadas
+del mismo evento en primer lugar. Queda pendiente evaluar un umbral más
+estricto (ratio ≥0.9-0.95 + misma fecha/provincia) que descarte el
+repost nuevo directo en vez de guardarlo como fila aparte, con cuidado
+de no comerse una edición distinta de un curso recurrente (para eso ya
+existe `_son_ediciones_distintas`).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
