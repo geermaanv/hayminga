@@ -1252,6 +1252,46 @@ emails reales) antes de mandar — corrida real con `--escribir` mandó
 el mail a las 27 y actualizó `CuentasIds!E` para las 27 en un solo
 `batchUpdate`.
 
+## "Publicar y que reporten" — invertir la moderación de pendientes (31/10-01/11)
+
+Pregunta del mantenedor: ¿qué pasa si publicamos los pendientes
+directamente y agregamos un mecanismo para que cualquiera los reporte
+si están mal, en vez de frenarlos en revisión manual que a veces no
+llega? Postura explícita: "lo máximo que puede pasar es que no sea
+correcto y no pasa nada" — poner la depuración del lado del usuario,
+no del filtro previo.
+
+**Alcance acordado:** se publican todos los pendientes salvo
+`confianza=baja` (duplicados y país no resuelto ahora publican si la
+confianza es alta/media). Los reportes no requieren identificarse —
+solo un motivo (ej. "no es de Argentina", "evento duplicado") y texto
+libre opcional.
+
+**Hecho (gate de publicación, esta entrada):**
+- `processor.py`: `validate_event_data()` ahora calcula
+  `activo_salvo_pais` — la misma fórmula de `activo` pero sin exigir
+  país resuelto. `extract_event_data()` (canal de mail intake) publica
+  igual (`activo=True`, `estado=confirmado`) cuando falta solo el país,
+  `activo_salvo_pais` es true y `confianza` está en
+  `CONFIANZA_PUBLICABLE` — mismo cambio espejado en
+  `hiker_pipeline.py`'s `procesar_post()`, después de los filtros
+  duros existentes (evento virtual sin país, país confirmado no
+  Argentina), que siguen teniendo prioridad.
+- `sheets.py`'s `append_events()`: las dos ramas de duplicado (clave
+  exacta y match probable/difuso) ya no fuerzan
+  `pendiente_confirmacion` sin condición — solo lo hacen si la
+  confianza NO es publicable. Con confianza alta/media se publica
+  igual, manteniendo siempre la nota de contexto en la descripción
+  (el duplicado sigue siendo visible para quien lo revise después).
+- No se tocó nada para `confianza=baja`: sigue yendo 100% a
+  `pendiente_confirmacion`, sin excepciones.
+
+**Pendiente (no incluido en esta entrada):** migrar el backlog
+existente de `pendiente_confirmacion` (confianza alta/media) al nuevo
+criterio, y construir el mecanismo público de "reportar" (acción en
+`Code.gs` sin secreto, almacenamiento de reportes, aviso a
+`germanv@gmail.com`, UI en `index.html`).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

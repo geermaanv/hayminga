@@ -585,14 +585,22 @@ def validate_event_data(data: dict, today: date | None = None) -> dict:
     rango_valido = not (fecha_inicio and fecha_fin and fecha_fin < fecha_inicio)
     fecha_relevante = fecha_fin or fecha_inicio
     ubicacion_valida = result.get("pais") == "Argentina"
-    result["activo"] = bool(
+    # Todo lo demás (nombre, fecha, rango, no vencido) resuelto — lo único
+    # que falta es el país. Separado de `activo` para que el llamador
+    # pueda publicar igual cuando la confianza es alta/media (31/10/2026,
+    # ver ROADMAP.md: "publicar y que reporten" en vez de frenar todo lo
+    # que le falta un dato secundario) sin tener que recalcular estas
+    # mismas condiciones. Nunca se usa para pasar por alto un país YA
+    # resuelto como no-Argentina — eso lo sigue filtrando procesar_post()
+    # aparte, antes de llegar acá.
+    result["activo_salvo_pais"] = bool(
         result.get("nombre")
         and fecha_inicio
         and result.get("anio_confirmado") is not False
         and rango_valido
         and fecha_relevante >= today
-        and ubicacion_valida
     )
+    result["activo"] = bool(result["activo_salvo_pais"] and ubicacion_valida)
     if not rango_valido:
         result["fecha_fin_iso"] = ""
 
@@ -672,6 +680,17 @@ def extract_event_data(image_path: Path, metadata: dict):
     if data.get("activo") and confianza not in CONFIANZA_PUBLICABLE:
         data["activo"] = False
         data["estado"] = "pendiente_confirmacion"
+    elif (
+        not data.get("activo") and data.get("activo_salvo_pais")
+        and confianza in CONFIANZA_PUBLICABLE
+    ):
+        # "Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con todo
+        # lo demás resuelto y confianza buena, no vale la pena frenarlo
+        # solo porque no se pudo determinar el país — se publica y queda
+        # el botón de "reportar" (ej. "no es de Argentina") como red de
+        # seguridad, en vez de esperar revisión manual que capaz no llega.
+        data["activo"] = True
+        data["estado"] = "confirmado"
 
     activo = data.get("activo", False)
     print(

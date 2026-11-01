@@ -799,6 +799,17 @@ def procesar_post(
             razon_pendiente.append("sin_ubicacion")
         razon = ",".join(razon_pendiente) or "otra_razon"
         print(f"[PENDIENTE] {data.get('nombre', 'SIN_NOMBRE')} — {razon} — {post['link']}")
+    elif (
+        not data.get("activo") and data.get("activo_salvo_pais")
+        and confianza in CONFIANZA_PUBLICABLE
+    ):
+        # "Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con todo
+        # lo demás resuelto y confianza buena, no vale la pena frenarlo
+        # solo porque no se pudo determinar el país — se publica y queda
+        # el botón de "reportar" (ej. "no es de Argentina") como red de
+        # seguridad, en vez de esperar revisión manual que capaz no llega.
+        data["activo"] = True
+        data["estado"] = "confirmado"
 
     return data
 

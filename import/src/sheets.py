@@ -638,11 +638,21 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
             print(f"[sheets] Duplicado (mismo posteo de Instagram), saltando: '{nombre}'")
             continue
 
+        # "Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con
+        # confianza alta/media se publica igual que si no fuera un
+        # posible duplicado — el botón de "reportar" (ej. "es un evento
+        # duplicado") es la red de seguridad, no la revisión manual.
+        # Confianza baja sí sigue yendo a revisión (ídem el resto del
+        # pipeline), por eso el chequeo de confianza acá — no se puede
+        # importar CONFIANZA_PUBLICABLE de processor.py sin import
+        # circular (processor.py ya importa este módulo).
+        confianza_publicable = str(event.get("confianza") or "baja").lower() in {"alta", "media"}
+
         key = event_dedupe_key(event)
         if key in processed:
             existente = next((e for e in existentes if e["key"] == key), None)
             print(f"[sheets] Posible duplicado ambiguo (misma clave, link distinto), "
-                  f"pasa a revisión: '{nombre}'")
+                  f"{'se publica igual' if confianza_publicable else 'pasa a revisión'}: '{nombre}'")
             nota = (
                 f"⚠️ Posible duplicado del evento existente "
                 f"'{existente['nombre'] if existente else '?'}' "
@@ -650,8 +660,9 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
                 "pero distinto posteo de origen. Revisar y fusionar datos si corresponde.\n\n"
             )
             event["descripcion"] = nota + (event.get("descripcion") or "")
-            event["activo"] = False
-            event["estado"] = "pendiente_confirmacion"
+            if not confianza_publicable:
+                event["activo"] = False
+                event["estado"] = "pendiente_confirmacion"
         else:
             # No matcheó la clave exacta, pero puede ser el mismo evento
             # real en un posteo distinto con texto ligeramente diferente
@@ -659,7 +670,7 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
             probable = find_probable_duplicate(event, existentes)
             if probable:
                 print(f"[sheets] Posible duplicado (nombre parecido, misma provincia, "
-                      f"fecha cercana), pasa a revisión: '{nombre}'")
+                      f"fecha cercana), {'se publica igual' if confianza_publicable else 'pasa a revisión'}: '{nombre}'")
                 nota = (
                     f"⚠️ Podría ser un repost del evento existente "
                     f"'{probable.get('nombre') or '?'}' (id {probable.get('id') or '?'}) — "
@@ -667,8 +678,9 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
                     "distinto y no coincide exacto. Revisar y fusionar si corresponde.\n\n"
                 )
                 event["descripcion"] = nota + (event.get("descripcion") or "")
-                event["activo"] = False
-                event["estado"] = "pendiente_confirmacion"
+                if not confianza_publicable:
+                    event["activo"] = False
+                    event["estado"] = "pendiente_confirmacion"
 
         event.setdefault("id", generate_id())
         rows.append(event_to_row(event))
