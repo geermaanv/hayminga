@@ -1301,11 +1301,47 @@ libre opcional.
 - No se tocó nada para `confianza=baja`: sigue yendo 100% a
   `pendiente_confirmacion`, sin excepciones.
 
-**Pendiente (no incluido en esta entrada):** migrar el backlog
-existente de `pendiente_confirmacion` (confianza alta/media) al nuevo
-criterio, y construir el mecanismo público de "reportar" (acción en
-`Code.gs` sin secreto, almacenamiento de reportes, aviso a
-`germanv@gmail.com`, UI en `index.html`).
+**Mecanismo de reporte construido (01/11):** sin hoja nueva —
+reutiliza `Eventos`/`?pendientes` tal cual ya existían, a pedido
+explícito del mantenedor ("es más de lo mismo, no generar otra hoja").
+
+- 3 columnas nuevas al final de `Eventos` (`Reportes_Cantidad`,
+  `Reportes_Tokens`, `Reportes_Motivos`), agregadas a `COLUMNS` en
+  `sheets.py` solo para que `ensure_header()` no marque desincronizado
+  — Python nunca las lee ni las escribe, son enteramente de `Code.gs`.
+- `Code.gs`: nueva acción pública `reportar_evento` (sin secreto, como
+  `directorio_alta`) en `reportarEvento_()`. Motivos fijos (6, con
+  "No es un evento real" y "No es de bioconstrucción" fusionados en
+  uno solo por decisión del mantenedor): país, duplicado, fecha,
+  ubicación, no es de bioconstrucción, otro (con texto libre).
+- **Sin identificación de quien reporta** (decisión explícita, ver
+  pregunta original del mantenedor). Se consideró filtrar por IP
+  distinta, pero Apps Script no expone la IP del caller en
+  doPost/doGet (confirmado contra la documentación oficial de Web
+  Apps: `e` solo trae `queryString`/`parameter`/`parameters`/
+  `pathInfo`/`postData`) — en cambio, el frontend genera un token
+  random guardado en `localStorage` la primera vez, así un solo click
+  repetido no cuenta como varios reportes. Débil (se resetea borrando
+  storage o en ventana privada) pero alcanza como disuasivo liviano,
+  consistente con el resto del sitio (sin login, sin fricción).
+- **Al tercer reporte de tokens distintos** el evento se suspende solo
+  (`Activo=false`, `Estado=pendiente_confirmacion`) y entra a la cola
+  de revisión de siempre — ningún código nuevo de revisión. La nota
+  con los motivos se prepende a `Descripción`, mismo patrón que ya usa
+  el aviso de duplicado en `sheets.py`.
+- `notificarPendientes()` solo mira filas nuevas desde la última
+  corrida (pensado para altas en la cola, no para una fila vieja que
+  recién ahora pasa a pendiente) — por eso la suspensión manda un mail
+  directo a `germanv@gmail.com` en el momento, en vez de depender de
+  ese trigger.
+- Frontend: botón discreto "¿Algo no está bien con este evento?" en
+  el modal de detalle (no en cada card de la grilla, para no tentar a
+  reportar sin abrir el evento primero) → mini-form con el selector de
+  motivos + comentario libre opcional, mismo patrón de modal que
+  "Quiero contactar" del Directorio.
+
+**Pendiente:** migrar el backlog existente de `pendiente_confirmacion`
+(confianza alta/media) al nuevo criterio — todavía no construido.
 
 ## Métricas a monitorear
 

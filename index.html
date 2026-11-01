@@ -642,6 +642,36 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
   </div>
 </div>
 
+<!-- Reporte público de eventos (01/11, ver ROADMAP.md): "publicar y que
+     reporten" — sin identificarse, solo un motivo fijo + comentario
+     opcional. Al tercer reporte distinto el evento se suspende solo. -->
+<div class="popup-overlay" id="reportar-overlay" onclick="cerrarReportarEvento(event)">
+  <div class="popup">
+    <button class="popup-cerrar" onclick="cerrarReportarEvento()">✕</button>
+    <h3>Reportar <em id="reportar-nombre-destino"></em></h3>
+    <p>No hace falta que te identifiques. Si varias personas reportan lo mismo, lo revisamos.</p>
+    <form id="form-reportar" onsubmit="enviarReporteEvento(event)">
+      <select id="reportar-motivo" required
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;">
+        <option value="" disabled selected>¿Qué está mal?</option>
+        <option value="No es de Argentina">No es de Argentina</option>
+        <option value="Es un evento duplicado">Es un evento duplicado</option>
+        <option value="La fecha está mal">La fecha está mal</option>
+        <option value="La ubicación está mal">La ubicación está mal</option>
+        <option value="No es un evento de bioconstrucción">No es un evento de bioconstrucción</option>
+        <option value="Otro">Otro</option>
+      </select>
+      <textarea id="reportar-comentario" placeholder="Contanos más (opcional)" rows="3"
+        style="width:100%;padding:0.7rem 1rem;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;margin-bottom:0.75rem;resize:vertical;"></textarea>
+      <button type="submit" id="btn-enviar-reporte"
+        style="width:100%;padding:0.7rem;background:var(--tierra-claro);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;cursor:pointer;">
+        Reportar
+      </button>
+      <p id="reportar-form-msg" style="margin-top:0.75rem;padding:0.6rem;border-radius:8px;font-size:0.9rem;font-weight:500;text-align:center;display:none;"></p>
+    </form>
+  </div>
+</div>
+
 <section class="vision" id="vision">
   <div class="vision-inner">
     <h2 class="vision-titulo">¿Qué es <em>hayminga</em>?</h2>
@@ -1368,6 +1398,9 @@ function abrirModal(idx) {
   if (link) h += '<a class="btn-link" href="' + link + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'click_instagram\')">Ver publicación original ↗</a>';
   if (waContacto) h += '<a class="btn-whatsapp" href="' + waContacto + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'contactar_organizador_whatsapp\')">Contactar por WhatsApp</a>';
   h += '</div>';
+  h += '<button type="button" onclick="abrirReportarEvento(' + JSON.stringify(ev['Id']) + ',' + JSON.stringify(ev['Nombre']) + ')" '
+    + 'style="margin-top:0.6rem;background:transparent;border:none;color:var(--texto-suave);font-family:\'DM Sans\',sans-serif;font-size:0.78rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">'
+    + '¿Algo no está bien con este evento?</button>';
   h += '</div>';
   document.getElementById('modal-contenido').innerHTML = h;
   document.getElementById('modal-overlay').classList.add('activo');
@@ -1896,12 +1929,80 @@ function enviarSolicitudContacto(e) {
     });
 }
 
+// ---- Reporte público de eventos (01/11, ver ROADMAP.md) ----
+var reportarEventoId = null;
+
+// Token random por navegador, no por persona: evita que un solo click
+// repetido cuente como varios reportes, sin pedirle nada a quien reporta
+// (Apps Script no expone la IP del caller — ver reportarEvento_ en
+// Code.gs). Se guarda en localStorage; si falla (ventana privada, etc.)
+// se usa un token de esta sola sesión, total el peor caso es que ese
+// reporte puntual no se recuerde la próxima vez.
+function tokenReporteDeEsteNavegador() {
+  try {
+    var t = localStorage.getItem('hayminga_token_reporte');
+    if (!t) {
+      t = 'r' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('hayminga_token_reporte', t);
+    }
+    return t;
+  } catch (e) {
+    if (!window._tokenReporteSesion) {
+      window._tokenReporteSesion = 'r' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+    return window._tokenReporteSesion;
+  }
+}
+
+function abrirReportarEvento(id, nombre) {
+  reportarEventoId = id;
+  document.getElementById('reportar-nombre-destino').textContent = nombre || 'este evento';
+  document.getElementById('reportar-overlay').classList.add('activo');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarReportarEvento(ev) {
+  if (ev && ev.target !== document.getElementById('reportar-overlay')) return;
+  document.getElementById('reportar-overlay').classList.remove('activo');
+  document.body.style.overflow = '';
+}
+
+function enviarReporteEvento(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btn-enviar-reporte');
+  var msg = document.getElementById('reportar-form-msg');
+  var payload = {
+    accion: 'reportar_evento',
+    id: reportarEventoId,
+    motivo: document.getElementById('reportar-motivo').value,
+    comentario: document.getElementById('reportar-comentario').value,
+    token: tokenReporteDeEsteNavegador()
+  };
+  btn.disabled = true;
+  fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) })
+    .then(function() {
+      msg.style.display = 'block'; msg.style.color = '#1a3d1a'; msg.style.background = '#a8e6a0';
+      msg.textContent = 'Gracias, lo tenemos en cuenta.';
+      scrollAMensaje(msg);
+      if (typeof gtag === 'function') gtag('event', 'reportar_evento', { motivo: payload.motivo });
+      document.getElementById('form-reportar').reset();
+      btn.disabled = false;
+      setTimeout(function() { cerrarReportarEvento(); }, 2000);
+    })
+    .catch(function() {
+      msg.style.display = 'block'; msg.style.color = '#5c1010'; msg.style.background = '#f5b7b1';
+      msg.textContent = 'Algo salió mal, intentá de nuevo.';
+      scrollAMensaje(msg);
+      btn.disabled = false;
+    });
+}
+
 document.addEventListener('keydown', function(ev) {
   if (ev.key === 'Escape') {
     document.getElementById('modal-overlay').classList.remove('activo');
     document.getElementById('form-evento-overlay').classList.remove('activo');
     document.getElementById('form-directorio-overlay').classList.remove('activo');
     document.getElementById('contacto-overlay').classList.remove('activo');
+    document.getElementById('reportar-overlay').classList.remove('activo');
     document.getElementById('panel-mob').classList.remove('abierto');
     document.body.style.overflow = '';
   }

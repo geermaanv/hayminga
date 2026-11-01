@@ -67,6 +67,12 @@ COLUMNS = [
     # cargue sus eventos) y es la señal que le faltaba a find_probable_duplicate
     # para detectar reposts del mismo evento por la misma cuenta.
     "Username",
+    # Mecanismo de reporte público (01/11, ver ROADMAP.md): "publicar y que
+    # reporten" en vez de revisión previa. Las escribe solo Code.gs
+    # (reportar_evento, sin secreto) — Python nunca las lee ni las escribe,
+    # solo necesita que ensure_header() las conozca para no marcar AVISO de
+    # header desincronizado cuando ya existen en la hoja real.
+    "Reportes_Cantidad", "Reportes_Tokens", "Reportes_Motivos",
 ]
 
 

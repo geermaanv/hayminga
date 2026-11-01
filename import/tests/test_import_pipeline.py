@@ -2331,7 +2331,7 @@ class UsernameColumnTests(unittest.TestCase):
 
     def test_event_to_row_guarda_el_username_normalizado(self):
         fila = sheets.event_to_row({"nombre": "Taller", "username": "@ElAbrazal"})
-        self.assertEqual(len(fila), len(sheets.COLUMNS))
+        self.assertEqual(len(fila), sheets.COLUMNS.index("Username") + 1)
         self.assertEqual(fila[-1], "elabrazal")
 
     def test_event_to_row_sin_username_deja_la_celda_vacia(self):
@@ -2339,10 +2339,16 @@ class UsernameColumnTests(unittest.TestCase):
         fila = sheets.event_to_row({"nombre": "Taller"})
         self.assertEqual(fila[-1], "")
 
-    def test_username_es_la_ultima_columna(self):
-        # Va al final a propósito: mover posiciones existentes rompe al
-        # frontend, que lee por GViz (ver PATRONES.md).
-        self.assertEqual(sheets.COLUMNS[-1], "Username")
+    def test_username_es_la_ultima_columna_que_escribe_python(self):
+        # Va al final de lo que Python escribe a propósito: mover posiciones
+        # existentes rompe al frontend, que lee por GViz (ver PATRONES.md).
+        # Las columnas de Reportes_* después de Username son del mecanismo
+        # de reporte público (01/11, ver ROADMAP.md) — las escribe solo
+        # Code.gs, event_to_row() nunca las toca.
+        fila = sheets.event_to_row({"nombre": "x", "username": "elabrazal"})
+        self.assertEqual(len(fila), sheets.COLUMNS.index("Username") + 1)
+        self.assertEqual(sheets.COLUMNS[len(fila) - 1], "Username")
+        self.assertEqual(sheets.COLUMNS[-1], "Reportes_Motivos")
 
     def test_procesar_post_propaga_el_username_del_post(self):
         from src import hiker_pipeline
