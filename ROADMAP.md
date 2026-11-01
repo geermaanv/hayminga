@@ -1367,15 +1367,33 @@ dry-run/`--escribir`) para descartar los 4 reposts por Id antes de
 migrar — **resultado: 4 descartados, 8 publicados**.
 
 Esto también mostró un gap real en `find_probable_duplicate()`
-(`sheets.py`): el score de solapamiento de nombre ya existe (ratio de
+(`sheets.py`): el score de solapamiento de nombre ya existía (ratio de
 palabras compartidas, umbral 0.6 o 0.99 según si es la misma cuenta),
-pero hoy solo sirve para marcar y mandar a revisión, nunca para
+pero solo servía para marcar y mandar a revisión/publicar, nunca para
 descartar solo — así es como terminaron existiendo 3 filas separadas
-del mismo evento en primer lugar. Queda pendiente evaluar un umbral más
-estricto (ratio ≥0.9-0.95 + misma fecha/provincia) que descarte el
-repost nuevo directo en vez de guardarlo como fila aparte, con cuidado
-de no comerse una edición distinta de un curso recurrente (para eso ya
-existe `_son_ediciones_distintas`).
+del mismo evento en primer lugar.
+
+**Descarte automático de duplicados certeros (01/11):** a pedido del
+mantenedor, se agregó `_RATIO_CERTEZA_DESCARTE = 0.92` — por encima de
+este umbral (bastante más estricto que el 0.6 para solo flaguear), el
+repost se descarta directo (`Estado=descartado`) en vez de publicarse o
+mandarse a revisión, **sin importar la confianza extraída**: acá lo
+que manda es la certeza del duplicado, no la confianza de la
+extracción. `find_probable_duplicate()` ahora devuelve
+`(evento_existente, es_certero)` en vez de solo el evento. La señal por
+cuenta de Instagram (`_RATIO_MINIMO_NOMBRE_MISMA_CUENTA = 0.99`) ya
+era lo bastante estricta para matchear, así que cualquier match por esa
+vía cuenta como certero directamente.
+
+También se endureció la rama de clave exacta de `append_events()`
+(mismo nombre normalizado + fecha + provincia, distinto posteo de
+origen): antes publicaba igual con confianza alta/media, ahora se
+descarta siempre — es la señal más fuerte posible sin ser literalmente
+el mismo post, así que no hay razón para esperar un reporte.
+
+El resguardo existente (`_son_ediciones_distintas`, para no confundir
+"Módulo I"/"Módulo II" del mismo curso) se mantiene intacto — el umbral
+más estricto es sobre el ratio, no reemplaza ese chequeo.
 
 ## Métricas a monitorear
 
