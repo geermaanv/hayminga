@@ -1,13 +1,18 @@
-name: TEMP - Dry-run migrar_pendientes_publicables
+name: TEMP - Migración de pendientes publicables (descarte de duplicados + migración)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      escribir:
+        description: "Aplicar de verdad (false = dry-run)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  dry-run:
+  migrar:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -31,8 +36,14 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Dry-run migración de pendientes publicables
+      - name: Descartar los 4 reposts detectados en el dry-run (01/11)
         env:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python -m src.migrar_pendientes_publicables
+        run: python -m src.descartar_duplicados_migracion_pendientes ${{ inputs.escribir && '--escribir' || '' }}
+
+      - name: Migrar el resto del backlog a confirmado
+        env:
+          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python -m src.migrar_pendientes_publicables ${{ inputs.escribir && '--escribir' || '' }}
