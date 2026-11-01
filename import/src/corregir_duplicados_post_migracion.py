@@ -25,6 +25,7 @@ from src.sheets import COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service
 
 IDS_A_DESCARTAR = {"ff930e0787", "3dc2e2c94d"}
 
+IDX_ACTIVO = COLUMNS.index("Activo")
 IDX_ID = COLUMNS.index("Id")
 IDX_NOMBRE = COLUMNS.index("Nombre")
 IDX_DESCRIPCION = COLUMNS.index("Descripción")
@@ -70,6 +71,7 @@ def corregir(escribir: bool = False) -> list[tuple[int, str, str, str]]:
         print(f"\n[corregir_duplicados_post_migracion] {len(filas)} fila(s), dry-run — correr con --escribir para aplicar.")
         return filas
 
+    col_activo = _col_letra(IDX_ACTIVO)
     col_estado = _col_letra(IDX_ESTADO)
     col_desc = _col_letra(IDX_DESCRIPCION)
     nota = (
@@ -79,6 +81,13 @@ def corregir(escribir: bool = False) -> list[tuple[int, str, str, str]]:
     )
     data = []
     for fila, _, _, descripcion_actual in filas:
+        # Bug real (01/11): la primera corrida de este script solo puso
+        # Estado=descartado y dejó Activo=true sin tocar — el frontend
+        # filtra por Activo, no por Estado, así que los dos duplicados
+        # siguieron visibles en el sitio pese a figurar "descartado" en
+        # la planilla. Activo=false es la parte que realmente lo saca
+        # del sitio.
+        data.append({"range": f"{SHEET_NAME}!{col_activo}{fila}", "values": [["false"]]})
         data.append({"range": f"{SHEET_NAME}!{col_estado}{fila}", "values": [["descartado"]]})
         data.append({"range": f"{SHEET_NAME}!{col_desc}{fila}", "values": [[nota + descripcion_actual]]})
 
