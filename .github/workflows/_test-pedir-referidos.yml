@@ -1,4 +1,4 @@
-name: "[Diagnóstico temporal] Dry-run de pedidos de referidos"
+name: "[Diagnóstico temporal] Mandar pedidos de referidos"
 
 on:
   workflow_dispatch: {}
@@ -31,14 +31,18 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Dry-run — pedido al Directorio
+      - name: Mandar — pedido al Directorio
         env:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python -m src.pedir_referido_directorio
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          APPS_SCRIPT_SHARED_SECRET: ${{ secrets.APPS_SCRIPT_SHARED_SECRET }}
+        run: python -m src.pedir_referido_directorio --escribir
 
-      - name: Dry-run — pedido a cuentas de Instagram
+      - name: Mandar — pedido a cuentas de Instagram
         env:
           GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python -m src.pedir_referido_cuentas_instagram
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          APPS_SCRIPT_SHARED_SECRET: ${{ secrets.APPS_SCRIPT_SHARED_SECRET }}
+        run: python -m src.pedir_referido_cuentas_instagram --escribir
