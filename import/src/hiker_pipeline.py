@@ -874,10 +874,18 @@ def run() -> int:
         ids_cacheados, pais_cacheado, email_cacheado, emails_directorio = {}, {}, {}, set()
 
     atribucion = {"posts_recent": 0, "posts_top": 0, "solo_en_recent": 0, "eventos_solo_recent": 0}
-    for hashtag in hashtags:
+
+    def _procesar_hashtag(hashtag: str) -> bool:
+        """Devuelve True si falló el fetch de 'recent' — para poder
+        reintentarlo una vez al final de la corrida (ver ROADMAP.md,
+        01/11: una corrida real tiró 404 en 13 de 75 hashtags,
+        incluidos #bioconstruccion y #minga, que llevan meses andando
+        bien — no es que el hashtag no exista, parece intermitencia
+        de HikerAPI que para la próxima consulta ya se resuelve sola)."""
         posts = []
         shortcodes_recent = set()
         shortcodes_top = set()
+        fallo_recent = False
         try:
             posts_recent = fetch_hashtag_posts_recent(hashtag)
             shortcodes_recent = {instagram_shortcode(p["link"]) for p in posts_recent}
@@ -885,6 +893,7 @@ def run() -> int:
             posts.extend(posts_recent)
         except Exception as e:
             print(f"[hiker_pipeline] #{hashtag} (recent): error consultando HikerAPI — {e}")
+            fallo_recent = True
         if USAR_TOP:
             try:
                 posts_top = fetch_hashtag_posts(hashtag)
@@ -897,7 +906,7 @@ def run() -> int:
         else:
             atribucion["solo_en_recent"] += len(shortcodes_recent)
         if not posts:
-            continue
+            return fallo_recent
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
         fuentes_resultados[("hashtag", hashtag)] = False
 
@@ -943,6 +952,14 @@ def run() -> int:
                 )
             except Exception as e:
                 print(f"[hiker_pipeline] #{hashtag}: error guardando en el Sheet — {e}")
+        return fallo_recent
+
+    hashtags_con_error = [h for h in hashtags if _procesar_hashtag(h)]
+    if hashtags_con_error:
+        print(f"[hiker_pipeline] reintentando {len(hashtags_con_error)} hashtag(s) con error: {', '.join(hashtags_con_error)}")
+        for hashtag in hashtags_con_error:
+            if _procesar_hashtag(hashtag):
+                print(f"[hiker_pipeline] #{hashtag}: falló también en el reintento")
 
     # Timeline real de cuentas ya conocidas de organizadores argentinos —
     # a diferencia de los hashtags, no compite por popularidad global, así

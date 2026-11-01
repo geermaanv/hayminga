@@ -1252,6 +1252,21 @@ emails reales) antes de mandar — corrida real con `--escribir` mandó
 el mail a las 27 y actualizó `CuentasIds!E` para las 27 en un solo
 `batchUpdate`.
 
+## Reintento de hashtags con error al final de la corrida (01/11)
+
+Una corrida real tiró error en 13 de 75 hashtags al consultar `recent`
+en HikerAPI — incluidos `#bioconstruccion` y `#minga`, que vienen
+andando bien hace meses, así que no era que el hashtag dejó de existir
+sino intermitencia puntual de la API. Antes, un hashtag que fallaba se
+perdía esa corrida entera (`continue` sin registrar el motivo).
+
+**Hecho:** el loop de hashtags de `hiker_pipeline.py`'s `run()` se
+extrajo a una closure `_procesar_hashtag(hashtag) -> bool` que devuelve
+si falló el fetch de `recent`. Al terminar la primera pasada sobre
+todos los hashtags, se reintentan una sola vez los que fallaron. No es
+un backoff ni reintento infinito — una sola pasada extra al final,
+suficiente para la intermitencia observada.
+
 ## "Publicar y que reporten" — invertir la moderación de pendientes (31/10-01/11)
 
 Pregunta del mantenedor: ¿qué pasa si publicamos los pendientes
