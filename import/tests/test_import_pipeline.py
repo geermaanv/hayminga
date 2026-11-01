@@ -2324,6 +2324,136 @@ class LimpiarPendientesVencidosTests(unittest.TestCase):
         service.spreadsheets.return_value.values.return_value.batchUpdate.assert_called_once()
 
 
+class MigrarPendientesPublicablesTests(unittest.TestCase):
+    """Migración retroactiva de "publicar y que reporten" (31/10-01/11/2026,
+    ver ROADMAP.md) al backlog de pendiente_confirmacion que ya existía
+    antes del cambio de política."""
+
+    def _fila(self, estado="pendiente_confirmacion", nombre="Evento", confianza="alta",
+              fecha_inicio="03/11/2026", fecha_fin="", pais="Argentina", es_virtual=""):
+        from src.sheets import COLUMNS
+        fila = [""] * len(COLUMNS)
+        fila[COLUMNS.index("Nombre")] = nombre
+        fila[COLUMNS.index("Fecha_Inicio")] = fecha_inicio
+        fila[COLUMNS.index("Fecha_Fin")] = fecha_fin
+        fila[COLUMNS.index("Estado")] = estado
+        fila[COLUMNS.index("Confianza")] = confianza
+        fila[COLUMNS.index("Pais")] = pais
+        fila[COLUMNS.index("Es_Virtual")] = es_virtual
+        return fila
+
+    def _service_con(self, filas):
+        service = Mock()
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": filas
+        }
+        return service
+
+    def test_publica_confianza_alta_o_media(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(nombre="Alta", confianza="alta"),
+            self._fila(nombre="Media", confianza="media"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [(2, "Alta"), (3, "Media")])
+
+    def test_no_toca_confianza_baja(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Dudoso", confianza="baja")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_ignora_eventos_no_pendientes(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(estado="confirmado", nombre="Ya confirmado"),
+            self._fila(estado="descartado", nombre="Ya descartado"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_evento_ya_vencido(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Viejo", fecha_inicio="01/09/2026")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_pais_confirmado_no_argentina(self):
+        """País confirmado distinto de Argentina nunca se publica — mismo
+        hard filter que procesar_post() aplica a eventos nuevos."""
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Uruguayo", pais="Uruguay")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_publica_sin_pais_resuelto(self):
+        """Sin país resuelto (ni confirmado ni descartado) sí se publica
+        ahora — ese es justamente el cambio de política."""
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Sin país", pais="")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [(2, "Sin país")])
+
+    def test_no_publica_virtual_sin_pais_resuelto(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Virtual sin país", pais="", es_virtual="true")])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_no_publica_rango_de_fechas_invalido(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([
+            self._fila(nombre="Rango invertido", fecha_inicio="10/11/2026", fecha_fin="05/11/2026"),
+        ])
+        publicables = mpp.encontrar_publicables(service, hoy=date(2026, 10, 31))
+
+        self.assertEqual(publicables, [])
+
+    def test_escribir_hace_un_solo_get_y_actualiza_activo_y_estado(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Publicable")])
+
+        with patch("src.migrar_pendientes_publicables.get_service", return_value=service), \
+             patch("src.migrar_pendientes_publicables.date") as mock_date:
+            mock_date.today.return_value = date(2026, 10, 31)
+            mpp.migrar(escribir=True)
+
+        self.assertEqual(service.spreadsheets.return_value.values.return_value.get.call_count, 1)
+        batch_body = service.spreadsheets.return_value.values.return_value.batchUpdate.call_args.kwargs["body"]
+        self.assertEqual(
+            {(d["range"], d["values"][0][0]) for d in batch_body["data"]},
+            {(f"{mpp.SHEET_NAME}!A2", "true"), (f"{mpp.SHEET_NAME}!Q2", "confirmado")},
+        )
+
+    def test_dry_run_no_escribe(self):
+        from src import migrar_pendientes_publicables as mpp
+
+        service = self._service_con([self._fila(nombre="Publicable")])
+        with patch("src.migrar_pendientes_publicables.get_service", return_value=service), \
+             patch("src.migrar_pendientes_publicables.date") as mock_date:
+            mock_date.today.return_value = date(2026, 10, 31)
+            mpp.migrar(escribir=False)
+
+        service.spreadsheets.return_value.values.return_value.batchUpdate.assert_not_called()
+
+
 class UsernameColumnTests(unittest.TestCase):
     """El username de la cuenta de origen ya venía en la respuesta de HikerAPI
     y solo vivía en memoria (filtro de cuentas_excluidas). Persistirlo no cuesta

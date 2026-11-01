@@ -1340,8 +1340,18 @@ explícito del mantenedor ("es más de lo mismo, no generar otra hoja").
   motivos + comentario libre opcional, mismo patrón de modal que
   "Quiero contactar" del Directorio.
 
-**Pendiente:** migrar el backlog existente de `pendiente_confirmacion`
-(confianza alta/media) al nuevo criterio — todavía no construido.
+**Migración del backlog construida (01/11):** `migrar_pendientes_publicables.py`
+— mismo patrón que `limpiar_pendientes_vencidos.py` (un solo GET de rango,
+dry-run por default, `--escribir` para aplicar, nunca borra filas).
+Publica (`Activo=true`, `Estado=confirmado`) todo `pendiente_confirmacion`
+con confianza alta/media que además pase los mismos filtros duros que ya
+aplica `procesar_post()` a eventos nuevos: país confirmado no-Argentina,
+virtual sin país resuelto, fecha ya vencida, o rango de fechas inválido
+quedan tal cual estaban (no es un retroceso, solo no se adelantan). Sin
+`anio_confirmado` disponible en el backlog (es una señal solo de
+extracción, no se persiste) — no se puede replicar esa parte exacta de
+`activo_salvo_pais`, pero el resto de los filtros alcanza para no
+publicar nada que la política nueva no publicaría igual.
 
 ## Métricas a monitorear
 
