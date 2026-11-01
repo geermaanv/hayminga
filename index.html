@@ -1398,7 +1398,7 @@ function abrirModal(idx) {
   if (link) h += '<a class="btn-link" href="' + link + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'click_instagram\')">Ver publicación original ↗</a>';
   if (waContacto) h += '<a class="btn-whatsapp" href="' + waContacto + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'contactar_organizador_whatsapp\')">Contactar por WhatsApp</a>';
   h += '</div>';
-  h += '<button type="button" onclick="abrirReportarEvento(' + JSON.stringify(ev['Id']) + ',' + JSON.stringify(ev['Nombre']) + ')" '
+  h += '<button type="button" onclick="abrirReportarEvento(\'' + esc(ev['Id']) + '\',\'' + esc(ev['Nombre']) + '\')" '
     + 'style="margin-top:0.6rem;background:transparent;border:none;color:var(--texto-suave);font-family:\'DM Sans\',sans-serif;font-size:0.78rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">'
     + '¿Algo no está bien con este evento?</button>';
   h += '</div>';
