@@ -945,7 +945,9 @@ class SheetsTests(unittest.TestCase):
         probable = sheets.find_probable_duplicate(nuevo, existentes)
 
         self.assertIsNotNone(probable)
-        self.assertEqual(probable["id"], "abc123")
+        existente_encontrado, es_certero = probable
+        self.assertEqual(existente_encontrado["id"], "abc123")
+        self.assertTrue(es_certero)  # ratio 1.0 ("formacion"+"biologica" compartidos), por encima de _RATIO_CERTEZA_DESCARTE
 
     def test_find_probable_duplicate_requires_same_provincia(self):
         existentes = [{
@@ -1019,19 +1021,22 @@ class SheetsTests(unittest.TestCase):
     def test_append_events_flags_probable_duplicate_for_review(
         self, get_service, load_processed_events, ensure_header,
     ):
+        """Ratio ~0.667 (ver test_find_probable_duplicate_*) — por debajo
+        de _RATIO_CERTEZA_DESCARTE, así que flaguea y manda a revisión
+        (confianza baja por default) en vez de descartar directo."""
         load_processed_events.return_value = [{
             "key": sheets.event_dedupe_key({
-                "nombre": "Formación Práctica en Arquitectura Biológica",
+                "nombre": "Encuentro de Superadobe y Permacultura Regenerativa",
                 "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
             }),
             "shortcode": "AAA111", "id": "abc123",
-            "nombre": "Formación Práctica en Arquitectura Biológica",
+            "nombre": "Encuentro de Superadobe y Permacultura Regenerativa",
             "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
         }]
         service = get_service.return_value
 
         sheets.append_events([{
-            "nombre": "Formación en Arquitectura Biológica y Bioconstrucción",
+            "nombre": "Formación en Superadobe y Permacultura Urbana",
             "fecha_inicio_iso": "2026-09-08", "provincia": "Córdoba",
             "activo": True, "link_promocional": "https://www.instagram.com/p/BBB222/",
         }])
@@ -1049,9 +1054,43 @@ class SheetsTests(unittest.TestCase):
     ):
         """"Publicar y que reporten" (31/10/2026, ver ROADMAP.md): con
         confianza alta/media se publica igual aunque sea un posible
-        duplicado — el reporte ("es un evento duplicado") es la red de
-        seguridad, no la revisión manual. La nota de contexto se
-        mantiene en la descripción para quien lo revise."""
+        duplicado (pero NO certero — ver ratio en el test de arriba) — el
+        reporte ("es un evento duplicado") es la red de seguridad, no la
+        revisión manual. La nota de contexto se mantiene en la
+        descripción para quien lo revise."""
+        load_processed_events.return_value = [{
+            "key": sheets.event_dedupe_key({
+                "nombre": "Encuentro de Superadobe y Permacultura Regenerativa",
+                "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
+            }),
+            "shortcode": "AAA111", "id": "abc123",
+            "nombre": "Encuentro de Superadobe y Permacultura Regenerativa",
+            "provincia": "Córdoba", "fecha_inicio_iso": "2026-09-05",
+        }]
+        service = get_service.return_value
+
+        sheets.append_events([{
+            "nombre": "Formación en Superadobe y Permacultura Urbana",
+            "fecha_inicio_iso": "2026-09-08", "provincia": "Córdoba",
+            "activo": True, "confianza": "alta",
+            "link_promocional": "https://www.instagram.com/p/BBB222/",
+        }])
+
+        fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
+        self.assertEqual(fila_escrita[0], "true")  # Activo
+        self.assertIn("abc123", fila_escrita[8])  # la nota de contexto se mantiene
+
+    @patch("src.sheets.ensure_header")
+    @patch("src.sheets.load_processed_events")
+    @patch("src.sheets.get_service")
+    def test_append_events_discards_probable_duplicate_when_certero_pese_a_confianza_alta(
+        self, get_service, load_processed_events, ensure_header,
+    ):
+        """Descarte automático (01/11/2026, ver ROADMAP.md): ratio de
+        nombre ~1.0 (certero) descarta el repost directo, incluso con
+        confianza alta — acá lo que manda es la certeza del duplicado,
+        no la confianza de la extracción. Caso real que motivó esto:
+        3 filas separadas del mismo evento publicadas a la vez."""
         load_processed_events.return_value = [{
             "key": sheets.event_dedupe_key({
                 "nombre": "Formación Práctica en Arquitectura Biológica",
@@ -1071,18 +1110,19 @@ class SheetsTests(unittest.TestCase):
         }])
 
         fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
-        self.assertEqual(fila_escrita[0], "true")  # Activo
-        self.assertIn("abc123", fila_escrita[8])  # la nota de contexto se mantiene
+        self.assertEqual(fila_escrita[0], "false")  # Activo
+        self.assertEqual(fila_escrita[16], "descartado")  # Estado
+        self.assertIn("abc123", fila_escrita[8])
 
     @patch("src.sheets.ensure_header")
     @patch("src.sheets.load_processed_events")
     @patch("src.sheets.get_service")
-    def test_append_events_flags_exact_key_duplicate_when_confianza_baja(
+    def test_append_events_discards_exact_key_duplicate_pese_a_confianza_baja(
         self, get_service, load_processed_events, ensure_header,
     ):
-        """Rama de clave exacta (mismo nombre/fecha/provincia, link
-        distinto) — sin test directo hasta ahora. Confianza baja sigue
-        yendo a revisión, igual que el resto del pipeline."""
+        """Clave exacta (mismo nombre/fecha/provincia, link distinto) es
+        la señal más fuerte posible — se descarta directo sin importar
+        confianza (01/11/2026, ver ROADMAP.md)."""
         load_processed_events.return_value = [{
             "key": sheets.event_dedupe_key({
                 "nombre": "Taller de Quincha", "fecha_inicio_iso": "2026-09-05", "provincia": "Córdoba",
@@ -1100,13 +1140,13 @@ class SheetsTests(unittest.TestCase):
 
         fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
         self.assertEqual(fila_escrita[0], "false")  # Activo
-        self.assertEqual(fila_escrita[16], "pendiente_confirmacion")  # Estado
+        self.assertEqual(fila_escrita[16], "descartado")  # Estado
         self.assertIn("abc123", fila_escrita[8])
 
     @patch("src.sheets.ensure_header")
     @patch("src.sheets.load_processed_events")
     @patch("src.sheets.get_service")
-    def test_append_events_publishes_exact_key_duplicate_when_confianza_alta(
+    def test_append_events_discards_exact_key_duplicate_pese_a_confianza_alta(
         self, get_service, load_processed_events, ensure_header,
     ):
         load_processed_events.return_value = [{
@@ -1125,7 +1165,8 @@ class SheetsTests(unittest.TestCase):
         }])
 
         fila_escrita = service.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"][0]
-        self.assertEqual(fila_escrita[0], "true")  # Activo
+        self.assertEqual(fila_escrita[0], "false")  # Activo
+        self.assertEqual(fila_escrita[16], "descartado")  # Estado
         self.assertIn("abc123", fila_escrita[8])
 
     @patch("src.sheets.ensure_header")

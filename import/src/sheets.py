@@ -497,6 +497,15 @@ _VENTANA_DIAS_REPOST = 10  # ± días para considerar "misma fecha" entre dos po
 _MIN_TOKENS_COMPARTIDOS = 2
 _RATIO_MINIMO_NOMBRE = 0.6
 
+# Umbral para descartar el repost nuevo directo en vez de solo flaguearlo y
+# publicarlo/mandarlo a revisión (01/11/2026, ver ROADMAP.md: el caso real
+# que motivó esto fueron 3 filas separadas del mismo evento — "publicar y
+# que reporten" los publicaba todas a la vez). Deliberadamente más alto que
+# _RATIO_MINIMO_NOMBRE: acá el costo de un falso positivo es más alto
+# (se pierde un evento real sin que quede en revisión), así que hace falta
+# más certeza que para simplemente flaguear.
+_RATIO_CERTEZA_DESCARTE = 0.92
+
 # Para la señal por cuenta de origen se exige un parecido de nombre MÁS alto
 # que para la señal por provincia+fecha, porque se sueltan dos restricciones
 # a la vez. Con el umbral flojo, una cuenta que dicta "Taller de
@@ -535,7 +544,7 @@ def _fechas_cercanas(a: str | None, b: str | None) -> bool:
     return abs((fecha_a - fecha_b).days) <= _VENTANA_DIAS_REPOST
 
 
-def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
+def find_probable_duplicate(event: dict, existentes: list[dict]) -> tuple[dict, bool] | None:
     """El mismo evento real, promocionado en dos posteos de Instagram
     distintos con texto/fecha ligeramente distinto (mismo patrón que el
     caso DeBarro de la Etapa 9.5, que sí se resolvió porque era literalmente
@@ -544,9 +553,7 @@ def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
     coincidencia exacta de nombre normalizado y no lo agarra si el texto
     varía.
 
-    Dos señales, las dos conservadoras y NO destructivas — igual que el
-    match exacto ambiguo, solo sirven para mandar a revisión manual, nunca
-    para descartar:
+    Dos señales:
 
     1. Nombre parecido + misma provincia + fecha cercana. No depende del
        username, así que sigue cubriendo los eventos que entran por mail o
@@ -557,7 +564,15 @@ def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
        distinta. Acá el umbral de nombre es más exigente a propósito (ver
        _RATIO_MINIMO_NOMBRE_MISMA_CUENTA): al soltar fecha y provincia, un
        criterio flojo marcaría como duplicado cada edición de un curso que
-       se dicta varias veces al año, que en este rubro es lo habitual."""
+       se dicta varias veces al año, que en este rubro es lo habitual.
+
+    Devuelve (evento_existente, es_certero) o None. `es_certero` (ver
+    _RATIO_CERTEZA_DESCARTE, 01/11/2026, ROADMAP.md) distingue un match
+    tan fuerte que append_events() lo descarta directo, de uno más flojo
+    que solo flaguea y deja seguir el flujo normal (publicar o revisión
+    según confianza) — la señal por cuenta ya exige un ratio tan alto
+    (_RATIO_MINIMO_NOMBRE_MISMA_CUENTA) para matchear que, si matcheó,
+    siempre cuenta como certero."""
     tokens_evento = _tokens_nombre(event.get("nombre"))
     if not tokens_evento:
         return None
@@ -580,13 +595,13 @@ def find_probable_duplicate(event: dict, existentes: list[dict]) -> dict | None:
         )
         if (misma_cuenta and ratio >= _RATIO_MINIMO_NOMBRE_MISMA_CUENTA
                 and not _son_ediciones_distintas(tokens_evento, tokens_existente)):
-            return existente
+            return existente, True
 
         if (provincia_evento and fecha_evento
                 and _normalize_key_part(existente.get("provincia")) == provincia_evento
                 and _fechas_cercanas(fecha_evento, existente.get("fecha_inicio_iso"))
                 and ratio >= _RATIO_MINIMO_NOMBRE):
-            return existente
+            return existente, ratio >= _RATIO_CERTEZA_DESCARTE
     return None
 
 
@@ -656,37 +671,56 @@ def append_events(events: list[dict], return_inserted_keys: bool = False):
 
         key = event_dedupe_key(event)
         if key in processed:
+            # Clave exacta (mismo nombre normalizado + fecha + provincia,
+            # distinto posteo de origen): la señal más fuerte posible sin
+            # ser literalmente el mismo post, así que se descarta directo
+            # en vez de publicar o mandar a revisión (01/11/2026, ver
+            # ROADMAP.md) — independiente de la confianza extraída, porque
+            # acá lo que importa es la certeza del duplicado, no la
+            # confianza de la extracción.
             existente = next((e for e in existentes if e["key"] == key), None)
-            print(f"[sheets] Posible duplicado ambiguo (misma clave, link distinto), "
-                  f"{'se publica igual' if confianza_publicable else 'pasa a revisión'}: '{nombre}'")
+            print(f"[sheets] Posible duplicado ambiguo (misma clave, link distinto), se descarta: '{nombre}'")
             nota = (
-                f"⚠️ Posible duplicado del evento existente "
-                f"'{existente['nombre'] if existente else '?'}' "
-                f"(id {existente['id'] if existente else '?'}) — mismo nombre/fecha/provincia "
-                "pero distinto posteo de origen. Revisar y fusionar datos si corresponde.\n\n"
+                f"❌ Descartado automáticamente: mismo nombre/fecha/provincia que el "
+                f"evento existente '{existente['nombre'] if existente else '?'}' "
+                f"(id {existente['id'] if existente else '?'}), distinto posteo de origen. "
+                "Revisar si corresponde fusionar datos.\n\n"
             )
             event["descripcion"] = nota + (event.get("descripcion") or "")
-            if not confianza_publicable:
-                event["activo"] = False
-                event["estado"] = "pendiente_confirmacion"
+            event["activo"] = False
+            event["estado"] = "descartado"
         else:
             # No matcheó la clave exacta, pero puede ser el mismo evento
             # real en un posteo distinto con texto ligeramente diferente
             # (gap #2 de ESTADO.md — ver find_probable_duplicate).
             probable = find_probable_duplicate(event, existentes)
             if probable:
-                print(f"[sheets] Posible duplicado (nombre parecido, misma provincia, "
-                      f"fecha cercana), {'se publica igual' if confianza_publicable else 'pasa a revisión'}: '{nombre}'")
-                nota = (
-                    f"⚠️ Podría ser un repost del evento existente "
-                    f"'{probable.get('nombre') or '?'}' (id {probable.get('id') or '?'}) — "
-                    "nombre parecido, misma provincia, fecha cercana, pero posteo de origen "
-                    "distinto y no coincide exacto. Revisar y fusionar si corresponde.\n\n"
-                )
-                event["descripcion"] = nota + (event.get("descripcion") or "")
-                if not confianza_publicable:
+                existente_probable, es_certero = probable
+                if es_certero:
+                    print(f"[sheets] Posible duplicado (nombre parecido, misma provincia, "
+                          f"fecha cercana), se descarta: '{nombre}'")
+                    nota = (
+                        f"❌ Descartado automáticamente: muy probable repost del evento "
+                        f"existente '{existente_probable.get('nombre') or '?'}' "
+                        f"(id {existente_probable.get('id') or '?'}) — nombre casi idéntico, "
+                        "misma provincia, fecha cercana. Revisar si corresponde fusionar datos.\n\n"
+                    )
+                    event["descripcion"] = nota + (event.get("descripcion") or "")
                     event["activo"] = False
-                    event["estado"] = "pendiente_confirmacion"
+                    event["estado"] = "descartado"
+                else:
+                    print(f"[sheets] Posible duplicado (nombre parecido, misma provincia, "
+                          f"fecha cercana), {'se publica igual' if confianza_publicable else 'pasa a revisión'}: '{nombre}'")
+                    nota = (
+                        f"⚠️ Podría ser un repost del evento existente "
+                        f"'{existente_probable.get('nombre') or '?'}' (id {existente_probable.get('id') or '?'}) — "
+                        "nombre parecido, misma provincia, fecha cercana, pero posteo de origen "
+                        "distinto y no coincide exacto. Revisar y fusionar si corresponde.\n\n"
+                    )
+                    event["descripcion"] = nota + (event.get("descripcion") or "")
+                    if not confianza_publicable:
+                        event["activo"] = False
+                        event["estado"] = "pendiente_confirmacion"
 
         event.setdefault("id", generate_id())
         rows.append(event_to_row(event))
