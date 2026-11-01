@@ -1228,9 +1228,9 @@ amigable, no corporativo.
   regla real) — una futura corrida no le repite el pedido a quien ya
   se le pidió hace menos de 2 meses.
 
-**Pendiente:** `Code.gs` necesita el despliegue manual de siempre
-(script.google.com) antes de que la acción nueva funcione. No se
-mandó ningún mail todavía — falta la corrida real con `--escribir`.
+**Code.gs desplegado y mail mandado (01/11):** confirmado con dry-run
+primero (~5 personas, ninguna con pedido previo) y después con la
+corrida real — **mail mandado a 5 personas**.
 
 **Hecho (31/10):** de las 50 `cuentas_seguidas` + `cuentas_protegidas`,
 **28 ya tenían email público cacheado** (gratis, de corridas
@@ -1247,9 +1247,10 @@ mismo cooldown de 2 meses. Texto distinto al del Directorio — estos
 contactos todavía no son miembros, así que el pedido es doble: sumarse
 o compartirlo.
 
-**Pendiente:** mismo deploy manual de `Code.gs` que la campaña
-anterior. Ningún mail real mandado todavía para ninguna de las dos
-campañas.
+**Mail mandado (01/11):** dry-run confirmó las 27 cuentas (con sus
+emails reales) antes de mandar — corrida real con `--escribir` mandó
+el mail a las 27 y actualizó `CuentasIds!E` para las 27 en un solo
+`batchUpdate`.
 
 ## Métricas a monitorear
 
