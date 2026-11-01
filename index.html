@@ -1350,7 +1350,7 @@ function renderGrilla() {
     if (prov) metaHtml += '<div class="card-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' + prov + '</div>';
     var igHtml = link ? '<a class="card-ig" href="' + link + '" target="_blank" rel="noopener" onclick="event.stopPropagation();if(typeof gtag===\'function\')gtag(\'event\',\'click_instagram\')">' + igIcon() + 'Ver publicación</a>' : '<span></span>';
     var reportarHtml = '<button type="button" class="card-reportar" '
-      + 'onclick="event.stopPropagation();abrirReportarEvento(\'' + esc(ev['Id']) + '\',\'' + esc(ev['Nombre']) + '\')">Reportar</button>';
+      + 'onclick="event.stopPropagation();abrirReportarEvento(\'' + esc(ev['Id']) + '\',\'' + esc(ev['Nombre']) + '\')">¿Algo mal?</button>';
     html += '<div class="card" onclick="abrirModal(' + i + ')" style="animation:fadeUp 0.3s ease ' + (i*0.03) + 's both">'
       + imgHtml
       + '<div class="card-body">'
@@ -1404,9 +1404,10 @@ function abrirModal(idx) {
   if (link) h += '<a class="btn-link" href="' + link + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'click_instagram\')">Ver publicación original ↗</a>';
   if (waContacto) h += '<a class="btn-whatsapp" href="' + waContacto + '" target="_blank" rel="noopener" onclick="if(typeof gtag===\'function\')gtag(\'event\',\'contactar_organizador_whatsapp\')">Contactar por WhatsApp</a>';
   h += '</div>';
-  h += '<button type="button" onclick="abrirReportarEvento(\'' + esc(ev['Id']) + '\',\'' + esc(ev['Nombre']) + '\')" '
-    + 'style="margin-top:0.6rem;background:transparent;border:none;color:var(--texto-suave);font-family:\'DM Sans\',sans-serif;font-size:0.78rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">'
-    + '¿Algo no está bien con este evento?</button>';
+  h += '<div style="text-align:right;margin-top:0.6rem;">'
+    + '<button type="button" onclick="abrirReportarEvento(\'' + esc(ev['Id']) + '\',\'' + esc(ev['Nombre']) + '\')" '
+    + 'style="background:transparent;border:none;color:var(--texto-suave);font-family:\'DM Sans\',sans-serif;font-size:0.78rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;">'
+    + '¿Algo mal?</button></div>';
   h += '</div>';
   document.getElementById('modal-contenido').innerHTML = h;
   document.getElementById('modal-overlay').classList.add('activo');
