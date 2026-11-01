@@ -1395,6 +1395,58 @@ El resguardo existente (`_son_ediciones_distintas`, para no confundir
 "Módulo I"/"Módulo II" del mismo curso) se mantiene intacto — el umbral
 más estricto es sobre el ratio, no reemplaza ese chequeo.
 
+## Dos incidentes reales tras publicar la migración (01/11)
+
+**Botón de reportar rompía el modal:** `onclick="abrirReportarEvento(" +
+JSON.stringify(...) + ")"` metía comillas dobles (las que usa
+`JSON.stringify`) dentro de un atributo HTML ya delimitado por comillas
+dobles — el navegador cortaba el atributo en la primera comilla de
+adentro, rompiendo el resto del modal (el link "Ver publicación
+original" incluido) en cualquier evento con nombre con espacio, es
+decir, siempre. Corregido con el mismo patrón de escapado que ya usaba
+el botón "Quiero contactar" del Directorio (comillas simples + `esc()`
+alrededor de cada valor). A pedido del mantenedor, el link de reportar
+se sumó también al pie de cada card de la home (al lado de "Ver
+publicación"), no solo dentro del modal.
+
+**La migración publicó 2 duplicados de eventos ya confirmados:**
+`migrar_pendientes_publicables.py` solo revisaba duplicados DENTRO del
+propio lote de pendientes que migraba — nunca cruzó contra eventos que
+YA estaban `confirmado` desde antes. "12° Encuentro Nacional en
+Patagonia - Red Protierra Argentina" y "Autonomía es Libertad" (mismo
+nombre y fecha exactos que otras dos filas confirmadas mucho antes)
+quedaron duplicados en el sitio. `corregir_duplicados_post_migracion.py`
+los descartó — pero **su primera corrida tenía el mismo bug**: solo
+puso `Estado=descartado` y dejó `Activo=true` sin tocar. El frontend
+filtra por `Activo`, no por `Estado`, así que los duplicados siguieron
+visibles pese a figurar "descartado" en la planilla — el mantenedor lo
+reportó de nuevo, se agregó la escritura de `Activo=false` que faltaba
+y recién ahí se resolvió de verdad.
+
+**Lección en los dos casos:** verificar el resultado contra la fuente
+real (el sitio, la planilla) antes de dar un fix por cerrado, no
+alcanza con que el script corra en verde — mismo principio que el
+incidente del 31/10 con `achicar_cuentas_sin_aporte.py` ("corrida
+exitosa" no es "cambio guardado", ver más arriba), ahora aplicado a
+"la fila dice lo que yo esperaba" en vez de "lo que el sitio realmente
+muestra".
+
+## Descarte automático de duplicados — la señal más fuerte, no la única (01/11)
+
+`find_probable_duplicate()` (gap señalado más arriba) también tiene un
+límite conocido que el umbral de certeza no resuelve: solo compara
+contra eventos ya registrados en el Sheet. Un evento que ya estaba
+`confirmado` ANTES de que `migrar_pendientes_publicables.py` corriera
+sí entra en esa comparación (es parte de `existentes`), así que en
+teoría el camino normal de `append_events()` lo hubiera agarrado — el
+problema real fue que la migración no pasa por `append_events()` en
+absoluto, solo flipea `Estado`/`Activo` de filas ya escritas, sin
+re-correr ninguna detección de duplicados. Si en el futuro se vuelve a
+correr una migración o corrección masiva de este tipo, conviene
+cruzarla contra `find_probable_duplicate()`/`event_dedupe_key()` antes
+de escribir, no asumir que "ya pasó los filtros alguna vez" sigue
+siendo cierto.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
