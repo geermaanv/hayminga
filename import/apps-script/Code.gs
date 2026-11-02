@@ -534,6 +534,7 @@ var MOTIVOS_REPORTE_VALIDOS = [
   'La fecha está mal',
   'La ubicación está mal',
   'No es un evento de bioconstrucción',
+  'Falta la foto o imagen',
   'Otro',
 ];
 var UMBRAL_REPORTES_SUSPENSION = 3;
