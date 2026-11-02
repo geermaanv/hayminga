@@ -905,10 +905,17 @@ def run() -> int:
                 print(f"[hiker_pipeline] #{hashtag} (top): error consultando HikerAPI — {e}")
         else:
             atribucion["solo_en_recent"] += len(shortcodes_recent)
+        # Se registra el intento (como "sin hit") ANTES del corte por
+        # "sin posts" — si no, un hashtag que siempre tira error (ej. 404
+        # por no existir en Instagram) nunca entra a fuentes_resultados y
+        # queda invisible para curar_fuentes.py para siempre: nunca
+        # acumula IntentosSinHit, nunca se da de baja sola (ver ROADMAP.md,
+        # 02/11 — hallazgo real: 10 hashtags con 404 persistente, dos
+        # corridas seguidas, nunca iban a ser detectados).
+        fuentes_resultados[("hashtag", hashtag)] = False
         if not posts:
             return fallo_recent
         print(f"[hiker_pipeline] #{hashtag}: {len(posts)} post(s)")
-        fuentes_resultados[("hashtag", hashtag)] = False
 
         eventos_hashtag = []
         for post in posts:
@@ -988,6 +995,10 @@ def run() -> int:
                 posts = fetch_user_posts(username, user_id=user_id)
             except Exception as e:
                 print(f"[hiker_pipeline] @{username}: error consultando HikerAPI — {e}")
+                # Mismo fix que el loop de hashtags (ver ROADMAP.md, 02/11):
+                # sin esto, una cuenta que siempre tira error queda
+                # invisible para curar_fuentes.py para siempre.
+                fuentes_resultados[("cuenta", username)] = False
                 continue
             print(f"[hiker_pipeline] @{username}: {len(posts)} post(s)")
             fuentes_resultados[("cuenta", username)] = False
