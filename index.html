@@ -662,6 +662,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
         <option value="La fecha está mal">La fecha está mal</option>
         <option value="La ubicación está mal">La ubicación está mal</option>
         <option value="No es un evento de bioconstrucción">No es un evento de bioconstrucción</option>
+        <option value="Falta la foto o imagen">Falta la foto o imagen</option>
         <option value="Otro">Otro</option>
       </select>
       <textarea id="reportar-comentario" placeholder="Contanos más (opcional)" rows="3"
@@ -1190,6 +1191,31 @@ function formatFecha(f) {
   return f;
 }
 
+// Versión corta para la card de la grilla (el modal ya usa formatFecha
+// completo). Sin esto, un evento largo (ej. un voluntariado de meses, o
+// un curso en varias etapas) solo mostraba la fecha de inicio — se veía
+// "vencido" aunque siguiera vigente, porque nunca se veía la fecha de
+// fin real (02/11, reportado por el mantenedor).
+function formatFechaCorta(f) {
+  if (!f) return null;
+  var d = parseFechaEvento(f);
+  if (!d || isNaN(d.getTime())) return f;
+  var opts = { day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('es-AR', opts).replace(/\.$/, '');
+}
+
+function formatRangoFechaCorta(fechaInicio, fechaFin) {
+  var corta = formatFechaCorta(fechaInicio);
+  if (!corta) return null;
+  var di = parseFechaEvento(fechaInicio);
+  var df = parseFechaEvento(fechaFin);
+  if (df && di && df.getTime() !== di.getTime()) {
+    corta += ' → ' + formatFechaCorta(fechaFin);
+  }
+  return corta;
+}
+
 function svgIco(paths) {
   return '<svg class="detalle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + paths + '</svg>';
 }
@@ -1338,7 +1364,7 @@ function renderGrilla() {
     var ev = eventosFiltrados[i];
     var img = ev['img'];
     var esV = ev['Es_Virtual'] === true || ev['Es_Virtual'] === 'true';
-    var fecha = formatFecha(ev['Fecha_Inicio']);
+    var fecha = formatRangoFechaCorta(ev['Fecha_Inicio'], ev['Fecha_Fin']);
     var prov = ev['Provincia'] && ev['Provincia'] !== 'null' ? ev['Provincia'] : '';
     var link = ev['Link_Promocion'] && ev['Link_Promocion'] !== 'null' ? ev['Link_Promocion'] : '';
     var imgHtml = img

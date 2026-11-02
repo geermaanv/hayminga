@@ -1447,6 +1447,56 @@ cruzarla contra `find_probable_duplicate()`/`event_dedupe_key()` antes
 de escribir, no asumir que "ya pasó los filtros alguna vez" sigue
 siendo cierto.
 
+## Hashtags con 404 persistente nunca detectados por curar_fuentes.py (02/11)
+
+Revisión de la corrida del 02/11: 10 hashtags dieron 404 tanto en el
+intento inicial como en el reintento del 01/11 — `#arteytierra`,
+`#pajaencofrada`, `#techovivo`, `#obrascuela`,
+`#voluntariadobioconstruccion`, `#tallerdebarro`, `#cursodebarro`,
+`#formacionesmatria`, `#bambú`, `#ahisearmolaescuela`. Caso confirmado
+con evidencia directa: `bambu` (sin tilde) está en `config.json` y
+funciona todos los días; `bambú` (con tilde) es el mismo hashtag
+duplicado y es uno de los que falla siempre — ese caso puntual se
+explica solo. Para los otros 9 no hay confirmación oficial de qué
+significa el 404 (no se encontró documentación de HikerAPI al
+respecto, y no hay credenciales ni acceso directo a Instagram desde
+acá para probar) — la inferencia es indirecta: el mismo patrón de
+consulta funciona para ~65 hashtags más todos los días, así que no es
+un bug genérico, y las 10 fallas se repitieron igual en dos corridas
+reales separadas.
+
+**Causa raíz real encontrada:** el loop de hashtags (y el de
+`cuentas_seguidas`, mismo patrón) hacía `return`/`continue` en el
+error de fetch ANTES de registrar el intento en `fuentes_resultados`
+— una fuente que siempre tira error nunca acumulaba `IntentosSinHit`
+en `FuentesStats`, así que `curar_fuentes.py` nunca la iba a detectar,
+sin importar cuántas corridas pasaran. Corregido: ahora se registra el
+intento sin hit antes del corte por error, en los dos loops.
+
+**Decisión del mantenedor:** sacar los 10 ahora en vez de esperar a
+que el mecanismo recién arreglado los detecte solo (50+ corridas) —
+costo de estar equivocado es bajo, se re-agregan fácil a `config.json`.
+`cuentas_seguidas` quedó en 65 hashtags (antes 75).
+
+## Dos hallazgos de revisión visual del sitio (02/11)
+
+**Eventos largos parecían vencidos en la home:** la card de la grilla
+solo mostraba `Fecha_Inicio`, nunca `Fecha_Fin` — un voluntariado de
+meses (inicio 1/9, fin 28/2/2027) o un curso en etapas (inicio 8/9, fin
+3/11) se veían como eventos de septiembre ya pasados el 2/11, aunque
+el filtro de "ya pasó" (que sí mira `Fecha_Fin`) los dejaba pasar
+correctamente — no era un bug de filtrado, era que la fecha real nunca
+se mostraba. Se agregó `formatRangoFechaCorta()` (fecha corta, con
+rango "1 sept → 28 feb 2027" cuando fin ≠ inicio) para la card de la
+grilla — el modal de detalle ya mostraba el rango completo, esto lo
+iguala.
+
+**Faltaba un motivo de reporte para "no tiene imagen":** varias cards
+muestran el placeholder 🏠 en vez de la foto real del evento (`img`
+vacío o el link de Drive roto) — se agregó "Falta la foto o imagen" a
+la lista de motivos fijos del mecanismo de reporte (`index.html` +
+`MOTIVOS_REPORTE_VALIDOS` en `Code.gs`).
+
 ## Métricas a monitorear
 
 **Ahora (F1):**
