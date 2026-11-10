@@ -84,6 +84,8 @@ def analizar(service=None) -> list[dict]:
             "eventos": len(eventos),
             "otros": [e["nombre"] for e in eventos if e["nombre"] != citado["nombre"]],
             "mensaje": armar_mensaje(citado["nombre"], citado["provincia"]),
+            "evento_citado": citado["nombre"],
+            "provincia": citado["provincia"],
         })
     return sorted(salida, key=lambda d: (-d["eventos"], d["usuario"]))
 

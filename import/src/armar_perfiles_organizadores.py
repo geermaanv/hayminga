@@ -1,0 +1,145 @@
+"""
+armar_perfiles_organizadores.py
+Piloto: en vez de pedirle al organizador que llene el formulario del
+Directorio desde cero, armamos un borrador de su perfil con datos que
+ya están disponibles (evento que publicó, bio pública de Instagram) y
+se lo mandamos para que diga "sí", "con cambios" o "no" — baja la
+fricción a confirmar en vez de completar (ver ROADMAP.md, idea del
+mantenedor 10/2026).
+
+Reporte de solo lectura, no manda nada y no escribe el Directorio
+(eso lo sigue haciendo solo Code.gs, ver CLAUDE.md): primero filtra
+gratis (CuentasIds!EmailPublico, ya cacheado, sin email no hay forma de
+contactar por este canal) y solo para ese subconjunto —acotado por
+--limite, porque esto SÍ cuesta: una llamada a HikerAPI por cuenta
+para traer biography/full_name— arma el borrador de perfil.
+
+Universo de organizadores: el mismo que mensajes_organizadores.py
+(cuentas de eventos ya confirmados), pensado como piloto sobre el
+backlog de eventos ya vencidos — no hace falta que el evento siga
+activo para construir el perfil, al revés que para invitar a alguien
+a una historia/DM de "mirá tu evento".
+"""
+import argparse
+import os
+
+import requests
+
+from src.mensajes_organizadores import analizar
+from src.sheets import CUENTAS_IDS_SHEET_NAME, SPREADSHEET_ID, cargar_emails_directorio, get_service
+
+LIMITE_DEFAULT = 10  # tope de llamadas pagas a HikerAPI por corrida de prueba
+
+
+def _hiker_headers() -> dict:
+    return {"x-access-key": os.environ["HIKERAPI_KEY"]}
+
+
+def _perfil_instagram(username: str) -> dict:
+    """Una llamada paga. full_name + biography para armar el borrador —
+    mismo endpoint que ya se usa (gratis) para país/email en
+    hiker_pipeline.py, pero esos campos no se cachean hoy en CuentasIds,
+    así que para el piloto se vuelve a pedir."""
+    resp = requests.get(
+        "https://api.hikerapi.com/v1/user/by/username",
+        params={"username": username}, headers=_hiker_headers(), timeout=20,
+    )
+    if resp.status_code != 200:
+        return {}
+    data = resp.json()
+    return {
+        "full_name": (data.get("full_name") or "").strip(),
+        "biography": (data.get("biography") or "").strip().replace("\n", " "),
+    }
+
+
+def _emails_cacheados(service) -> dict[str, str]:
+    values = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{CUENTAS_IDS_SHEET_NAME}!A2:D")
+        .execute()
+    ).get("values", [])
+    salida = {}
+    for row in values:
+        row = (row + [""] * 4)[:4]
+        username = (row[0] or "").strip().lower()
+        email = (row[3] or "").strip()
+        if username and email:
+            salida[username] = email
+    return salida
+
+
+def candidatos_con_email(service=None) -> list[dict]:
+    """Filtro gratis (sin llamar a HikerAPI): organizadores con email ya
+    cacheado, que no estén ya en el Directorio. Devuelve TODOS los que
+    cumplen — el tope de costo se aplica después, al armar el perfil."""
+    service = service or get_service()
+    organizadores = analizar(service=service)
+    emails_cache = _emails_cacheados(service)
+    ya_en_directorio = cargar_emails_directorio(service)
+
+    salida = []
+    for org in organizadores:
+        email = emails_cache.get(org["usuario"])
+        if not email or email.lower() in ya_en_directorio:
+            continue
+        salida.append({**org, "email": email})
+    return salida
+
+
+def armar_borradores(limite: int = LIMITE_DEFAULT) -> list[dict]:
+    service = get_service()
+    candidatos = candidatos_con_email(service)
+
+    print(f"[armar_perfiles_organizadores] {len(candidatos)} organizador(es) con email cacheado, "
+          f"sin estar ya en el Directorio")
+    if not candidatos:
+        return []
+
+    a_procesar = candidatos[:limite]
+    if len(candidatos) > limite:
+        print(f"[armar_perfiles_organizadores] procesando solo los primeros {limite} "
+              f"(--limite) — cada uno es una llamada paga a HikerAPI")
+
+    borradores = []
+    for c in a_procesar:
+        perfil_ig = _perfil_instagram(c["usuario"])
+        borradores.append({
+            "usuario": c["usuario"],
+            "email": c["email"],
+            "nombre": perfil_ig.get("full_name") or c["usuario"],
+            "provincia": c["provincia"],
+            "evento_citado": c["evento_citado"],
+            "bio": perfil_ig.get("biography"),
+        })
+    return borradores
+
+
+def reportar(limite: int = LIMITE_DEFAULT):
+    borradores = armar_borradores(limite)
+    if not borradores:
+        print("[armar_perfiles_organizadores] Nada para mostrar")
+        return
+
+    for i, b in enumerate(borradores, 1):
+        print("=" * 68)
+        print(f"{i}. @{b['usuario']}  →  {b['email']}")
+        print("=" * 68)
+        print(f"Nombre (borrador):     {b['nombre']}")
+        print(f"Provincia (borrador):  {b['provincia'] or '(sin dato)'}")
+        print(f"Evento que publicó:    {b['evento_citado']}")
+        print(f"Descripcion (borrador, de la bio pública de Instagram):")
+        print(f"  {b['bio'] or '(sin bio pública o vacía)'}")
+        print()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--limite", type=int, default=LIMITE_DEFAULT,
+                         help=f"Máximo de perfiles a armar (cada uno llama a HikerAPI, paga). Default {LIMITE_DEFAULT}.")
+    args = parser.parse_args()
+    reportar(limite=args.limite)
+
+
+if __name__ == "__main__":
+    main()
