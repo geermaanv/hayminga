@@ -1642,17 +1642,23 @@ primera línea distintos cuando el evento todavía se está revisando,
 para no afirmar algo falso.
 
 **Automatizado por corrida, con tope duro:** `correr_automatico()`
-cuelga de `email_intake.py` (mismo lugar que `contenido_instagram.generar()`,
-cada 3h), siempre con `--escribir` pero acotado a
+cuelga de `hiker_pipeline.py`, siempre con `--escribir` pero acotado a
 `_MAX_POR_CORRIDA_AUTOMATICA = 5` — mismo criterio que
-`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` en `hiker_pipeline.py`, y
+`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` en ese mismo archivo, y
 la misma razón de fondo que ya aprendió este proyecto dos veces con
 `curar_fuentes.py` (515 cuentas de golpe, después 2976 más): un
 auto-send sin tope duro por corrida es peligroso por diseño,
 no alcanza con un piso de calidad. Acá el riesgo es más alto que en
 esos casos — es un mail real a una persona real, no solo escribir una
-fila — así que el tope arranca chico (5 cada 3h ≈ hasta 40/día) y se
-sube con datos reales de cuántos confirman, no de entrada.
+fila.
+
+**Corrección (11/11):** arrancó colgado de `email_intake.py` (cada 3h,
+mismo lugar que `contenido_instagram.generar()`) — pero a diferencia
+de la cola de Instagram, invitar a alguien al Directorio no tiene
+apuro de horas, y cada 3h multiplicaba el tope real a ~40/día en vez
+de 5. Movido a `hiker_pipeline.py`, después del import diario: un tope
+de 5 significa 5 de verdad, una vez por día, y se sube con datos
+reales de cuántos confirman — no de entrada.
 
 ## Corrección: los borradores del Directorio se mostraban igual en el sitio (11/11)
 

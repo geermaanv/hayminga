@@ -1099,3 +1099,16 @@ def run() -> int:
 
 if __name__ == "__main__":
     run()
+
+    # Borradores de perfil del Directorio (ver ROADMAP.md, 11/2026): acá y
+    # no en email_intake.py (que corre cada 3h) — a diferencia de la cola
+    # de Instagram, no hay apuro de horas en invitar a alguien al
+    # Directorio, y correrlo una sola vez por día después del import
+    # mantiene el tope real en _MAX_POR_CORRIDA_AUTOMATICA (5) por día, no
+    # multiplicado por ~8 corridas. En try propio: un fallo acá no debe
+    # marcar roto el import, que es lo importante de este job.
+    try:
+        from src.armar_perfiles_organizadores import correr_automatico
+        correr_automatico()
+    except Exception as e:
+        print(f"[hiker_pipeline] error armando perfiles del Directorio — {e}")

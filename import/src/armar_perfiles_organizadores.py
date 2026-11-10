@@ -29,7 +29,7 @@ tiene que ser cierto. Acá el mail distingue los dos casos (ver
 `evento_confirmado` más abajo y `avisarBorradorDirectorio_` en
 Code.gs).
 
-Pensado para colgarse de un cron (ver `email_intake.py`) con un tope
+Pensado para colgarse de un cron (ver `hiker_pipeline.py`, 1x/día tras el import) con un tope
 chico por corrida (`_MAX_POR_CORRIDA_AUTOMATICA`) — mismo criterio que
 `_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` en `hiker_pipeline.py`: un
 goteo, no una tanda grande, aunque el pool elegible en un momento dado
@@ -237,7 +237,7 @@ def reportar(limite: int = LIMITE_DEFAULT, escribir: bool = False):
 
 
 def correr_automatico(limite: int = _MAX_POR_CORRIDA_AUTOMATICA) -> int:
-    """Para colgar de un cron sin revisión humana (ver email_intake.py) —
+    """Para colgar de un cron sin revisión humana (ver hiker_pipeline.py) —
     siempre --escribir, siempre acotado al tope chico, nunca al --limite
     manual que se usa para probar. Devuelve cuántos borradores se crearon
     de verdad."""
