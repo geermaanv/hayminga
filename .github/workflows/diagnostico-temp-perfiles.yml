@@ -1,10 +1,9 @@
 name: TEMP - Piloto armar_perfiles_organizadores
 
 # Workflow de diagnóstico temporal (mismo patrón que otros ya usados y
-# borrados en el proyecto, ver ROADMAP.md): correr una vez
-# armar_perfiles_organizadores.py --escribir con --limite acotado, para
-# probar el piloto de "armamos tu perfil, confirmalo" contra la cola real
-# antes de escalarlo. Se borra después de usarlo.
+# borrados en el proyecto, ver ROADMAP.md): correr armar_perfiles_organizadores.py
+# --escribir con --limite acotado, para crear borradores y mandar el mail
+# real contra la cola de organizadores. Se borra después de usarlo.
 
 on:
   workflow_dispatch:
