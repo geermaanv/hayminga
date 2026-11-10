@@ -1624,7 +1624,35 @@ ahora: cuántos de los 38 confirman, cuántos rechazan, cuántos no
 responden. Si en una semana el número de confirmados sigue en 7, el
 canal no está funcionando — si sube, funciona.
 
-## Métricas a monitorear
+## Directorio: automatizar el envío por corrida + ampliar el pool (11/2026)
+
+A pedido del mantenedor, dos cambios sobre el piloto de arriba:
+
+**Pool ampliado, pero no a cualquier costo:** `_organizadores_candidatos()`
+(nueva, en `armar_perfiles_organizadores.py`) suma cuentas con un evento
+`pendiente_confirmacion`, no solo `confirmado` — `descartado` sigue
+sin contar, porque ahí ya se determinó activamente que no es un
+evento real o es un duplicado, y eso sí sería peor que no invitar.
+Separado a propósito de `mensajes_organizadores.analizar()` (sigue
+solo `confirmado`): ese alimenta la cola vieja de DM
+(`dm_organizador`), cuyo texto afirma "ya está publicado" — ahí tiene
+que seguir siendo cierto. El nuevo campo `evento_confirmado` viaja
+hasta `Code.gs` y `avisarBorradorDirectorio_` elige un asunto y una
+primera línea distintos cuando el evento todavía se está revisando,
+para no afirmar algo falso.
+
+**Automatizado por corrida, con tope duro:** `correr_automatico()`
+cuelga de `email_intake.py` (mismo lugar que `contenido_instagram.generar()`,
+cada 3h), siempre con `--escribir` pero acotado a
+`_MAX_POR_CORRIDA_AUTOMATICA = 5` — mismo criterio que
+`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` en `hiker_pipeline.py`, y
+la misma razón de fondo que ya aprendió este proyecto dos veces con
+`curar_fuentes.py` (515 cuentas de golpe, después 2976 más): un
+auto-send sin tope duro por corrida es peligroso por diseño,
+no alcanza con un piso de calidad. Acá el riesgo es más alto que en
+esos casos — es un mail real a una persona real, no solo escribir una
+fila — así que el tope arranca chico (5 cada 3h ≈ hasta 40/día) y se
+sube con datos reales de cuántos confirman, no de entrada.
 
 **Ahora (F1):**
 - Eventos activos: meta 50+

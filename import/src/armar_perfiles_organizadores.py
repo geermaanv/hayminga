@@ -17,11 +17,24 @@ Code.gs (accion directorio_crear_borrador) que cree la fila
 (Activo=false, Estado=borrador) y mande el mail de verdad — Python
 nunca escribe el Directorio directamente (ver CLAUDE.md).
 
-Universo de organizadores: el mismo que mensajes_organizadores.py
-(cuentas de eventos ya confirmados), pensado como piloto sobre el
-backlog de eventos ya vencidos — no hace falta que el evento siga
-activo para construir el perfil, al revés que para invitar a alguien
-a una historia/DM de "mirá tu evento".
+Universo de organizadores (ampliado 11/2026, a pedido del mantenedor):
+cuentas con un evento `confirmado` O `pendiente_confirmacion` —
+`descartado` no cuenta, porque ya se determinó activamente que no es
+un evento real o es un duplicado, así que invitar en base a eso sería
+peor que no invitar. Separado a propósito de
+`mensajes_organizadores.analizar()` (que sigue siendo solo
+`confirmado`): ese alimenta además la cola vieja de DM
+(`dm_organizador`), cuyo texto afirma "ya está publicado" — ahí sí
+tiene que ser cierto. Acá el mail distingue los dos casos (ver
+`evento_confirmado` más abajo y `avisarBorradorDirectorio_` en
+Code.gs).
+
+Pensado para colgarse de un cron (ver `email_intake.py`) con un tope
+chico por corrida (`_MAX_POR_CORRIDA_AUTOMATICA`) — mismo criterio que
+`_MAX_VALIDACIONES_ORGANIZADOR_POR_CORRIDA` en `hiker_pipeline.py`: un
+goteo, no una tanda grande, aunque el pool elegible en un momento dado
+sea mucho más grande (ver ROADMAP.md, incidentes de
+`curar_fuentes.py` por no tener un tope duro).
 """
 import argparse
 import json
@@ -29,10 +42,58 @@ import os
 
 import requests
 
-from src.mensajes_organizadores import analizar
-from src.sheets import CUENTAS_IDS_SHEET_NAME, SPREADSHEET_ID, cargar_emails_directorio, get_service
+from src.sheets import COLUMNS, CUENTAS_IDS_SHEET_NAME, SHEET_NAME, SPREADSHEET_ID, cargar_emails_directorio, get_service
 
-LIMITE_DEFAULT = 10  # tope de llamadas pagas a HikerAPI por corrida de prueba
+LIMITE_DEFAULT = 10  # tope de llamadas pagas a HikerAPI por corrida manual/de prueba
+_MAX_POR_CORRIDA_AUTOMATICA = 5  # tope por corrida cuando cuelga de un cron, sin revisión humana
+
+_ESTADOS_ELEGIBLES = {"confirmado", "pendiente_confirmacion"}
+
+
+def _organizadores_candidatos(service) -> list[dict]:
+    """Agrupado por cuenta de Instagram (no por evento ni por el texto
+    libre de Organizador). Para cada cuenta, el evento a citar se elige
+    así: uno activo si hay (invita mejor algo que todavía va a pasar);
+    si no, uno confirmado (afirmación cierta); si no, el primero
+    pendiente_confirmacion encontrado. `evento_confirmado` le dice al
+    mail qué tan afirmativo puede ser el texto."""
+    values = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_NAME}!A2:Y")
+        .execute()
+    ).get("values", [])
+
+    por_cuenta: dict[str, dict] = {}
+    for row in values:
+        row = (row + [""] * len(COLUMNS))[:len(COLUMNS)]
+        estado = (row[16] or "").strip().lower()
+        if estado not in _ESTADOS_ELEGIBLES:
+            continue
+        usuario = (row[24] or "").strip().lstrip("@").lower()
+        if not usuario:
+            continue
+        entrada = por_cuenta.setdefault(usuario, {"usuario": usuario, "eventos": []})
+        entrada["eventos"].append({
+            "nombre": (row[1] or "").strip(),
+            "provincia": (row[7] or "").strip(),
+            "activo": (row[0] or "").strip().lower() == "true",
+            "confirmado": estado == "confirmado",
+        })
+
+    salida = []
+    for datos in por_cuenta.values():
+        eventos = datos["eventos"]
+        activos = [e for e in eventos if e["activo"]]
+        confirmados = [e for e in eventos if e["confirmado"]]
+        citado = activos[0] if activos else (confirmados[0] if confirmados else eventos[0])
+        salida.append({
+            "usuario": datos["usuario"],
+            "eventos": len(eventos),
+            "evento_citado": citado["nombre"],
+            "provincia": citado["provincia"],
+            "evento_confirmado": citado["confirmado"],
+        })
+    return sorted(salida, key=lambda d: (-d["eventos"], d["usuario"]))
 
 
 def _hiker_headers() -> dict:
@@ -78,7 +139,7 @@ def candidatos_con_email(service=None) -> list[dict]:
     cacheado, que no estén ya en el Directorio. Devuelve TODOS los que
     cumplen — el tope de costo se aplica después, al armar el perfil."""
     service = service or get_service()
-    organizadores = analizar(service=service)
+    organizadores = _organizadores_candidatos(service)
     emails_cache = _emails_cacheados(service)
     ya_en_directorio = cargar_emails_directorio(service)
 
@@ -114,6 +175,7 @@ def armar_borradores(limite: int = LIMITE_DEFAULT) -> list[dict]:
             "nombre": perfil_ig.get("full_name") or c["usuario"],
             "provincia": c["provincia"],
             "evento_citado": c["evento_citado"],
+            "evento_confirmado": c["evento_confirmado"],
             "bio": perfil_ig.get("biography"),
         })
     return borradores
@@ -137,6 +199,7 @@ def crear_borrador(b: dict) -> str | None:
             "descripcion": b["bio"],
             "email": b["email"],
             "evento": b["evento_citado"],
+            "evento_confirmado": b["evento_confirmado"],
         }),
         timeout=30,
     )
@@ -159,7 +222,8 @@ def reportar(limite: int = LIMITE_DEFAULT, escribir: bool = False):
         print("=" * 68)
         print(f"Nombre (borrador):     {b['nombre']}")
         print(f"Provincia (borrador):  {b['provincia'] or '(sin dato)'}")
-        print(f"Evento que publicó:    {b['evento_citado']}")
+        estado_evento = "confirmado" if b["evento_confirmado"] else "pendiente de revisión"
+        print(f"Evento citado ({estado_evento}): {b['evento_citado']}")
         print(f"Descripcion (borrador, de la bio pública de Instagram):")
         print(f"  {b['bio'] or '(sin bio pública o vacía)'}")
         if escribir:
@@ -170,6 +234,20 @@ def reportar(limite: int = LIMITE_DEFAULT, escribir: bool = False):
 
     if not escribir:
         print("[armar_perfiles_organizadores] dry-run — correr con --escribir para crear los borradores y mandar el mail.")
+
+
+def correr_automatico(limite: int = _MAX_POR_CORRIDA_AUTOMATICA) -> int:
+    """Para colgar de un cron sin revisión humana (ver email_intake.py) —
+    siempre --escribir, siempre acotado al tope chico, nunca al --limite
+    manual que se usa para probar. Devuelve cuántos borradores se crearon
+    de verdad."""
+    borradores = armar_borradores(limite)
+    creados = 0
+    for b in borradores:
+        if crear_borrador(b):
+            creados += 1
+    print(f"[armar_perfiles_organizadores] {creados}/{len(borradores)} borrador(es) creado(s) automáticamente")
+    return creados
 
 
 def main():

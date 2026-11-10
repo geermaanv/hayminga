@@ -262,3 +262,14 @@ if __name__ == "__main__":
             generar()
         except Exception as e:
             print(f"[email_intake] error generando la cola de Instagram — {e}")
+
+        # Borradores de perfil del Directorio (ver ROADMAP.md, 11/2026):
+        # mismo espíritu que arriba, en try propio para que un fallo acá
+        # tampoco rompa el resto. Tope chico (_MAX_POR_CORRIDA_AUTOMATICA,
+        # hoy 5) a propósito — es un auto-send real (mail de verdad), no
+        # solo escribir una cola, así que el tope importa más todavía.
+        try:
+            from src.armar_perfiles_organizadores import correr_automatico
+            correr_automatico()
+        except Exception as e:
+            print(f"[email_intake] error armando perfiles del Directorio — {e}")

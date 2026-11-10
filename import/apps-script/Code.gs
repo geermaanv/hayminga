@@ -264,6 +264,11 @@ function crearBorradorDirectorio_(data) {
  * con el mantenedor (ver ROADMAP.md, 11/2026). Tres links de un clic:
  * confirmar tal cual (doGet ?confirmar_directorio), editar (abre el
  * formulario del sitio precargado) o rechazar (doGet ?rechazar_directorio).
+ *
+ * `data.evento_confirmado` (11/2026, pool ampliado a
+ * pendiente_confirmacion): el asunto y la primera línea cambian para no
+ * afirmar que algo "ya está publicado" cuando todavía se está revisando
+ * — ver armar_perfiles_organizadores.py.
  */
 function avisarBorradorDirectorio_(id, data) {
   var scriptUrl = ScriptApp.getService().getUrl();
@@ -273,18 +278,28 @@ function avisarBorradorDirectorio_(id, data) {
 
   var evento = data.evento || 'tu evento';
   var donde = data.provincia ? ' en ' + data.provincia : '';
+  var confirmado = data.evento_confirmado !== false; // default true: no romper llamadas viejas sin el campo
+
+  var asunto = confirmado
+    ? 'Gracias: Tu "' + evento + '" fue parte de hayminga.org 2026 🌿'
+    : 'Tu "' + evento + '" en hayminga.org 🌿';
+  var primeraLinea = confirmado
+    ? 'Durante 2026 vimos que organizaste "' + evento + '"' + donde + ', así que armamos tu ' +
+      'perfil para poder sumarte al Directorio de profesionales — es gratis hoy y siempre:\n\n'
+    : 'Durante 2026 vimos que compartiste "' + evento + '"' + donde + ' en Instagram — todavía ' +
+      'lo estamos revisando para publicarlo, pero ya armamos tu perfil para poder sumarte al ' +
+      'Directorio de profesionales — es gratis hoy y siempre:\n\n';
 
   MailApp.sendEmail({
     to: String(data.email).trim(),
-    subject: 'Gracias: Tu "' + evento + '" fue parte de hayminga.org 2026 🌿',
+    subject: asunto,
     body:
       'Hola! Somos Maxi y Germán, de hayminga.org.\n\n' +
       'Armamos hayminga como el nexo entre las personas, los saberes y las oportunidades ' +
       'de la bioconstrucción: juntamos en un solo lugar los eventos, mingas y profesionales ' +
       'de Argentina, que hoy están dispersos en cientos de perfiles de Instagram. No vendemos ' +
       'nada, solo conectamos.\n\n' +
-      'Durante 2026 vimos que organizaste "' + evento + '"' + donde + ', así que armamos tu ' +
-      'perfil para poder sumarte al Directorio de profesionales — es gratis hoy y siempre:\n\n' +
+      primeraLinea +
       '———\n' +
       data.nombre + (data.provincia ? ' · ' + data.provincia : '') + '\n' +
       (data.descripcion || '') + '\n' +
