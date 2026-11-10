@@ -1579,9 +1579,28 @@ mismo que el botón "No, gracias" del formulario. "Quiero cambiar algo
 antes" sigue siendo el único que abre el sitio, porque ahí sí hace
 falta escribir algo.
 
-**Pendiente real:** todavía no se corrió `--escribir` contra la cola
-real de organizadores — falta esa primera corrida (acotada por
-`--limite`) para medir si el canal funciona.
+**Primera corrida real (10/11, `--limite 2`), vía workflow temporal
+autorizado por el mantenedor:** funcionó de punta a punta — 38
+organizadores elegibles encontrados (con email cacheado, sin estar en
+el Directorio, muchos más que los 93 de la vieja cola de DM), 2
+borradores creados y 2 mails mandados de verdad.
+
+**Hallazgo real, no solo una corrida de prueba limpia:** los dos
+eventos citados en los mails (`Curso de Hongos Mágicos – Psilocybe
+cubensis`, `Taller de Cultivo de Gírgolas`) son del cluster de "hongos"
+que `PATRONES.md`/este mismo documento ya identificaron como ruido
+temático conocido en otras partes del pipeline (hashtags
+`cultivodehongos`/`fungi`/`girgolas`/`hongos`/`micelio`, excluidos a
+propósito en `candidatos_hashtags.py`). `mensajes_organizadores.py`
+no tiene ese mismo filtro — agrupa por cuenta cualquier evento
+`confirmado`, sin chequear si el evento mismo es on-topic. Para una de
+las dos cuentas (`@arteytierrabioconstruccion`) la bio real de
+Instagram sí es de bioconstrucción, así que el evento citado parece
+ser ruido puntual de esa cuenta, no una cuenta mal targeteada — pero
+no hay evidencia todavía para la otra (`@ecoaldea_nakkal`, sin bio
+pública). Pendiente: decidir si vale la pena filtrar eventos del
+cluster de hongos antes de citarlos en el mail, o si alcanza con que
+el mantenedor revise antes de escalar el `--limite`.
 
 ## Métricas a monitorear
 
