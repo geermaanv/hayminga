@@ -1859,7 +1859,13 @@ function renderDirectorio() {
     // la persona confirme. Solo un "false" explícito oculta — igual que
     // RecibeNovedades, así las filas de antes de esta columna (todas ya
     // confirmadas a mano) se siguen mostrando sin backfill.
-    if (String(p['Activo'] || '').toLowerCase() === 'false') return false;
+    // Comparar contra 'false' Y false (no solo el string): GViz puede
+    // devolver el booleano nativo según cómo Sheets tipó la columna, y
+    // `p['Activo'] || ''` se come un `false` nativo (false || '' === ''),
+    // dejando pasar todo sin filtrar — mismo bug que Activo de Eventos ya
+    // resuelve comparando los dos casos (ver más abajo, línea de
+    // todosLosEventos).
+    if (p['Activo'] === 'false' || p['Activo'] === false) return false;
     if (filtroProv && p['Provincia'] !== filtroProv) return false;
     if (soloDisp && String(p['OfreceServicios'] || '').toLowerCase() !== 'true') return false;
     // Búsqueda sobre el texto libre: con perfiles escritos a mano rinde más

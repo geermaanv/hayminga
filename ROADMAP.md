@@ -1654,6 +1654,22 @@ esos casos — es un mail real a una persona real, no solo escribir una
 fila — así que el tope arranca chico (5 cada 3h ≈ hasta 40/día) y se
 sube con datos reales de cuántos confirman, no de entrada.
 
+## Corrección: los borradores del Directorio se mostraban igual en el sitio (11/11)
+
+Reportado por el mantenedor al entrar a hayminga.org: los 38
+borradores (`Activo=false`) aparecían en la grilla pública del
+Directorio, sin filtrar. Mismo bug ya documentado para `Activo` de
+Eventos (ver `todosLosEventos` en `index.html`, y PATRONES.md
+"Booleans nativos rompen GViz"), reintroducido acá sin darse cuenta:
+el filtro nuevo comparaba `String(p['Activo'] || '').toLowerCase() ===
+'false'`, y cuando GViz devuelve `Activo` como booleano nativo (no
+como texto) `false || ''` da `''`, no `false` — el filtro nunca
+disparaba y todo quedaba visible. Eventos ya resuelve esto comparando
+los dos casos posibles (`=== 'true' || === true`); el filtro de
+Directorio ahora hace lo mismo (`=== 'false' || === false`).
+
+## Métricas a monitorear
+
 **Ahora (F1):**
 - Eventos activos: meta 50+
 - Pendientes por corrida: meta <10
