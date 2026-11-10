@@ -1497,6 +1497,74 @@ vacío o el link de Drive roto) — se agregó "Falta la foto o imagen" a
 la lista de motivos fijos del mecanismo de reporte (`index.html` +
 `MOTIVOS_REPORTE_VALIDOS` en `Code.gs`).
 
+## Directorio: borrador + confirmar/rechazar, en vez de pedir el formulario desde cero (11/2026)
+
+Con el Directorio en 7 personas y la cola de 93 DM a organizadores
+vieja (ver sección de Instagram más arriba), surgió una idea más
+simple que mandar el DM de invitación de siempre: en vez de pedirle al
+organizador que llene el formulario desde cero, armar el perfil
+nosotros con datos que ya están disponibles (qué evento publicó, su
+bio pública de Instagram — gratis, misma llamada que ya se paga para
+`EmailPublico`) y mandarle un link para que solo diga "sí", "con
+cambios" o "no". Decisión del mantenedor: tiene que ser opt-in
+explícito, nunca publicar el borrador sin que la persona lo confirme
+— a diferencia de un evento (un hecho ya público), un perfil del
+Directorio es una afirmación sobre una persona (`PATRONES.md`: "el
+sitio no clasifica personas"), así que presumir consentimiento no
+corresponde acá aunque sí se usa ese criterio para Eventos.
+
+**Piloto de solo lectura, primer paso:** `armar_perfiles_organizadores.py`
+reusa el agrupado por cuenta de `mensajes_organizadores.py` (se le
+agregaron `provincia` y `evento_citado` al dict que ya devolvía),
+filtra gratis por cuentas con `EmailPublico` ya cacheado en
+`CuentasIds` que no estén ya en el Directorio, y solo para ese
+subconjunto acotado (`--limite`, default 10) llama a HikerAPI para
+traer `biography`/`full_name` y armar el borrador. No escribe nada
+todavía — es el paso de "mirar los datos antes de decidir" (ver
+`ESTRATEGIA.md`).
+
+**Mecanismo de confirmación, reusando el formulario público en vez de
+construir uno nuevo** (idea del mantenedor: evita pasar texto libre
+largo, como la bio, por parámetros de URL en un mail):
+
+- `Directorio` suma tres columnas al final (`Activo`, `Estado`,
+  `FechaRechazo` — mismo criterio de "nunca reordenar" que ya rige
+  Eventos). Igual que `RecibeNovedades`, solo un `Activo=false`
+  explícito oculta: las 7 filas de antes de esta columna (ya
+  confirmadas a mano) se siguen mostrando sin backfill.
+- `crearBorradorDirectorio_` (Code.gs, protegida con el mismo secreto
+  que `subir_imagen`/`avisar_evento_publicado` porque la llama Python,
+  no el form público) crea la fila con `Activo=false`,
+  `Estado=borrador` — invisible en el sitio.
+- El mail (todavía no se manda — falta ese paso y revisar el texto con
+  el mantenedor, mismo proceso que ya se siguió con
+  `pedir_referido_directorio`) llevaría un link con el `Id`, no los
+  datos: `hayminga.org?directorio=1&id=XXXX`.
+- `index.html`: ese link fuerza la vista Directorio, busca esa fila en
+  el feed GViz que el sitio ya lee (público, sin backend nuevo para
+  esto) y precarga el formulario existente con lo que ya armamos. Un
+  botón nuevo "No, gracias" (oculto salvo en este modo) llama a
+  `directorio_rechazar`.
+- Al enviar, si se estaba editando un borrador, el form manda
+  `directorio_confirmar` con el `Id` en vez de `directorio_alta` —
+  `confirmarPersonaDirectorio_` (Code.gs) ACTUALIZA esa fila por Id en
+  vez de appendear una nueva (mismo patrón de buscar-por-Id que ya
+  usan `confirmarEvento_`/`descartarEvento_` para Eventos) y pone
+  `Activo=true`, `Estado=confirmado`.
+- `rechazarPersonaDirectorio_`: la fila nunca se borra (PATRONES.md) —
+  queda `Activo=false`, `Estado=descartado`, con `FechaRechazo` (fecha
+  de hoy) para no volver a ofrecérselo en una corrida futura. Pedido
+  explícito del mantenedor: hay que poder distinguir "nunca
+  respondió" de "dijo que no", no solo que quede invisible en los dos
+  casos por igual.
+
+**Falta para que el piloto mande algo de verdad:** conectar
+`armar_perfiles_organizadores.py` a `crearBorradorDirectorio_` (un
+`--escribir`) y escribir el texto del mail — con el mismo proceso de
+revisión con el mantenedor que ya se siguió para
+`pedir_referido_directorio`/`pedir_referido_cuentas_instagram`, antes
+de mandar nada real.
+
 ## Métricas a monitorear
 
 **Ahora (F1):**

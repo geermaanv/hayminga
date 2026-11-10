@@ -118,7 +118,14 @@ var DIRECTORIO_SHEET_NAME = 'Directorio';
 // RecibeNovedades se guarda como texto "true"/"false" y no como booleano
 // nativo: Apps Script escribiendo booleanos rompe el parseo de GViz del
 // frontend (ver PATRONES.md).
-var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades', 'OfreceServicios', 'UltimoPedidoReferido'];
+// Activo/Estado/FechaRechazo (11/2026, ver ROADMAP.md): piloto "armamos tu
+// perfil, confirmalo" — en vez de pedirle a cada organizador que llene el
+// formulario desde cero, se arma un borrador (Activo=false, Estado=borrador)
+// con datos ya disponibles y se le manda un link para que lo confirme,
+// edite, o rechace. Filas de antes de esta columna (ya confirmadas a mano)
+// se siguen mostrando: el frontend solo oculta un 'false' explícito, igual
+// que ya hace con RecibeNovedades — no hace falta backfill.
+var DIRECTORIO_HEADERS = ['Id', 'Nombre', 'Provincia', 'Intereses', 'Descripcion', 'Email', 'Whatsapp', 'Tecnicas', 'AnioDesde', 'RecibeNovedades', 'OfreceServicios', 'UltimoPedidoReferido', 'Activo', 'Estado', 'FechaRechazo'];
 var SOLICITUDES_SHEET_NAME = 'SolicitudesContacto';
 var SOLICITUDES_HEADERS = ['Id', 'DirectorioId', 'SolicitanteNombre', 'SolicitanteEmail', 'Mensaje', 'Token', 'Estado', 'Timestamp'];
 
@@ -136,6 +143,12 @@ function doPost(e) {
       respuesta = { success: true, id: crearPersonaDirectorio_(data) };
     } else if (data.accion === 'directorio_contacto') {
       respuesta = { success: true, id: solicitarContacto_(data) };
+    } else if (data.accion === 'directorio_confirmar') {
+      respuesta = { success: true, id: confirmarPersonaDirectorio_(data) };
+    } else if (data.accion === 'directorio_rechazar') {
+      respuesta = { success: true, id: rechazarPersonaDirectorio_(data) };
+    } else if (data.accion === 'directorio_crear_borrador') {
+      respuesta = { success: true, id: crearBorradorDirectorio_(data) };
     } else if (data.accion === 'confirmar_evento') {
       respuesta = { success: true, id: confirmarEvento_(data) };
     } else if (data.accion === 'descartar_evento') {
@@ -195,9 +208,125 @@ function crearPersonaDirectorio_(data) {
     // "false" explicito da de baja.
     data.recibeNovedades === false ? 'false' : 'true',
     data.ofreceServicios === true ? 'true' : 'false',
+    '', // UltimoPedidoReferido
+    'true', // Activo
+    'confirmado', // Estado
+    '', // FechaRechazo
   ]);
 
   return id;
+}
+
+
+/**
+ * Crea un borrador de perfil (Activo=false, Estado=borrador) a partir de
+ * datos ya disponibles (evento publicado + bio de Instagram) sin que la
+ * persona haya hecho nada todavía — ver armar_perfiles_organizadores.py.
+ * Invisible en el sitio hasta que confirme vía confirmarPersonaDirectorio_.
+ * Protegido con el mismo secreto que subirImagenADrive_/avisarEventoPublicado_
+ * porque lo llama Python, no el formulario público (CLAUDE.md: Python nunca
+ * escribe el Directorio directamente).
+ */
+function crearBorradorDirectorio_(data) {
+  var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
+  if (!secreto || data.secreto !== secreto) {
+    throw new Error('Secreto inválido');
+  }
+  if (!data.nombre || !data.email) {
+    throw new Error('Faltan campos requeridos (nombre, email)');
+  }
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var id = Utilities.getUuid().replace(/-/g, '').substring(0, 10);
+  appendRowComoTexto_(sheet, [
+    id,
+    String(data.nombre).trim(),
+    data.provincia || '',
+    '', // Intereses
+    data.descripcion || '',
+    String(data.email).trim(),
+    '', // Whatsapp
+    '', // Tecnicas
+    '', // AnioDesde
+    'true', // RecibeNovedades (default, igual que el alta normal)
+    'false', // OfreceServicios
+    '', // UltimoPedidoReferido
+    'false', // Activo
+    'borrador', // Estado
+    '', // FechaRechazo
+  ]);
+  return id;
+}
+
+
+/**
+ * Confirma (con o sin cambios) un borrador armado por
+ * crearBorradorDirectorio_ — a diferencia de crearPersonaDirectorio_, que
+ * siempre appendea una fila nueva, esto ACTUALIZA la fila existente por Id
+ * y la activa. Mismo patrón de buscar-por-Id que confirmarEvento_/
+ * descartarEvento_ en Eventos.
+ */
+function confirmarPersonaDirectorio_(data) {
+  if (!data.id) throw new Error('Falta el id del perfil a confirmar');
+  if (!data.nombre || !data.email || !data.whatsapp) {
+    throw new Error('Faltan campos requeridos (nombre, email, whatsapp)');
+  }
+
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var filaEncontrada = _buscarFilaDirectorioPorId_(sheet, data.id);
+  if (filaEncontrada === -1) throw new Error('No se encontró el perfil ' + data.id);
+
+  var intereses = Array.isArray(data.intereses) ? data.intereses.join('; ') : (data.intereses || '');
+
+  var valores = {
+    Nombre: String(data.nombre).trim(),
+    Provincia: data.provincia || '',
+    Intereses: intereses,
+    Descripcion: data.descripcion || '',
+    Email: String(data.email).trim(),
+    Whatsapp: data.whatsapp || '',
+    RecibeNovedades: data.recibeNovedades === false ? 'false' : 'true',
+    OfreceServicios: data.ofreceServicios === true ? 'true' : 'false',
+    Activo: 'true',
+    Estado: 'confirmado',
+  };
+  for (var campo in valores) {
+    var idx = DIRECTORIO_HEADERS.indexOf(campo);
+    if (idx === -1) continue;
+    sheet.getRange(filaEncontrada, idx + 1).setNumberFormat('@').setValue(valores[campo]);
+  }
+  return data.id;
+}
+
+
+/**
+ * La persona dijo explícitamente que no quiere publicar el borrador. Nunca
+ * se borra la fila (PATRONES.md) — queda Activo=false y Estado=descartado
+ * con la fecha, para no volver a ofrecérselo en una corrida futura.
+ */
+function rechazarPersonaDirectorio_(data) {
+  if (!data.id) throw new Error('Falta el id del perfil a rechazar');
+
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var filaEncontrada = _buscarFilaDirectorioPorId_(sheet, data.id);
+  if (filaEncontrada === -1) throw new Error('No se encontró el perfil ' + data.id);
+
+  var hoyStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  sheet.getRange(filaEncontrada, DIRECTORIO_HEADERS.indexOf('Activo') + 1).setNumberFormat('@').setValue('false');
+  sheet.getRange(filaEncontrada, DIRECTORIO_HEADERS.indexOf('Estado') + 1).setNumberFormat('@').setValue('descartado');
+  sheet.getRange(filaEncontrada, DIRECTORIO_HEADERS.indexOf('FechaRechazo') + 1).setNumberFormat('@').setValue(hoyStr);
+  return data.id;
+}
+
+
+function _buscarFilaDirectorioPorId_(sheet, id) {
+  var ultimaFila = sheet.getLastRow();
+  if (ultimaFila < 2) return -1;
+  var idxId = DIRECTORIO_HEADERS.indexOf('Id');
+  var ids = sheet.getRange(2, idxId + 1, ultimaFila - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) return i + 2;
+  }
+  return -1;
 }
 
 
