@@ -318,7 +318,6 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 <header>
   <div class="header-left">
     <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">hay<span>minga</span></div>
-    <span id="contador-pendientes" style="display:none;font-size:0.7rem;color:var(--texto-suave);opacity:0.6;margin-left:0.3rem;" title="pendientes / publicados / total de eventos"></span>
     <a class="wa-pill" href="https://chat.whatsapp.com/EFxD5RYXDkb79UNsxPJkfw" target="_blank" rel="noopener"
        title="Es una comunidad de WhatsApp: te llegan los eventos nuevos cada semana">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.32A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.1c-.22.62-1.28 1.18-1.77 1.24-.45.06-1.02.08-1.65-.1-.38-.11-.87-.28-1.5-.55-2.64-1.14-4.36-3.8-4.5-3.98-.13-.18-1.08-1.43-1.08-2.73s.68-1.93.92-2.2c.24-.26.53-.33.7-.33h.5c.16 0 .38-.06.6.46.22.53.75 1.83.82 1.97.07.13.11.29.02.47-.09.18-.14.29-.27.44-.13.16-.28.35-.4.47-.13.13-.27.27-.11.53.16.26.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.16 1.34.26.13.42.11.57-.07.16-.18.66-.77.84-1.03.18-.26.35-.22.6-.13.24.09 1.55.73 1.82.87.26.13.44.2.5.31.07.11.07.65-.14 1.27z"/></svg>
@@ -328,6 +327,8 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
     <!-- <button class="nav-link" onclick="document.getElementById('vision').scrollIntoView({behavior:'smooth'})">¿Qué es hayminga?</button> -->
   </div>
   <div class="header-right">
+    <span id="contador-pendientes" style="display:none;font-size:0.7rem;color:var(--texto-suave);opacity:0.6;" title="pendientes / publicados / total de eventos"></span>
+    <span id="contador-directorio" style="display:none;font-size:0.7rem;color:var(--texto-suave);opacity:0.6;" title="confirmados / total del Directorio"></span>
     <div class="vista-toggle" style="margin:0;padding:0;max-width:none;">
       <button class="vista-btn eventos on" id="vista-btn-eventos" onclick="mostrarVista('eventos')" title="Eventos">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -619,6 +620,7 @@ body.vista-directorio-activa .header-action.persona{display:flex;}
 
       <button type="submit" class="btn-publicar directorio-btn" id="btn-publicar-directorio">Sumarme</button>
       <button type="button" class="btn-cancelar" onclick="cerrarFormDirectorio()">Cancelar</button>
+      <button type="button" class="btn-cancelar" id="btn-rechazar-borrador" style="display:none;" onclick="rechazarBorradorDirectorio()">No, gracias</button>
       <p id="directorio-form-msg" style="margin-top:0.75rem;font-size:0.85rem;text-align:center;display:none;"></p>
     </form>
   </div>
@@ -806,6 +808,10 @@ function cargarDatos() {
       aplicarFiltros(2);
       iniciarRevisionSiCorresponde();
       abrirDirectorioSiCorresponde();
+      // Carga el Directorio de entrada (no solo al abrir esa pestaña) para
+      // que el contador del header tenga datos ya mismo — mismo criterio
+      // que el de Eventos, que siempre se ve apenas carga la página.
+      if (!directorioCargado) cargarDirectorio();
     })
     .catch(function(err) {
       console.error('Error:', err);
@@ -1488,16 +1494,46 @@ function mostrarContadorPendientes() {
   el.style.display = 'inline';
 }
 
+// Mismo criterio que mostrarContadorPendientes(), para el Directorio
+// (ver ROADMAP.md, 11/2026 — piloto de borradores): "confirmado" acá
+// cuenta activo (no 'false'/false explícito, igual que el filtro de
+// renderDirectorio()), no solo Estado=confirmado, porque las filas de
+// antes de esa columna no tienen Estado y siguen siendo visibles.
+function mostrarContadorDirectorio() {
+  var confirmados = personasDirectorio.filter(function(p) {
+    return !(p['Activo'] === 'false' || p['Activo'] === false);
+  }).length;
+  var total = personasDirectorio.length;
+  var el = document.getElementById('contador-directorio');
+  el.textContent = confirmados + '/' + total;
+  el.style.display = 'inline';
+}
+
 // ---- Revisión manual (cambio temporal): ?pendientes ----
 var eventoEnRevision = null;
 
 // ?directorio=1 — link directo desde el mail a organizadores (ver
 // ROADMAP.md, contacto por email): abre el form del Directorio solo,
 // en vez de mandarlos al sitio a buscar el botón "Sumate".
+// ?directorio=1&id=XXXX — variante del piloto "armamos tu perfil,
+// confirmalo" (ver ROADMAP.md, 11/2026): en vez de abrir el form vacío,
+// lo precarga con el borrador ya armado (fila Activo=false en la
+// Sheet, invisible hasta que la persona confirme) y habilita el botón
+// de rechazo. Necesita que el Directorio ya esté cargado — por eso
+// fuerza la vista y, si todavía no bajó el GViz, lo deja pendiente en
+// idDirectorioAPrellenar para que cargarDirectorio() lo resuelva.
 function abrirDirectorioSiCorresponde() {
   var params = new URLSearchParams(window.location.search);
   if (!params.has('directorio')) return;
-  abrirFormDirectorio();
+  var id = params.get('id');
+  if (!id) { abrirFormDirectorio(); return; }
+  idDirectorioAPrellenar = id;
+  mostrarVista('directorio');
+  // Si el Directorio ya estaba cargado de antes (navegación previa en la
+  // misma sesión), cargarDirectorio() no se vuelve a disparar desde
+  // mostrarVista() — hay que resolver el prellenado ahora mismo. Si no,
+  // lo resuelve cargarDirectorio() cuando termine el fetch.
+  if (personasDirectorio && personasDirectorio.length) prellenarBorradorSiCorresponde();
 }
 
 function iniciarRevisionSiCorresponde() {
@@ -1728,6 +1764,12 @@ function enviarEvento(e) {
 var directorioApiUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=Directorio&headers=1';
 var directorioCargado = false;
 var personasDirectorio = [];
+// Piloto "armamos tu perfil, confirmalo" (ver ROADMAP.md, 11/2026):
+// idDirectorioAPrellenar es el id pendiente de buscar en personasDirectorio
+// una vez que termine de cargar; borradorDirectorioId es el id ya
+// encontrado y en edición en el form (null = alta nueva de siempre).
+var idDirectorioAPrellenar = null;
+var borradorDirectorioId = null;
 
 var PROVINCIAS_ARGENTINA = [
   'Buenos Aires', 'CABA', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
@@ -1816,6 +1858,8 @@ function cargarDirectorio() {
         })
         .filter(function(p) { return p['Nombre']; });
       renderDirectorio();
+      mostrarContadorDirectorio();
+      prellenarBorradorSiCorresponde();
     })
     .catch(function() {
       document.getElementById('grilla-directorio').innerHTML =
@@ -1832,6 +1876,17 @@ function renderDirectorio() {
   soloDisp = soloDisp && soloDisp.checked;
 
   var personas = personasDirectorio.filter(function(p) {
+    // Borradores del piloto (ver ROADMAP.md, 11/2026): invisibles hasta que
+    // la persona confirme. Solo un "false" explícito oculta — igual que
+    // RecibeNovedades, así las filas de antes de esta columna (todas ya
+    // confirmadas a mano) se siguen mostrando sin backfill.
+    // Comparar contra 'false' Y false (no solo el string): GViz puede
+    // devolver el booleano nativo según cómo Sheets tipó la columna, y
+    // `p['Activo'] || ''` se come un `false` nativo (false || '' === ''),
+    // dejando pasar todo sin filtrar — mismo bug que Activo de Eventos ya
+    // resuelve comparando los dos casos (ver más abajo, línea de
+    // todosLosEventos).
+    if (p['Activo'] === 'false' || p['Activo'] === false) return false;
     if (filtroProv && p['Provincia'] !== filtroProv) return false;
     if (soloDisp && String(p['OfreceServicios'] || '').toLowerCase() !== 'true') return false;
     // Búsqueda sobre el texto libre: con perfiles escritos a mano rinde más
@@ -1877,6 +1932,55 @@ function cerrarFormDirectorio(ev) {
   if (ev && ev.target !== document.getElementById('form-directorio-overlay')) return;
   document.getElementById('form-directorio-overlay').classList.remove('activo');
   document.body.style.overflow = '';
+  // Reset del modo "confirmar borrador": si se vuelve a abrir el form
+  // desde el botón normal "Sumate", tiene que arrancar en alta nueva.
+  borradorDirectorioId = null;
+  document.getElementById('btn-rechazar-borrador').style.display = 'none';
+  document.getElementById('btn-publicar-directorio').textContent = 'Sumarme';
+}
+
+// Busca en personasDirectorio (ya cargado) el id pendiente de
+// abrirDirectorioSiCorresponde() y, si lo encuentra, precarga el form con
+// el borrador en vez de abrirlo vacío. Si no lo encuentra (link viejo, ya
+// confirmado/rechazado antes, o id inválido) no hace nada — no tiene
+// sentido abrir un form vacío sin que la persona lo haya pedido.
+function prellenarBorradorSiCorresponde() {
+  if (!idDirectorioAPrellenar) return;
+  var id = idDirectorioAPrellenar;
+  idDirectorioAPrellenar = null;
+  var persona = personasDirectorio.filter(function(p) { return p['Id'] === id; })[0];
+  if (!persona) return;
+
+  borradorDirectorioId = id;
+  document.getElementById('directorio-nombre').value = persona['Nombre'] || '';
+  document.getElementById('directorio-provincia').value = persona['Provincia'] || '';
+  document.getElementById('directorio-email').value = persona['Email'] || '';
+  document.getElementById('directorio-whatsapp').value = persona['Whatsapp'] || '';
+  document.getElementById('directorio-descripcion').value = persona['Descripcion'] || '';
+  document.getElementById('btn-rechazar-borrador').style.display = '';
+  document.getElementById('btn-publicar-directorio').textContent = 'Confirmar mi perfil';
+  abrirFormDirectorio();
+}
+
+function rechazarBorradorDirectorio() {
+  if (!borradorDirectorioId) return;
+  var id = borradorDirectorioId;
+  var btn = document.getElementById('btn-rechazar-borrador');
+  btn.disabled = true;
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'directorio_rechazar', id: id }),
+  })
+    .then(function() {
+      var msg = document.getElementById('directorio-form-msg');
+      msg.style.display = 'block'; msg.style.color = 'var(--verde)';
+      msg.textContent = 'Listo, no lo publicamos. Gracias por responder.';
+      scrollAMensaje(msg);
+      setTimeout(function() { cerrarFormDirectorio(); }, 1800);
+    })
+    .catch(function() {
+      btn.disabled = false;
+    });
 }
 
 function enviarDirectorio(e) {
@@ -1884,7 +1988,11 @@ function enviarDirectorio(e) {
   var btn = document.getElementById('btn-publicar-directorio');
   var msg = document.getElementById('directorio-form-msg');
   var payload = {
-    accion: 'directorio_alta',
+    // Si se está confirmando un borrador del piloto (ver ROADMAP.md,
+    // 11/2026), actualiza esa fila en vez de crear una nueva — por eso
+    // lleva el id y una acción distinta.
+    accion: borradorDirectorioId ? 'directorio_confirmar' : 'directorio_alta',
+    id: borradorDirectorioId || undefined,
     web: document.querySelector('#form-directorio .honeypot-field').value,
     nombre: document.getElementById('directorio-nombre').value,
     email: document.getElementById('directorio-email').value,
