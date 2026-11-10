@@ -1558,12 +1558,30 @@ largo, como la bio, por parámetros de URL en un mail):
   respondió" de "dijo que no", no solo que quede invisible en los dos
   casos por igual.
 
-**Falta para que el piloto mande algo de verdad:** conectar
-`armar_perfiles_organizadores.py` a `crearBorradorDirectorio_` (un
-`--escribir`) y escribir el texto del mail — con el mismo proceso de
-revisión con el mantenedor que ya se siguió para
-`pedir_referido_directorio`/`pedir_referido_cuentas_instagram`, antes
-de mandar nada real.
+**Conectado de punta a punta (11/2026):** `armar_perfiles_organizadores.py
+--escribir` le pide a `crearBorradorDirectorio_` que cree la fila y mande
+el mail — texto revisado y aprobado con el mantenedor en varias rondas
+(mismo proceso que ya se siguió con los dos mails de referidos):
+misión de hayminga primero (tomada tal cual de la sección "¿Qué es
+hayminga?" de `index.html`, no inventada de nuevo), mención activa
+("armamos tu perfil", no "pensamos que te podría interesar"), "gratis
+hoy y siempre", asunto en tono de agradecimiento referenciando el
+evento propio (más efectivo que un asunto genérico de marca en
+cold-outreach, según varios estudios de la industria — Belkins,
+Backlinko; no son fuentes académicas, pero coinciden en la dirección).
+
+**Confirmar/rechazar con un clic, sin pasar por el formulario** — se
+sumaron dos rutas a `doGet` (mismo mecanismo que ya usa "Quiero
+contactar" vía `?token=`): `?confirmar_directorio=<id>` activa el
+borrador tal cual está (exige `Estado=borrador`, para que un link
+viejo no reviva algo ya rechazado), `?rechazar_directorio=<id>` hace lo
+mismo que el botón "No, gracias" del formulario. "Quiero cambiar algo
+antes" sigue siendo el único que abre el sitio, porque ahí sí hace
+falta escribir algo.
+
+**Pendiente real:** todavía no se corrió `--escribir` contra la cola
+real de organizadores — falta esa primera corrida (acotada por
+`--limite`) para medir si el canal funciona.
 
 ## Métricas a monitorear
 
