@@ -1598,9 +1598,31 @@ las dos cuentas (`@arteytierrabioconstruccion`) la bio real de
 Instagram sí es de bioconstrucción, así que el evento citado parece
 ser ruido puntual de esa cuenta, no una cuenta mal targeteada — pero
 no hay evidencia todavía para la otra (`@ecoaldea_nakkal`, sin bio
-pública). Pendiente: decidir si vale la pena filtrar eventos del
-cluster de hongos antes de citarlos en el mail, o si alcanza con que
-el mantenedor revise antes de escalar el `--limite`.
+pública). **Decisión del mantenedor: no filtrar por tema del evento
+citado** — en Fase 1 cobertura gana a precisión (mismo criterio que
+`ESTRATEGIA.md` ya aplica al resto del pipeline), prefiere manejar esa
+ambigüedad puntual a cambio de más perfiles creados.
+
+**Corrida completa (10/11, `--limite 50`, resto del pool):** los 36
+organizadores restantes procesados sin errores — 36/36 borradores
+creados y mails mandados. Sumado a los 2 de la corrida piloto: **38
+borradores creados en total, 0 errores de Code.gs en ninguna de las
+dos corridas.**
+
+**Métrica antes/después de esta tanda (10/11):**
+
+| | Antes | Después de las 2 corridas |
+|---|---|---|
+| Directorio confirmado (`Activo=true`, visible en el sitio) | 7 | 7 (sin cambio — nadie confirmó todavía) |
+| Borradores pendientes (`Estado=borrador`) | 0 | 38 |
+| Total de filas en `Directorio` | 7 | 45 |
+
+La fila "confirmado" no se mueve con esta corrida — depende de que
+cada organizador abra el mail y haga clic en alguno de los tres links.
+Esa es la métrica que hay que volver a mirar en los próximos días, no
+ahora: cuántos de los 38 confirman, cuántos rechazan, cuántos no
+responden. Si en una semana el número de confirmados sigue en 7, el
+canal no está funcionando — si sube, funciona.
 
 ## Métricas a monitorear
 
