@@ -1302,7 +1302,7 @@ class NotificarRunTests(unittest.TestCase):
     que no explote justo en el caso que tiene que avisar (run incompleto,
     Sheet caído)."""
 
-    def _mensaje(self, estado_job="success", resumen=None, contar=None):
+    def _mensaje(self, estado_job="success", resumen=None, contar=None, directorio=None):
         from src import notificar_run
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1311,11 +1311,18 @@ class NotificarRunTests(unittest.TestCase):
             try:
                 if resumen is not None:
                     Path("run_summary.json").write_text(json.dumps(resumen))
-                with patch.object(notificar_run, "contar_pendientes") as contar_mock:
+                with patch.object(notificar_run, "contar_pendientes") as contar_mock, \
+                     patch.object(notificar_run, "contar_directorio") as directorio_mock:
                     if isinstance(contar, Exception):
                         contar_mock.side_effect = contar
                     else:
                         contar_mock.return_value = contar if contar is not None else 0
+                    if isinstance(directorio, Exception):
+                        directorio_mock.side_effect = directorio
+                    else:
+                        directorio_mock.return_value = directorio or {
+                            "total": 0, "confirmados": 0, "borradores": 0, "rechazados": 0,
+                        }
                     return notificar_run.armar_mensaje(estado_job)
             finally:
                 os.chdir(cwd)
@@ -1418,6 +1425,46 @@ class NotificarRunTests(unittest.TestCase):
             "errores_hikerapi": 4,
         })
         self.assertNotIn("revisar HIKERAPI_KEY", mensaje)
+
+    def test_incluye_conteo_de_directorio(self):
+        # Piloto de borradores de perfil (ver ROADMAP.md, 11/2026).
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 1},
+            directorio={"total": 45, "confirmados": 7, "borradores": 36, "rechazados": 2},
+        )
+        self.assertIn("Directorio: 7 confirmados, 36 borradores esperando respuesta, 2 rechazados", mensaje)
+
+    def test_error_contando_directorio_no_rompe_el_aviso(self):
+        mensaje = self._mensaje(
+            resumen={"eventos_insertados": 1},
+            directorio=RuntimeError("sheet caído"),
+        )
+        self.assertIn("Eventos nuevos: 1", mensaje)
+        self.assertIn("No se pudo contar el Directorio", mensaje)
+
+
+class ContarDirectorioTests(unittest.TestCase):
+    """Conteo real de contar_directorio() — fila sin Estado (legacy, de
+    antes de la columna) cuenta como confirmada, mismo criterio que
+    RecibeNovedades (ver ROADMAP.md, 11/2026)."""
+
+    @patch("src.notificar_run.get_service")
+    def test_clasifica_por_estado_y_legacy_sin_estado_cuenta_confirmado(self, get_service):
+        service = Mock()
+        get_service.return_value = service
+        # Columnas A..O: Id..FechaRechazo (Estado es la N, índice 13).
+        fila_legacy = ["id1"]  # sin Activo/Estado/FechaRechazo (fila corta)
+        fila_confirmada = ["id2"] + [""] * 11 + ["true", "confirmado", ""]
+        fila_borrador = ["id3"] + [""] * 11 + ["false", "borrador", ""]
+        fila_descartada = ["id4"] + [""] * 11 + ["false", "descartado", "2026-11-10"]
+        service.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [fila_legacy, fila_confirmada, fila_borrador, fila_descartada]
+        }
+
+        from src.notificar_run import contar_directorio
+        out = contar_directorio()
+
+        self.assertEqual(out, {"total": 4, "confirmados": 2, "borradores": 1, "rechazados": 1})
 
 
 class HikerApiCostTests(unittest.TestCase):

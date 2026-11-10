@@ -14,9 +14,10 @@ from pathlib import Path
 
 import requests
 
-from .sheets import COLUMNS, SHEET_NAME, SPREADSHEET_ID, get_service
+from .sheets import COLUMNS, DIRECTORIO_SHEET_NAME, SHEET_NAME, SPREADSHEET_ID, get_service
 
 RESUMEN_PATH = Path("run_summary.json")
+_DIRECTORIO_COL_ESTADO = 13  # N: Id..FechaRechazo, ver DIRECTORIO_HEADERS en Code.gs
 
 
 def _formatear_duracion(segundos: float) -> str:
@@ -39,6 +40,31 @@ def contar_pendientes() -> int:
         if (row[16] or "").strip().lower() == "pendiente_confirmacion":
             pendientes += 1
     return pendientes
+
+
+def contar_directorio() -> dict:
+    """Snapshot total de la hoja Directorio (no solo lo nuevo de hoy, mismo
+    criterio que contar_pendientes()) — confirmados, borradores del piloto
+    de perfiles (ver ROADMAP.md, 11/2026) todavía sin respuesta, y
+    rechazados. Legacy (fila sin Estado, de antes de la columna) cuenta como
+    confirmado — mismo criterio de "solo un valor explícito cambia el
+    default" que ya usa RecibeNovedades."""
+    service = get_service()
+    values = (
+        service.spreadsheets().values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"{DIRECTORIO_SHEET_NAME}!A2:O")
+        .execute()
+    ).get("values", [])
+    borradores = rechazados = 0
+    for row in values:
+        estado = (row[_DIRECTORIO_COL_ESTADO] if len(row) > _DIRECTORIO_COL_ESTADO else "").strip().lower()
+        if estado == "borrador":
+            borradores += 1
+        elif estado == "descartado":
+            rechazados += 1
+    total = len(values)
+    return {"total": total, "borradores": borradores, "rechazados": rechazados,
+            "confirmados": total - borradores - rechazados}
 
 
 def armar_mensaje(estado_job: str) -> str:
@@ -102,6 +128,15 @@ def armar_mensaje(estado_job: str) -> str:
         lineas.append(f"Pendientes de confirmar (cola total): {pendientes}{sufijo}")
     except Exception as e:
         lineas.append(f"No se pudo contar la cola de pendientes: {e}")
+
+    try:
+        d = contar_directorio()
+        lineas.append(
+            f"Directorio: {d['confirmados']} confirmados, {d['borradores']} "
+            f"borradores esperando respuesta, {d['rechazados']} rechazados"
+        )
+    except Exception as e:
+        lineas.append(f"No se pudo contar el Directorio: {e}")
 
     return "\n".join(lineas)
 
