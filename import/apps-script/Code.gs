@@ -367,6 +367,24 @@ function solicitarContacto_(data) {
 
 
 function doGet(e) {
+  // Confirmar/rechazar un borrador del Directorio en un clic desde el mail
+  // (ver ROADMAP.md, 11/2026) — a diferencia de "Quiero editarlo", que
+  // manda al sitio (?directorio=1&id=XXXX) a revisar el form, estos dos
+  // actúan directo sin abrir ninguna página del sitio.
+  if (e.parameter.confirmar_directorio) {
+    var ok = confirmarBorradorDirectorioComoEsta_(e.parameter.confirmar_directorio);
+    return paginaSimple_(ok
+      ? '<h2>¡Listo!</h2><p>Ya estás en el Directorio de hayminga.org 🌿</p>'
+      : '<h2>Este link ya no es válido</h2><p>Ya fue confirmado o rechazado antes, o no encontramos ese perfil.</p>');
+  }
+  if (e.parameter.rechazar_directorio) {
+    var ok2 = false;
+    try { rechazarPersonaDirectorio_({ id: e.parameter.rechazar_directorio }); ok2 = true; } catch (err) { ok2 = false; }
+    return paginaSimple_(ok2
+      ? '<h2>Listo</h2><p>No publicamos nada. Gracias por responder — hayminga.org</p>'
+      : '<h2>Este link ya no es válido</h2><p>No encontramos ese perfil.</p>');
+  }
+
   var token = e.parameter.token;
   if (!token) {
     return HtmlService.createHtmlOutput('<p>Falta el token.</p>');
@@ -376,9 +394,36 @@ function doGet(e) {
   var mensaje = resultado
     ? '<h2>¡Listo!</h2><p>Les mandamos un mail a los dos presentándolos. Ya te podés cerrar esta pestaña 🌿</p>'
     : '<h2>Este link ya no es válido</h2><p>O ya fue usado, o la solicitud no existe.</p>';
+  return paginaSimple_(mensaje);
+}
+
+
+function paginaSimple_(mensajeHtml) {
   return HtmlService.createHtmlOutput(
-    '<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;color:#2A1A0A;">' + mensaje + '</body>'
+    '<body style="font-family:sans-serif;max-width:480px;margin:4rem auto;text-align:center;color:#2A1A0A;">' + mensajeHtml + '</body>'
   );
+}
+
+
+/**
+ * Confirma un borrador TAL COMO ESTÁ (click directo desde el mail, sin
+ * pasar por el formulario) — a diferencia de confirmarPersonaDirectorio_,
+ * no recibe nombre/email/whatsapp nuevos, solo activa lo que ya se guardó
+ * en crearBorradorDirectorio_. Exige Estado=borrador para evitar que un
+ * link viejo reactive algo ya rechazado o ya confirmado antes.
+ */
+function confirmarBorradorDirectorioComoEsta_(id) {
+  var sheet = getOrCreateSheetWithHeaders_(DIRECTORIO_SHEET_NAME, DIRECTORIO_HEADERS);
+  var filaEncontrada = _buscarFilaDirectorioPorId_(sheet, id);
+  if (filaEncontrada === -1) return false;
+
+  var idxEstado = DIRECTORIO_HEADERS.indexOf('Estado');
+  var estadoActual = String(sheet.getRange(filaEncontrada, idxEstado + 1).getValue() || '').trim();
+  if (estadoActual !== 'borrador') return false;
+
+  sheet.getRange(filaEncontrada, DIRECTORIO_HEADERS.indexOf('Activo') + 1).setNumberFormat('@').setValue('true');
+  sheet.getRange(filaEncontrada, idxEstado + 1).setNumberFormat('@').setValue('confirmado');
+  return true;
 }
 
 
