@@ -7,12 +7,15 @@ se lo mandamos para que diga "sí", "con cambios" o "no" — baja la
 fricción a confirmar en vez de completar (ver ROADMAP.md, idea del
 mantenedor 10/2026).
 
-Reporte de solo lectura, no manda nada y no escribe el Directorio
-(eso lo sigue haciendo solo Code.gs, ver CLAUDE.md): primero filtra
-gratis (CuentasIds!EmailPublico, ya cacheado, sin email no hay forma de
-contactar por este canal) y solo para ese subconjunto —acotado por
---limite, porque esto SÍ cuesta: una llamada a HikerAPI por cuenta
-para traer biography/full_name— arma el borrador de perfil.
+Dry-run por default (solo muestra, no gasta nada más que las llamadas a
+HikerAPI del armado): primero filtra gratis (CuentasIds!EmailPublico,
+ya cacheado, sin email no hay forma de contactar por este canal) y
+solo para ese subconjunto —acotado por --limite, porque esto SÍ
+cuesta: una llamada a HikerAPI por cuenta para traer
+biography/full_name— arma el borrador de perfil. --escribir le pide a
+Code.gs (accion directorio_crear_borrador) que cree la fila
+(Activo=false, Estado=borrador) y mande el mail de verdad — Python
+nunca escribe el Directorio directamente (ver CLAUDE.md).
 
 Universo de organizadores: el mismo que mensajes_organizadores.py
 (cuentas de eventos ya confirmados), pensado como piloto sobre el
@@ -21,6 +24,7 @@ activo para construir el perfil, al revés que para invitar a alguien
 a una historia/DM de "mirá tu evento".
 """
 import argparse
+import json
 import os
 
 import requests
@@ -115,7 +119,35 @@ def armar_borradores(limite: int = LIMITE_DEFAULT) -> list[dict]:
     return borradores
 
 
-def reportar(limite: int = LIMITE_DEFAULT):
+def crear_borrador(b: dict) -> str | None:
+    """Le pide a Code.gs que cree la fila (Activo=false, Estado=borrador) y
+    mande el mail con los tres links de un clic (confirmar/editar/rechazar)
+    — texto revisado con el mantenedor, ver ROADMAP.md 11/2026. Python nunca
+    escribe el Directorio directamente (CLAUDE.md)."""
+    apps_script_url = os.environ["APPS_SCRIPT_URL"]
+    secreto = os.environ["APPS_SCRIPT_SHARED_SECRET"]
+    resp = requests.post(
+        apps_script_url,
+        headers={"Content-Type": "text/plain"},
+        data=json.dumps({
+            "accion": "directorio_crear_borrador",
+            "secreto": secreto,
+            "nombre": b["nombre"],
+            "provincia": b["provincia"],
+            "descripcion": b["bio"],
+            "email": b["email"],
+            "evento": b["evento_citado"],
+        }),
+        timeout=30,
+    )
+    data = resp.json()
+    if not data.get("success"):
+        print(f"[armar_perfiles_organizadores] Code.gs respondió error para {b['email']} — {data.get('error')}")
+        return None
+    return data.get("id")
+
+
+def reportar(limite: int = LIMITE_DEFAULT, escribir: bool = False):
     borradores = armar_borradores(limite)
     if not borradores:
         print("[armar_perfiles_organizadores] Nada para mostrar")
@@ -130,15 +162,24 @@ def reportar(limite: int = LIMITE_DEFAULT):
         print(f"Evento que publicó:    {b['evento_citado']}")
         print(f"Descripcion (borrador, de la bio pública de Instagram):")
         print(f"  {b['bio'] or '(sin bio pública o vacía)'}")
+        if escribir:
+            id_creado = crear_borrador(b)
+            print(f"  → borrador creado, mail mandado (Id={id_creado})" if id_creado
+                  else "  → NO se pudo crear/mandar, ver error arriba")
         print()
+
+    if not escribir:
+        print("[armar_perfiles_organizadores] dry-run — correr con --escribir para crear los borradores y mandar el mail.")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limite", type=int, default=LIMITE_DEFAULT,
                          help=f"Máximo de perfiles a armar (cada uno llama a HikerAPI, paga). Default {LIMITE_DEFAULT}.")
+    parser.add_argument("--escribir", action="store_true",
+                         help="Crea el borrador en el Directorio y manda el mail de verdad (default: dry-run, solo muestra).")
     args = parser.parse_args()
-    reportar(limite=args.limite)
+    reportar(limite=args.limite, escribir=args.escribir)
 
 
 if __name__ == "__main__":

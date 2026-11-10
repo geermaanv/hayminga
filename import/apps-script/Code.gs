@@ -222,10 +222,10 @@ function crearPersonaDirectorio_(data) {
  * Crea un borrador de perfil (Activo=false, Estado=borrador) a partir de
  * datos ya disponibles (evento publicado + bio de Instagram) sin que la
  * persona haya hecho nada todavía — ver armar_perfiles_organizadores.py.
- * Invisible en el sitio hasta que confirme vía confirmarPersonaDirectorio_.
- * Protegido con el mismo secreto que subirImagenADrive_/avisarEventoPublicado_
- * porque lo llama Python, no el formulario público (CLAUDE.md: Python nunca
- * escribe el Directorio directamente).
+ * Invisible en el sitio hasta que confirme (vía doGet de un clic o el
+ * formulario). Protegido con el mismo secreto que subirImagenADrive_/
+ * avisarEventoPublicado_ porque lo llama Python, no el formulario público
+ * (CLAUDE.md: Python nunca escribe el Directorio directamente).
  */
 function crearBorradorDirectorio_(data) {
   var secreto = PropertiesService.getScriptProperties().getProperty('SUBIR_IMAGEN_SECRETO');
@@ -254,7 +254,47 @@ function crearBorradorDirectorio_(data) {
     'borrador', // Estado
     '', // FechaRechazo
   ]);
+  avisarBorradorDirectorio_(id, data);
   return id;
+}
+
+
+/**
+ * Mail de aviso del borrador recién creado — texto revisado y aprobado
+ * con el mantenedor (ver ROADMAP.md, 11/2026). Tres links de un clic:
+ * confirmar tal cual (doGet ?confirmar_directorio), editar (abre el
+ * formulario del sitio precargado) o rechazar (doGet ?rechazar_directorio).
+ */
+function avisarBorradorDirectorio_(id, data) {
+  var scriptUrl = ScriptApp.getService().getUrl();
+  var linkConfirmar = scriptUrl + '?confirmar_directorio=' + id;
+  var linkRechazar  = scriptUrl + '?rechazar_directorio=' + id;
+  var linkEditar    = 'https://hayminga.org?directorio=1&id=' + id;
+
+  var evento = data.evento || 'tu evento';
+  var donde = data.provincia ? ' en ' + data.provincia : '';
+
+  MailApp.sendEmail({
+    to: String(data.email).trim(),
+    subject: 'Gracias: Tu "' + evento + '" fue parte de hayminga.org 2026 🌿',
+    body:
+      'Hola! Somos Maxi y Germán, de hayminga.org.\n\n' +
+      'Armamos hayminga como el nexo entre las personas, los saberes y las oportunidades ' +
+      'de la bioconstrucción: juntamos en un solo lugar los eventos, mingas y profesionales ' +
+      'de Argentina, que hoy están dispersos en cientos de perfiles de Instagram. No vendemos ' +
+      'nada, solo conectamos.\n\n' +
+      'Durante 2026 vimos que organizaste "' + evento + '"' + donde + ', así que armamos tu ' +
+      'perfil para poder sumarte al Directorio de profesionales — es gratis hoy y siempre:\n\n' +
+      '———\n' +
+      data.nombre + (data.provincia ? ' · ' + data.provincia : '') + '\n' +
+      (data.descripcion || '') + '\n' +
+      '———\n\n' +
+      '✅ Sí, así está bien:\n' + linkConfirmar + '\n\n' +
+      '✏️ Quiero cambiar algo antes:\n' + linkEditar + '\n\n' +
+      '❌ No, gracias:\n' + linkRechazar + '\n\n' +
+      'Gracias por lo que hacés,\n' +
+      'Maxi y Germán — hayminga.org',
+  });
 }
 
 
